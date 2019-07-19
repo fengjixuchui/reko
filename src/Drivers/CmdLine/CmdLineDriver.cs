@@ -148,7 +148,8 @@ namespace Reko.CmdLine
             pArgs.TryGetValue("--loader", out object loader);
             try
             {
-                decompiler.Load((string) pArgs["filename"], (string) loader);
+                if (!decompiler.Load((string) pArgs["filename"], (string) loader))
+                    return;
 
                 decompiler.Project.Programs[0].User.ExtractResources =
                    !pArgs.TryGetValue("extract-resources", out var oExtractResources) ||
@@ -215,7 +216,7 @@ namespace Reko.CmdLine
                     ArchitectureOptions = null, //$TODO: How do we handle options for command line?
                     PlatformName = (string)sEnv,
                     LoadAddress = (string)pArgs["--base"],
-                    EntryPoint = new EntryPointElement { Address = (string)oAddrEntry }
+                    EntryPoint = new EntryPointDefinition { Address = (string)oAddrEntry }
                 });
                 var state = CreateInitialState(arch, program.SegmentMap, pArgs);
                 if (pArgs.TryGetValue("heuristics", out object oHeur))
@@ -467,7 +468,7 @@ namespace Reko.CmdLine
         private static void DumpArchitectures(IConfigurationService config, TextWriter w, string fmtString)
         {
             foreach (var arch in config.GetArchitectures()
-                .OfType<ArchitectureElement>()
+                .OfType<ArchitectureDefinition>()
                 .OrderBy(a => a.Name))
             {
                 w.WriteLine(fmtString, arch.Name, arch.Description);
@@ -477,7 +478,7 @@ namespace Reko.CmdLine
         private static void DumpEnvironments(IConfigurationService config, TextWriter w, string fmtString)
         {
             foreach (var arch in config.GetEnvironments()
-                .OfType<OperatingEnvironmentElement>()
+                .OfType<PlatformDefinition>()
                 .OrderBy(a => a.Name))
             {
                 w.WriteLine(fmtString, arch.Name, arch.Description);
@@ -487,7 +488,7 @@ namespace Reko.CmdLine
         private static void DumpRawFiles(IConfigurationService config, TextWriter w, string fmtString)
         {
             foreach (var raw in config.GetRawFiles()
-                .OfType<RawFileElement>()
+                .OfType<RawFileDefinition>()
                 .OrderBy(a => a.Name))
             {
                 w.WriteLine(fmtString, raw.Name, raw.Description);

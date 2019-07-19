@@ -71,10 +71,8 @@ namespace Reko
         public DecompilerDriver(ILoader ldr, IServiceProvider services)
         {
             this.loader = ldr ?? throw new ArgumentNullException("ldr");
-            if (services == null)
-                throw new ArgumentNullException("services");
+            this.services = services ?? throw new ArgumentNullException("services");
             this.host = services.RequireService<DecompilerHost>();
-            this.services = services;
             this.eventListener = services.RequireService<DecompilerEventListener>();
         }
 
@@ -191,7 +189,7 @@ namespace Reko
         /// <param name="fileName">The filename to load.</param>
         /// <param name="loaderName">Optional .NET class name of a custom
         /// image loader</param>
-        /// <returns>True if what was loaded was an actual project</returns>
+        /// <returns>True if the file could be loaded.</returns>
         public bool Load(string fileName, string loaderName = null)
         {
             eventListener.ShowStatus("Loading source program.");
@@ -199,22 +197,18 @@ namespace Reko
             var projectLoader = new ProjectLoader(this.services, loader, eventListener);
             projectLoader.ProgramLoaded += (s, e) => { RunScriptOnProgramImage(e.Program, e.Program.User.OnLoadedScript); };
             this.Project = projectLoader.LoadProject(fileName, image);
-            bool isProject;
-            if (Project != null)
-            {
-                isProject = true;
-            }
-            else
+            if (Project == null)
             {
                 var program = loader.LoadExecutable(fileName, image, loaderName, null);
+                if (program == null)
+                    return false;
                 this.Project = CreateDefaultProject(fileName, program);
                 this.Project.LoadedMetadata = program.Platform.CreateMetadata();
                 program.EnvironmentMetadata = this.Project.LoadedMetadata;
-                isProject = false;
             }
             BuildImageMaps();
             eventListener.ShowStatus("Source program loaded.");
-            return isProject;
+            return true;
         }
 
         /// <summary>

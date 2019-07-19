@@ -1,7 +1,4 @@
 language: csharp
-# There is a bug in latest verion of mono.
-# See https://github.com/travis-ci/travis-ci/issues/10221 for details
-mono: 5.14.0
 solution: src/Reko-decompiler.sln
 sudo: required
 
@@ -29,6 +26,6 @@ install:
 script:
   - source .travis_env
   - msbuild /version
-  - msbuild /p:Configuration=UnixRelease /p:Platform=x64 /verbosity:minimal src/Reko-decompiler.sln
+  - msbuild /restore /p:Configuration=UnixRelease /p:Platform=x64 /verbosity:minimal src/Reko-decompiler.sln
   - mono ./testrunner/NUnit.ConsoleRunner.3.9.0/tools/nunit3-console.exe ./src/UnitTests/bin/x64/UnixRelease/Reko.UnitTests.dll --where="cat != FailedTests && cat != UserInterface"
   - python ./subjects/regressionTests.py --check-output --platform=x64 --configuration=UnixRelease

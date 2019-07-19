@@ -59,6 +59,7 @@ namespace Reko.UnitTests.Gui.Windows
         private Project project;
         private Mock<IDecompilerShellUiService> uiSvc;
         private Mock<IUiPreferencesService> uiPrefSvc;
+        private Mock<ITabPage> tabPage;
 
         [SetUp]
         public void Setup()
@@ -68,6 +69,7 @@ namespace Reko.UnitTests.Gui.Windows
             mockNodes = new Mock<ITreeNodeCollection>();
             uiSvc = new Mock<IDecompilerShellUiService>();
             uiPrefSvc = new Mock<IUiPreferencesService>();
+            tabPage = new Mock<ITabPage>();
             mockTree.Setup(t => t.Nodes).Returns(mockNodes.Object);
             uiSvc.Setup(u => u.SetContextMenu(It.IsAny<object>(), It.IsAny<int>()));
             sc.AddService<IDecompilerShellUiService>(uiSvc.Object);
@@ -114,6 +116,8 @@ namespace Reko.UnitTests.Gui.Windows
         private class FakeTreeView : ITreeView
         {
             public event EventHandler AfterSelect;
+            public event EventHandler<Reko.Gui.Controls.TreeViewEventArgs> AfterExpand;
+            public event EventHandler<Reko.Gui.Controls.TreeViewEventArgs> BeforeExpand;
             public event DragEventHandler DragEnter;
             public event DragEventHandler DragOver;
             public event DragEventHandler DragDrop;
@@ -179,6 +183,11 @@ namespace Reko.UnitTests.Gui.Windows
                 return new FakeTreeNode { Text = text };
             }
 
+            public void PerformBeforeExpand(Reko.Gui.Controls.TreeViewEventArgs e)
+            {
+                BeforeExpand(this, e);
+            }
+
             public void PerformDragEnter(DragEventArgs e)
             {
                 DragEnter(this, e);
@@ -215,6 +224,11 @@ namespace Reko.UnitTests.Gui.Windows
             }
 
             public void Invoke(Action action)
+            {
+                throw new NotImplementedException();
+            }
+
+            public void Focus()
             {
                 throw new NotImplementedException();
             }
@@ -322,11 +336,19 @@ namespace Reko.UnitTests.Gui.Windows
             public string Text { get; set; }
             public string ToolTipText { get; set; }
 
+            public void Collapse()
+            {
+            }
+
             public void Expand()
             {
             }
 
             public void Invoke(Action a) { a();  }
+
+            public void Remove()
+            {
+            }
         }
 
         [Designer(typeof(TestDesigner))]
@@ -368,8 +390,11 @@ namespace Reko.UnitTests.Gui.Windows
             public string Text { get; set; }
             public string ToolTipText { get; set; }
 
+            public void Collapse() { }
             public void Expand() { }
             public void Invoke(Action a) { a(); }
+
+            public void Remove() { }
         }
 
         #endregion
@@ -377,7 +402,7 @@ namespace Reko.UnitTests.Gui.Windows
         [Test]
         public void PBS_NoProject()
         {
-            var pbs = new ProjectBrowserService(sc, fakeTree);
+            var pbs = new ProjectBrowserService(sc, tabPage.Object, fakeTree);
             pbs.Load(null);
 
             Expect("<?xml version=\"1.0\" encoding=\"utf-16\"?><root><node text=\"(No project loaded)\" /></root>");
@@ -420,7 +445,7 @@ namespace Reko.UnitTests.Gui.Windows
         [Test]
         public void PBS_SingleBinary()
         {
-            var pbs = new ProjectBrowserService(sc, fakeTree);
+            var pbs = new ProjectBrowserService(sc, tabPage.Object, fakeTree);
             Given_Project();
             Given_ProgramWithOneSegment();
             Given_ImageMapItem(0x12340000);
@@ -456,7 +481,7 @@ namespace Reko.UnitTests.Gui.Windows
         [Test]
         public void PBS_SingleBinary_NoGlobals()
         {
-            var pbs = new ProjectBrowserService(sc, fakeTree);
+            var pbs = new ProjectBrowserService(sc, tabPage.Object, fakeTree);
             Given_Project();
             Given_ProgramWithOneSegment();
 
@@ -487,7 +512,7 @@ namespace Reko.UnitTests.Gui.Windows
         [Test]
         public void PBS_AddBinary()
         {
-            var pbs = new ProjectBrowserService(sc, fakeTree);
+            var pbs = new ProjectBrowserService(sc, tabPage.Object, fakeTree);
             Given_Project();
             Given_ProgramWithOneSegment();
             Given_ImageMapItem(0x12340000);
@@ -538,7 +563,7 @@ namespace Reko.UnitTests.Gui.Windows
         [Test]
         public void PBS_UserProcedures()
         {
-            var pbs = new ProjectBrowserService(sc, fakeTree);
+            var pbs = new ProjectBrowserService(sc, tabPage.Object, fakeTree);
             Given_Project();
             Given_ProgramWithOneSegment();
             Given_ImageMapItem(0x12340000);
@@ -584,7 +609,7 @@ namespace Reko.UnitTests.Gui.Windows
             des.Object.Component = "foo";
             var mockTree = new FakeTreeView();
             
-            var pbs = new ProjectBrowserService(sc, mockTree);
+            var pbs = new ProjectBrowserService(sc, tabPage.Object, mockTree);
             pbs.AddComponents(new object[] { des.Object });
             var desdes = pbs.GetDesigner(des.Object);
             Assert.IsNotNull(desdes);
@@ -602,7 +627,7 @@ namespace Reko.UnitTests.Gui.Windows
         public void PBS_FindGrandParent()
         {
             var mockTree = new FakeTreeView();
-            var pbs = new ProjectBrowserService(sc, mockTree);
+            var pbs = new ProjectBrowserService(sc, tabPage.Object, mockTree);
             var gp = new GrandParentComponent();
             var p = new ParentComponent();
             var c = new TestComponent();
@@ -619,7 +644,7 @@ namespace Reko.UnitTests.Gui.Windows
         public void PBS_NoGrandParent()
         {
             var mockTree = new FakeTreeView();
-            var pbs = new ProjectBrowserService(sc, mockTree);
+            var pbs = new ProjectBrowserService(sc, tabPage.Object, mockTree);
             var p = new ParentComponent();
             var c = new TestComponent();
 
@@ -634,7 +659,7 @@ namespace Reko.UnitTests.Gui.Windows
         public void PBS_AddTypeLib()
         {
             var mockTree = new FakeTreeView();
-            var pbs = new ProjectBrowserService(sc, mockTree);
+            var pbs = new ProjectBrowserService(sc, tabPage.Object, mockTree);
             var project = new Project();
             pbs.Load(project);
 
@@ -651,7 +676,7 @@ namespace Reko.UnitTests.Gui.Windows
         public void PBS_AcceptFiles()
         {
             var mockTree = new FakeTreeView();
-            var pbs = new WindowsProjectBrowserService(sc, mockTree);
+            var pbs = new WindowsProjectBrowserService(sc, tabPage.Object, mockTree);
             var e = Given_DraggedFile();
 
             var project = new Project();
@@ -664,7 +689,7 @@ namespace Reko.UnitTests.Gui.Windows
         public void PBS_RejectTextDrop()
         {
             var mockTree = new FakeTreeView();
-            var pbs = new WindowsProjectBrowserService(sc, mockTree);
+            var pbs = new WindowsProjectBrowserService(sc, tabPage.Object, mockTree);
             var e = Given_DraggedText();
 
             var project = new Project();
@@ -678,7 +703,7 @@ namespace Reko.UnitTests.Gui.Windows
         {
             string filename = null;
             var mockTree = new FakeTreeView();
-            var pbs = new WindowsProjectBrowserService(sc, mockTree);
+            var pbs = new WindowsProjectBrowserService(sc, tabPage.Object, mockTree);
             pbs.FileDropped += (sender, ee) => { filename = ee.Filename; };
             var e = Given_DraggedFile();
 
@@ -715,7 +740,7 @@ namespace Reko.UnitTests.Gui.Windows
         [Test]
         public void PBS_SingleBinary_Imports()
         {
-            var pbs = new ProjectBrowserService(sc, fakeTree);
+            var pbs = new ProjectBrowserService(sc, tabPage.Object, fakeTree);
             Given_Project();
             Given_ProgramWithOneSegment();
             Given_ImportedFunction(Address.Ptr32(0x123400), "KERNEL32", "LoadLibraryA");

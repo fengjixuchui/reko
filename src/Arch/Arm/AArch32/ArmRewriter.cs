@@ -38,15 +38,15 @@ namespace Reko.Arch.Arm.AArch32
 {
     public partial class ArmRewriter : IEnumerable<RtlInstructionCluster>
     {
-        private IProcessorArchitecture arch;
-        private EndianImageReader rdr;
-        private IRewriterHost host;
-        private IStorageBinder binder;
-        private IEnumerator<AArch32Instruction> dasm;
+        private readonly IProcessorArchitecture arch;
+        private readonly EndianImageReader rdr;
+        private readonly IRewriterHost host;
+        private readonly IStorageBinder binder;
+        private readonly IEnumerator<AArch32Instruction> dasm;
+        protected int pcValueOffset;        // The offset to add to the current instruction's address when reading the PC register. 
         protected AArch32Instruction instr;
         protected InstrClass rtlClass;
         protected RtlEmitter m;
-        protected int pcValueOffset;        // The offset to add to the current instruction's address when reading the PC register. 
 
         public ArmRewriter(Arm32Architecture arch, EndianImageReader rdr, IRewriterHost host, IStorageBinder binder) : this(arch, rdr, host, binder, new A32Disassembler(arch, rdr).GetEnumerator())
         {
@@ -77,7 +77,7 @@ namespace Reko.Arch.Arm.AArch32
                 this.instr = dasm.Current;
                 var addrInstr = instr.Address;
                 // Most instructions are linear.
-                this.rtlClass = instr.iclass;
+                this.rtlClass = instr.InstructionClass;
                 var rtls = new List<RtlInstruction>();
                 this.m = new RtlEmitter(rtls);
                 // Most instructions have a conditional mode of operation.
@@ -115,14 +115,12 @@ namespace Reko.Arch.Arm.AArch32
                 case Opcode.ldrexd:
                 case Opcode.ldrexh:
                 case Opcode.mcr2:
-                case Opcode.mcrr:
                 case Opcode.mcrr2:
                 case Opcode.mrc2:
                 case Opcode.mrrc2:
                 case Opcode.pkhbt:
                 case Opcode.pkhtb:
                 case Opcode.pldw:
-                case Opcode.pld:
                 case Opcode.pli:
                 case Opcode.qasx:
                 case Opcode.qsax:
@@ -152,11 +150,9 @@ namespace Reko.Arch.Arm.AArch32
                 case Opcode.shsax:
                 case Opcode.smmlar:
                 case Opcode.smmlsr:
-                case Opcode.smmul:
                 case Opcode.smmulr:
                 case Opcode.smuad:
                 case Opcode.smuadx:
-                case Opcode.smusd:
                 case Opcode.smusdx:
                 case Opcode.srsda:
                 case Opcode.srsdb:
@@ -176,7 +172,6 @@ namespace Reko.Arch.Arm.AArch32
                 case Opcode.strexh:
                 case Opcode.sxtab16:
                 case Opcode.sxtb16:
-                case Opcode.uasx:
                 case Opcode.uhadd16:
                 case Opcode.uhadd8:
                 case Opcode.uhasx:
@@ -205,10 +200,6 @@ namespace Reko.Arch.Arm.AArch32
                 case Opcode.vbif:
                 case Opcode.vbit:
                 case Opcode.vbsl:
-                case Opcode.vceq:
-                case Opcode.vcge:
-                case Opcode.vcgt:
-                case Opcode.vcle:
                 case Opcode.vcls:
                 case Opcode.vclz:
                 case Opcode.vcnt:
@@ -288,7 +279,6 @@ namespace Reko.Arch.Arm.AArch32
                 case Opcode.vswp:
                 case Opcode.vtbl:
                 case Opcode.vtbx:
-                case Opcode.vcvtr:
                 case Opcode.vtrn:
                 case Opcode.vtst:
                 case Opcode.vuzp:
@@ -362,12 +352,14 @@ namespace Reko.Arch.Arm.AArch32
                 case Opcode.lsr: RewriteShift(m.Shr); break;
                 case Opcode.nop: m.Nop(); break;
                 case Opcode.mcr: RewriteMcr(); break;
+                case Opcode.mcrr: RewriteMcrr(); break;
                 case Opcode.mla: RewriteMultiplyAccumulate(m.IAdd); break;
                 case Opcode.mls: RewriteMultiplyAccumulate(m.ISub); break;
                 case Opcode.mov: RewriteMov(); break;
                 case Opcode.movt: RewriteMovt(); break;
                 case Opcode.movw: RewriteMovw(); break;
                 case Opcode.mrc: RewriteMrc(); break;
+                case Opcode.mrrc: RewriteMrrc(); break;
                 case Opcode.mrs: RewriteMrs(); break;
                 case Opcode.msr: RewriteMsr(); break;
                 case Opcode.mul: RewriteBinOp(m.IMul); break;
@@ -381,6 +373,7 @@ namespace Reko.Arch.Arm.AArch32
                 case Opcode.qdsub: RewriteQDAddSub(m.ISub); break;
                 case Opcode.qsub: RewriteQAddSub(m.ISub); break;
                 case Opcode.qsub16: RewriteVectorBinOp("__qsub_{0}", ArmVectorData.S16); break;
+                case Opcode.pld: RewritePld(); break;
                 case Opcode.pop: RewritePop(); break;
                 case Opcode.push: RewritePush(); break;
                 case Opcode.ror: RewriteShift(Ror); break;
@@ -418,6 +411,7 @@ namespace Reko.Arch.Arm.AArch32
                 case Opcode.smlsldx: RewriteMlxd(true, PrimitiveType.Int16, m.SMul, m.ISub); break;
                 case Opcode.smmla: RewriteSmml(m.IAdd); break;
                 case Opcode.smmls: RewriteSmml(m.ISub); break;
+                case Opcode.smmul: RewriteSmmul(); break;
                 case Opcode.smulbb: RewriteMulbb(false, false, PrimitiveType.Int16, m.SMul); break;
                 case Opcode.smulbt: RewriteMulbb(false, true, PrimitiveType.Int16, m.SMul); break;
                 case Opcode.smulwb: RewriteMulw(false); break;
@@ -425,6 +419,7 @@ namespace Reko.Arch.Arm.AArch32
                 case Opcode.smultb: RewriteMulbb(true, false, PrimitiveType.Int16, m.SMul); break;
                 case Opcode.smultt: RewriteMulbb(true, true, PrimitiveType.Int16, m.SMul); break;
                 case Opcode.smull: RewriteMull(PrimitiveType.Int64, m.SMul); break;
+                case Opcode.smusd: RewriteSmusd(); break;
                 case Opcode.ssat: RewriteSsat(); break;
                 case Opcode.ssub16: RewriteVectorBinOp("__ssub16", ArmVectorData.S16); break;
                 case Opcode.ssub8: RewriteVectorBinOp("__ssub8", ArmVectorData.S8); break;
@@ -460,6 +455,7 @@ namespace Reko.Arch.Arm.AArch32
                 case Opcode.tst: RewriteTst(); break;
                 case Opcode.uadd16: RewriteVectorBinOp("__uadd_{0}", ArmVectorData.I16); break;
                 case Opcode.uadd8: RewriteVectorBinOp("__uadd_{0}", ArmVectorData.I8); break;
+                case Opcode.uasx: RewriteUasx(); break;
                 case Opcode.ubfx: RewriteUbfx(); break;
                 case Opcode.udf: RewriteUdf(); break;
                 case Opcode.udiv: RewriteDiv(m.UDiv); break;
@@ -484,9 +480,14 @@ namespace Reko.Arch.Arm.AArch32
                 case Opcode.vaddl: RewriteVectorBinOp("__vaddl_{0}"); break;
                 case Opcode.vand: RewriteVecBinOp(m.And); break;
                 case Opcode.vcmp: RewriteVcmp(); break;
+                case Opcode.vceq: RewriteVectorBinOp("__vceq_{0}"); break;
+                case Opcode.vcge: RewriteVectorBinOp("__vcge_{0}"); break;
+                case Opcode.vcgt: RewriteVectorBinOp("__vcgt_{0}"); break;
+                case Opcode.vcle: RewriteVectorBinOp("__vcle_{0}"); break;
                 case Opcode.vclt: RewriteVectorBinOp("__vclt_{0}"); break;
                 case Opcode.vcmpe: RewriteVcmp(); break;
                 case Opcode.vcvt: RewriteVcvt(); break;
+                case Opcode.vcvtr: RewriteVcvtr(); break;
                 case Opcode.vdiv: RewriteVecBinOp(m.FDiv); break;
                 case Opcode.vdup: RewriteVdup(); break;
                 case Opcode.veor: RewriteVecBinOp(m.Xor); break;
@@ -559,7 +560,7 @@ namespace Reko.Arch.Arm.AArch32
             {
                 wInstr = rdr.PeekLeUInt16(-2);
             }
-            host.Error(instr.Address, "AArch32 instruction '{0}' ({1:X4}) is not supported yet.", instr.opcode, wInstr);
+            host.Error(instr.Address, "AArch32 instruction '{0}' ({1:X4}) is not supported yet.", instr, wInstr);
             EmitUnitTest(instr);
             Invalid();
         }
@@ -792,8 +793,9 @@ namespace Reko.Arch.Arm.AArch32
                                 ea = m.IAdd(ea, ix);
                                 break;
                             case Opcode.rrx:
-                                //$TODO: handle this (very unlikely) case!
-                                throw new NotImplementedException();
+                                var rrx = host.PseudoProcedure(PseudoProcedure.RorC, ireg.DataType, ireg, Constant.Int32(mop.Shift), C());
+                                ea = m.IAdd(ea, rrx);
+                                break;
                             }
                         }
                         return m.Mem(dt, ea);

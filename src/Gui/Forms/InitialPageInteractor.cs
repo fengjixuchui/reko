@@ -107,18 +107,18 @@ namespace Reko.Gui.Forms
         /// Open the specified file.
         /// </summary>
         /// <param name="file"></param>
-        /// <returns>True if the opened file was a Reko project.</returns>
+        /// <returns>True if the opened file was opened successfully.</returns>
         public bool OpenBinary(string file)
         {
             var ldr = Services.RequireService<ILoader>();
             this.Decompiler = CreateDecompiler(ldr);
             var svc = Services.RequireService<IWorkerDialogService>();
-            bool isOldProject = false;
-            svc.StartBackgroundWork("Loading program", delegate ()
+            bool successfullyLoaded = false;
+            svc.StartBackgroundWork("Loading program", () =>
             {
-                isOldProject = Decompiler.Load(file);
+                successfullyLoaded = Decompiler.Load(file);
             });
-            if (Decompiler.Project == null)
+            if (!successfullyLoaded)
             {
                 return false;
             }
@@ -126,8 +126,9 @@ namespace Reko.Gui.Forms
 
             var browserSvc = Services.RequireService<IProjectBrowserService>();
             browserSvc.Load(Decompiler.Project);
+            browserSvc.Show();
             ShowLowLevelWindow();
-            return isOldProject;
+            return true;
         }
 
         public bool OpenBinaryAs(string file, LoadDetails details)
@@ -141,14 +142,18 @@ namespace Reko.Gui.Forms
                 Decompiler.ExtractResources();
             });
             var browserSvc = Services.RequireService<IProjectBrowserService>();
+            var procListSvc = Services.RequireService<IProcedureListService>();
             if (Decompiler.Project != null)
             {
                 browserSvc.Load(Decompiler.Project);
+                browserSvc.Show();
+                procListSvc.Clear();
                 ShowLowLevelWindow();
             }
             else
             {
                 browserSvc.Clear();
+                procListSvc.Clear();
             }
             return false;   // We never open projects this way.
         }
@@ -175,6 +180,7 @@ namespace Reko.Gui.Forms
                 return false;
             var browserSvc = Services.RequireService<IProjectBrowserService>();
             browserSvc.Load(Decompiler.Project);
+            browserSvc.Show();
             ShowLowLevelWindow();
             return false;
         }
