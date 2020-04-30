@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,23 +29,24 @@ using System.Linq;
 
 namespace Reko.Arch.zSeries
 {
-    using Mutator = Func<ulong, zSeriesDisassembler, bool>;
+    using Decoder = WideDecoder<zSeriesDisassembler, Mnemonic, zSeriesInstruction>;
+    using WideInstrDecoder = WideInstrDecoder<zSeriesDisassembler, Mnemonic, zSeriesInstruction>;
 
-    public class zSeriesDisassembler : DisassemblerBase<zSeriesInstruction>
+    public class zSeriesDisassembler : DisassemblerBase<zSeriesInstruction, Mnemonic>
     {
         private readonly static Decoder[] decoders;
         private readonly static Decoder invalid;
 
         private readonly zSeriesArchitecture arch;
         private readonly EndianImageReader rdr;
-        private readonly State state;
+        private readonly List<MachineOperand> ops;
         private Address addr;
 
         public zSeriesDisassembler(zSeriesArchitecture arch, EndianImageReader rdr)
         {
             this.arch = arch;
             this.rdr = rdr;
-            this.state = new State();
+            this.ops = new List<MachineOperand>();
         }
 
         public override zSeriesInstruction DisassembleInstruction()
@@ -53,12 +54,33 @@ namespace Reko.Arch.zSeries
             this.addr = rdr.Address;
             if (!rdr.TryReadBeUInt16(out var opcode))
                 return null;
+            this.ops.Clear();
             var instr = decoders[opcode >> 8].Decode(opcode, this);
-            state.Reset();
             instr.Address = addr;
             instr.Length = (int)(rdr.Address - addr);
             instr.InstructionClass |= opcode == 0 ? InstrClass.Zero : 0;
             return instr;
+        }
+
+        public override zSeriesInstruction MakeInstruction(InstrClass iclass, Mnemonic mnemonic)
+        {
+            var instr = new zSeriesInstruction
+            {
+                InstructionClass = iclass,
+                Mnemonic = mnemonic,
+                Operands = this.ops.ToArray(),
+            };
+            return instr;
+        }
+
+        public override zSeriesInstruction CreateInvalidInstruction()
+        {
+            return new zSeriesInstruction
+            {
+                InstructionClass = InstrClass.Invalid,
+                Mnemonic = Mnemonic.invalid,
+                Operands = MachineInstruction.NoOperands
+            };
         }
 
         private MachineOperand CreateAccess(
@@ -107,15 +129,6 @@ namespace Reko.Arch.zSeries
             };
         }
 
-        private zSeriesInstruction Invalid()
-        {
-            return new zSeriesInstruction
-            {
-                Opcode = Opcode.invalid,
-                Ops = new MachineOperand[0]
-            };
-        }
-
         private void Nyi(ulong uInstr, string message)
         {
             var rdr2 = rdr.Clone();
@@ -131,34 +144,14 @@ namespace Reko.Arch.zSeries
             });
         }
 
-        private class State
-        {
-            public List<MachineOperand> ops = new List<MachineOperand>();
-            public Opcode opcode;
 
-            public void Reset()
-            {
-                this.opcode = Opcode.invalid;
-                this.ops.Clear();
-            }
-
-            public zSeriesInstruction MakeInstruction()
-            {
-                var instr = new zSeriesInstruction
-                {
-                    Opcode = this.opcode,
-                    Ops = this.ops.ToArray(),
-                };
-                return instr;
-            }
-        }
 
         #region Mutators
 
         public static bool FF(ulong uInstr, zSeriesDisassembler dasm)
         {
-            dasm.state.ops.Add(new RegisterOperand(Registers.FpRegisters[(uInstr >> 4) & 0xF]));
-            dasm.state.ops.Add(new RegisterOperand(Registers.FpRegisters[(uInstr) & 0xF]));
+            dasm.ops.Add(new RegisterOperand(Registers.FpRegisters[(uInstr >> 4) & 0xF]));
+            dasm.ops.Add(new RegisterOperand(Registers.FpRegisters[(uInstr) & 0xF]));
             return true;
         }
 
@@ -168,8 +161,8 @@ namespace Reko.Arch.zSeries
             var x2 = Registers.GpRegisters[(uInstr >> 16) & 0xF];
             var b2 = Registers.GpRegisters[(uInstr >> 12) & 0xF];
             var d2 = (int)Bits.SignExtend(uInstr, 12);
-            dasm.state.ops.Add(f1);
-            dasm.state.ops.Add(dasm.CreateAccess(b2, x2, d2));
+            dasm.ops.Add(f1);
+            dasm.ops.Add(dasm.CreateAccess(b2, x2, d2));
             return true;
         }
 
@@ -178,66 +171,66 @@ namespace Reko.Arch.zSeries
             var m1 = (byte)((uInstr >> 36) & 0xF);
             var r2 = (int) Bits.SignExtend((uint)(uInstr >> 24), 12);
             var r3 = (int) Bits.SignExtend((uint)uInstr, 24);
-            dasm.state.ops.Add(ImmediateOperand.Byte(m1));
-            dasm.state.ops.Add(ImmediateOperand.Int32(r2));
-            dasm.state.ops.Add(ImmediateOperand.Int32(r3));
+            dasm.ops.Add(ImmediateOperand.Byte(m1));
+            dasm.ops.Add(ImmediateOperand.Int32(r2));
+            dasm.ops.Add(ImmediateOperand.Int32(r3));
             return true;
         }
 
         public static bool R(ulong uInstr, zSeriesDisassembler dasm)
         {
-            dasm.state.ops.Add(new RegisterOperand(Registers.GpRegisters[uInstr & 0xF]));
+            dasm.ops.Add(new RegisterOperand(Registers.GpRegisters[uInstr & 0xF]));
             return true;
         }
 
         public static bool RR(ulong uInstr, zSeriesDisassembler dasm)
         {
-            dasm.state.ops.Add(new RegisterOperand(Registers.GpRegisters[(uInstr >> 4) & 0xF]));
-            dasm.state.ops.Add(new RegisterOperand(Registers.GpRegisters[(uInstr) & 0xF]));
+            dasm.ops.Add(new RegisterOperand(Registers.GpRegisters[(uInstr >> 4) & 0xF]));
+            dasm.ops.Add(new RegisterOperand(Registers.GpRegisters[(uInstr) & 0xF]));
             return true;
         }
 
         public static bool RRE(ulong uInstr, zSeriesDisassembler dasm)
         {
-            dasm.state.ops.Add(new RegisterOperand(Registers.GpRegisters[(uInstr >> 4) & 0xF]));
-            dasm.state.ops.Add(new RegisterOperand(Registers.GpRegisters[(uInstr) & 0xF]));
+            dasm.ops.Add(new RegisterOperand(Registers.GpRegisters[(uInstr >> 4) & 0xF]));
+            dasm.ops.Add(new RegisterOperand(Registers.GpRegisters[(uInstr) & 0xF]));
             return true;
         }
 
         public static bool RIa(ulong uInstr, zSeriesDisassembler dasm)
         {
-            dasm.state.ops.Add(new RegisterOperand(Registers.GpRegisters[(uInstr >> 20) & 0xF]));
-            dasm.state.ops.Add(ImmediateOperand.Int32((int)Bits.SignExtend(uInstr, 16)));
+            dasm.ops.Add(new RegisterOperand(Registers.GpRegisters[(uInstr >> 20) & 0xF]));
+            dasm.ops.Add(ImmediateOperand.Int32((int)Bits.SignExtend(uInstr, 16)));
             return true;
         }
 
         public static bool RIb(ulong uInstr, zSeriesDisassembler dasm)
         {
             var addr = dasm.addr + 2 * (int)Bits.SignExtend(uInstr, 16);
-            dasm.state.ops.Add(new RegisterOperand(Registers.GpRegisters[(uInstr >> 20) & 0xF]));
-            dasm.state.ops.Add(AddressOperand.Create(addr));
+            dasm.ops.Add(new RegisterOperand(Registers.GpRegisters[(uInstr >> 20) & 0xF]));
+            dasm.ops.Add(AddressOperand.Create(addr));
             return true;
         }
 
         public static bool RIc(ulong uInstr, zSeriesDisassembler dasm)
         {
             var addr = dasm.addr + 2*(int)Bits.SignExtend(uInstr, 16);
-            dasm.state.ops.Add(AddressOperand.Create(addr));
+            dasm.ops.Add(AddressOperand.Create(addr));
             return true;
         }
 
         public static bool RILb(ulong uInstr, zSeriesDisassembler dasm)
         {
-            dasm.state.ops.Add(new RegisterOperand(Registers.GpRegisters[(uInstr >> 36) & 0xF]));
+            dasm.ops.Add(new RegisterOperand(Registers.GpRegisters[(uInstr >> 36) & 0xF]));
             var offset = 2 * (int)Bits.SignExtend(uInstr, 32);
-            dasm.state.ops.Add(AddressOperand.Create(dasm.addr + offset));
+            dasm.ops.Add(AddressOperand.Create(dasm.addr + offset));
             return true;
         }
 
         public static bool RILc(ulong uInstr, zSeriesDisassembler dasm)
         {
             var offset = 2 * (int)Bits.SignExtend(uInstr, 32);
-            dasm.state.ops.Add(AddressOperand.Create(dasm.addr + offset));
+            dasm.ops.Add(AddressOperand.Create(dasm.addr + offset));
             return true;
         }
 
@@ -247,8 +240,8 @@ namespace Reko.Arch.zSeries
             var x2 = Registers.GpRegisters[(uInstr >> 16) & 0xF];
             var b2 = Registers.GpRegisters[(uInstr >> 12) & 0xF];
             var d2 = (int)Bits.SignExtend(uInstr, 12);
-            dasm.state.ops.Add(r1);
-            dasm.state.ops.Add(dasm.CreateAccess(b2, x2, d2));
+            dasm.ops.Add(r1);
+            dasm.ops.Add(dasm.CreateAccess(b2, x2, d2));
             return true;
         }
 
@@ -257,7 +250,7 @@ namespace Reko.Arch.zSeries
             var x2 = Registers.GpRegisters[(uInstr >> 16) & 0xF];
             var b2 = Registers.GpRegisters[(uInstr >> 12) & 0xF];
             var d2 = (int)Bits.SignExtend(uInstr, 12);
-            dasm.state.ops.Add(dasm.CreateAccess(b2, x2, d2));
+            dasm.ops.Add(dasm.CreateAccess(b2, x2, d2));
             return true;
         }
 
@@ -265,7 +258,7 @@ namespace Reko.Arch.zSeries
         {
             var b2 = Registers.GpRegisters[(uInstr >> 12) & 0xF];
             var d2 = (int)Bits.SignExtend(uInstr, 12);
-            dasm.state.ops.Add(dasm.CreateAccess(b2, d2));
+            dasm.ops.Add(dasm.CreateAccess(b2, d2));
             return true;
         }
 
@@ -276,8 +269,8 @@ namespace Reko.Arch.zSeries
             var d1 = (int)Bits.SignExtend(uInstr >> 16, 12);
             var b2 = Registers.GpRegisters[(uInstr >> 12) & 0xF];
             var d2 = (int)Bits.SignExtend(uInstr, 12);
-            dasm.state.ops.Add(dasm.CreateAccessLength(b1, d1, l + 1));
-            dasm.state.ops.Add(dasm.CreateAccess(b2, d2));
+            dasm.ops.Add(dasm.CreateAccessLength(b1, d1, l + 1));
+            dasm.ops.Add(dasm.CreateAccess(b2, d2));
             return true;
         }
 
@@ -289,8 +282,8 @@ namespace Reko.Arch.zSeries
             var d1 = (int)Bits.SignExtend(uInstr >> 16, 12);
             var b2 = Registers.GpRegisters[(uInstr >> 12) & 0xF];
             var d2 = (int)Bits.SignExtend(uInstr, 12);
-            dasm.state.ops.Add(dasm.CreateAccessLength(b1, d1, l1+ 1));
-            dasm.state.ops.Add(dasm.CreateAccessLength(b2, d2, l2+1));
+            dasm.ops.Add(dasm.CreateAccessLength(b1, d1, l1+ 1));
+            dasm.ops.Add(dasm.CreateAccessLength(b2, d2, l2+1));
             return true;
         }
 
@@ -302,9 +295,9 @@ namespace Reko.Arch.zSeries
             var d1 = (int)Bits.SignExtend(uInstr >> 16, 12);
             var b2 = Registers.GpRegisters[(uInstr >> 12) & 0xF];
             var d2 = (int)Bits.SignExtend(uInstr, 12);
-            dasm.state.ops.Add(dasm.CreateAccessLength(b1, d1, l + 1));
-            dasm.state.ops.Add(dasm.CreateAccess(b2, d2));
-            dasm.state.ops.Add(ImmediateOperand.Byte(i3));
+            dasm.ops.Add(dasm.CreateAccessLength(b1, d1, l + 1));
+            dasm.ops.Add(dasm.CreateAccess(b2, d2));
+            dasm.ops.Add(ImmediateOperand.Byte(i3));
             return true;
         }
 
@@ -316,9 +309,9 @@ namespace Reko.Arch.zSeries
             var d1 = (int)Bits.SignExtend(uInstr >> 16, 12);
             var b2 = Registers.GpRegisters[(uInstr >> 12) & 0xF];
             var d2 = (int)Bits.SignExtend(uInstr, 12);
-            dasm.state.ops.Add(dasm.CreateAccess(b1, r1, d1));
-            dasm.state.ops.Add(dasm.CreateAccess(b2, d2));
-            dasm.state.ops.Add(new RegisterOperand(r3));
+            dasm.ops.Add(dasm.CreateAccess(b1, r1, d1));
+            dasm.ops.Add(dasm.CreateAccess(b2, d2));
+            dasm.ops.Add(new RegisterOperand(r3));
             return true;
         }
 
@@ -329,8 +322,8 @@ namespace Reko.Arch.zSeries
             var d1 = (int)Bits.SignExtend(uInstr >> 16, 12);
             var b2 = Registers.GpRegisters[(uInstr >> 12) & 0xF];
             var d2 = (int)Bits.SignExtend(uInstr, 12);
-            dasm.state.ops.Add(dasm.CreateAccess(b1, d1));
-            dasm.state.ops.Add(dasm.CreateAccessLength(b2, d2, l2 + 1));
+            dasm.ops.Add(dasm.CreateAccess(b1, d1));
+            dasm.ops.Add(dasm.CreateAccessLength(b2, d2, l2 + 1));
             return true;
         }
 
@@ -339,8 +332,8 @@ namespace Reko.Arch.zSeries
             var r1 = Registers.GpRegisters[(uInstr >> 20) & 0xF];
             var b2 = Registers.GpRegisters[(uInstr >> 12) & 0xF];
             var d2 = (int)Bits.SignExtend(uInstr, 12);
-            dasm.state.ops.Add(new RegisterOperand(r1));
-            dasm.state.ops.Add(dasm.CreateAccess(b2, d2));
+            dasm.ops.Add(new RegisterOperand(r1));
+            dasm.ops.Add(dasm.CreateAccess(b2, d2));
             return true;
         }
 
@@ -350,9 +343,9 @@ namespace Reko.Arch.zSeries
             var r3 = Registers.GpRegisters[(uInstr >> 16) & 0xF];
             var b2 = Registers.GpRegisters[(uInstr >> 12) & 0xF];
             var d2 = (int)Bits.SignExtend(uInstr, 12);
-            dasm.state.ops.Add(new RegisterOperand(r1));
-            dasm.state.ops.Add(new RegisterOperand(r3));
-            dasm.state.ops.Add(dasm.CreateAccess(b2, d2));
+            dasm.ops.Add(new RegisterOperand(r1));
+            dasm.ops.Add(new RegisterOperand(r3));
+            dasm.ops.Add(dasm.CreateAccess(b2, d2));
             return true;
         }
 
@@ -362,9 +355,9 @@ namespace Reko.Arch.zSeries
             var m3 = ImmediateOperand.Byte((byte)((uInstr >> 16) & 0xF));
             var b2 = Registers.GpRegisters[(uInstr >> 12) & 0xF];
             var d2 = (int)Bits.SignExtend(uInstr, 12);
-            dasm.state.ops.Add(new RegisterOperand(r1));
-            dasm.state.ops.Add(dasm.CreateAccess(b2, d2));
-            dasm.state.ops.Add(m3);
+            dasm.ops.Add(new RegisterOperand(r1));
+            dasm.ops.Add(dasm.CreateAccess(b2, d2));
+            dasm.ops.Add(m3);
             return true;
         }
 
@@ -379,9 +372,9 @@ namespace Reko.Arch.zSeries
             var r3 = Registers.GpRegisters[(uInstr >> 32) & 0xF];
             var b2 = Registers.GpRegisters[(uInstr >> 28) & 0xF];
             var d2 = Bitfield.ReadSignedFields(rsya_offset, (uint)uInstr);
-            dasm.state.ops.Add(new RegisterOperand(r1));
-            dasm.state.ops.Add(new RegisterOperand(r3));
-            dasm.state.ops.Add(dasm.CreateAccess(b2, d2));
+            dasm.ops.Add(new RegisterOperand(r1));
+            dasm.ops.Add(new RegisterOperand(r3));
+            dasm.ops.Add(dasm.CreateAccess(b2, d2));
             return true;
         }
 
@@ -391,9 +384,9 @@ namespace Reko.Arch.zSeries
             var m3 = (byte)((uInstr >> 32) & 0xF);
             var b2 = Registers.GpRegisters[(uInstr >> 28) & 0xF];
             var d2 = Bitfield.ReadSignedFields(rsya_offset, (uint)uInstr);
-            dasm.state.ops.Add(new RegisterOperand(r1));
-            dasm.state.ops.Add(ImmediateOperand.Byte(m3));
-            dasm.state.ops.Add(dasm.CreateAccess(b2, d2));
+            dasm.ops.Add(new RegisterOperand(r1));
+            dasm.ops.Add(ImmediateOperand.Byte(m3));
+            dasm.ops.Add(dasm.CreateAccess(b2, d2));
             return true;
         }
 
@@ -409,8 +402,8 @@ namespace Reko.Arch.zSeries
             var x2 = Registers.GpRegisters[(uInstr >> 32) & 0xF];
             var b2 = Registers.GpRegisters[(uInstr >> 28) & 0xF];
             var d2 = Bitfield.ReadSignedFields(rxya_offset, (uint)uInstr);
-            dasm.state.ops.Add(r1);
-            dasm.state.ops.Add(dasm.CreateAccess(b2, x2, d2));
+            dasm.ops.Add(r1);
+            dasm.ops.Add(dasm.CreateAccess(b2, x2, d2));
             return true;
         }
 
@@ -419,40 +412,12 @@ namespace Reko.Arch.zSeries
             var i2 = ImmediateOperand.Byte((byte)(uInstr >> 16));
             var b1 = Registers.GpRegisters[(uInstr >> 12) & 0xF];
             var d1 = (int)Bits.SignExtend(uInstr, 12);
-            dasm.state.ops.Add(dasm.CreateAccess(b1, d1));
-            dasm.state.ops.Add(i2);
+            dasm.ops.Add(dasm.CreateAccess(b1, d1));
+            dasm.ops.Add(i2);
             return true;
         }
 
         #endregion
-
-        public abstract class Decoder
-        {
-            public abstract zSeriesInstruction Decode(ulong uInstr, zSeriesDisassembler dasm);
-        }
-
-        public class InstrDecoder : Decoder
-        {
-            private readonly Opcode opcode;
-            private readonly Mutator[] mutators;
-
-            public InstrDecoder(Opcode opcode, params Mutator[] mutators)
-            {
-                this.opcode = opcode;
-                this.mutators = mutators;
-            }
-
-            public override zSeriesInstruction Decode(ulong uInstr, zSeriesDisassembler dasm)
-            {
-                dasm.state.opcode = opcode;
-                foreach (var m in mutators)
-                {
-                    if (!m(uInstr, dasm))
-                        return dasm.Invalid();
-                }
-                return dasm.state.MakeInstruction();
-            }
-        }
 
         public class NyiDecoder : Decoder
         {
@@ -466,35 +431,36 @@ namespace Reko.Arch.zSeries
             public override zSeriesInstruction Decode(ulong uInstr, zSeriesDisassembler dasm)
             {
                 dasm.Nyi(uInstr, msg);
-                return dasm.Invalid();
+                return dasm.CreateInvalidInstruction();
             }
         }
 
-        public class ExtendDecoder32 : InstrDecoder
+        public class ExtendDecoder32 : WideInstrDecoder
         {
-            public ExtendDecoder32(Opcode opcode, params Mutator [] mutators) : base(opcode, mutators)
+            public ExtendDecoder32(InstrClass iclass, Mnemonic mnemonic, params WideMutator<zSeriesDisassembler>[] mutators)
+                : base(iclass, mnemonic, mutators)
             {
             }
 
             public override zSeriesInstruction Decode(ulong uInstr, zSeriesDisassembler dasm)
             {
                 if (!dasm.rdr.TryReadBeUInt16(out ushort uLowWord))
-                    return dasm.Invalid();
+                    return dasm.CreateInvalidInstruction();
                 ulong uInstrExt = (uInstr << 16) | uLowWord;
                 return base.Decode(uInstrExt, dasm);
             }
         }
 
-        public class ExtendDecoder48 : InstrDecoder
+        public class ExtendDecoder48 : WideInstrDecoder
         {
-            public ExtendDecoder48(Opcode opcode, params Mutator[] mutators) : base(opcode, mutators)
+            public ExtendDecoder48(InstrClass iclass, Mnemonic mnemonic, params WideMutator<zSeriesDisassembler>[] mutators) : base(iclass, mnemonic, mutators)
             {
             }
 
             public override zSeriesInstruction Decode(ulong uInstr, zSeriesDisassembler dasm)
             {
                 if (!dasm.rdr.TryReadBeUInt32(out uint uLowWord))
-                    return dasm.Invalid();
+                    return dasm.CreateInvalidInstruction();
                 ulong uInstrExt = (uInstr << 32) | uLowWord;
                 return base.Decode(uInstrExt, dasm);
             }
@@ -564,7 +530,7 @@ namespace Reko.Arch.zSeries
             public override zSeriesInstruction Decode(ulong uInstr, zSeriesDisassembler dasm)
             {
                 if (!dasm.rdr.TryReadBeUInt16(out ushort uLowWord))
-                    return dasm.Invalid();
+                    return dasm.CreateInvalidInstruction();
                 ulong uInstrExt = (uInstr << 16) | uLowWord;
                 var op = this.bitfield.Read((uint)uInstrExt);
                 return this.decoders[op].Decode(uInstrExt, dasm);
@@ -603,26 +569,31 @@ namespace Reko.Arch.zSeries
             public override zSeriesInstruction Decode(ulong uInstr, zSeriesDisassembler dasm)
             {
                 if (!dasm.rdr.TryReadBeUInt32(out uint uLowWord))
-                    return dasm.Invalid();
+                    return dasm.CreateInvalidInstruction();
                 ulong uInstrExt = (uInstr << 32) | uLowWord;
                 var op = this.bitfield.Read(uInstrExt);
                 return this.decoders[op].Decode(uInstrExt, dasm);
             }
         }
 
-        public static InstrDecoder Instr(Opcode opcode, params Mutator[] mutators)
+        public static WideInstrDecoder Instr(Mnemonic mnemonic, params WideMutator<zSeriesDisassembler>[] mutators)
         {
-            return new InstrDecoder(opcode, mutators);
+            return new WideInstrDecoder(InstrClass.Linear, mnemonic, mutators);
         }
 
-        public static ExtendDecoder32 Instr32(Opcode opcode, params Mutator[] mutators)
+        public static WideInstrDecoder Instr(Mnemonic mnemonic, InstrClass iclass, params WideMutator<zSeriesDisassembler>[] mutators)
         {
-            return new ExtendDecoder32(opcode, mutators);
+            return new WideInstrDecoder(iclass, mnemonic, mutators);
         }
 
-        public static ExtendDecoder48 Instr48(Opcode opcode, params Mutator[] mutators)
+        public static ExtendDecoder32 Instr32(Mnemonic mnemonic, params WideMutator<zSeriesDisassembler>[] mutators)
         {
-            return new ExtendDecoder48(opcode, mutators);
+            return new ExtendDecoder32(InstrClass.Linear, mnemonic, mutators);
+        }
+
+        public static ExtendDecoder48 Instr48(Mnemonic mnemonic, params WideMutator<zSeriesDisassembler>[] mutators)
+        {
+            return new ExtendDecoder48(InstrClass.Linear, mnemonic, mutators);
         }
 
         public static MaskDecoder Mask(int pos, int len, params Decoder[] decoders)
@@ -657,32 +628,32 @@ namespace Reko.Arch.zSeries
 
         static zSeriesDisassembler()
         {
-            invalid = Instr(Opcode.invalid);
+            invalid = Instr(Mnemonic.invalid, InstrClass.Invalid);
 
             var n01_decoders = Mask(0, 8,
-                (0x01, Instr(Opcode.pr)));
+                (0x01, Instr(Mnemonic.pr)));
 
             var b2_decoders = ExtendMask32(0, 8,
-                (0x04, Instr(Opcode.sck, S))
+                (0x04, Instr(Mnemonic.sck, S))
                 );
 
             var e3_decoders = ExtendMask48(0, 8,
-                (0x04, Instr(Opcode.lg, RXYa)),
-                (0x14, Instr(Opcode.lgf, RXYa)),
-                (0x21, Instr(Opcode.clg, RXYa)),
-                (0x24, Instr(Opcode.stg, RXYa)));
+                (0x04, Instr(Mnemonic.lg, RXYa)),
+                (0x14, Instr(Mnemonic.lgf, RXYa)),
+                (0x21, Instr(Mnemonic.clg, RXYa)),
+                (0x24, Instr(Mnemonic.stg, RXYa)));
 
             var e5_decoders = ExtendMask48(0, 8);
 
             var eb_decoders = ExtendMask48(0, 8,
                 (~0u, Nyi("*")),
-                (0x04, Instr(Opcode.lmg, RSYa)),
-                (0x0A, Instr(Opcode.srag, RSYa)),
-                (0x0B, Instr(Opcode.slag, RSYa)),
-                (0x0C, Instr(Opcode.srlg, RSYa)),
-                (0x0D, Instr(Opcode.sllg, RSYa)),
-                (0x20, Instr(Opcode.clmh, RSYb)),
-                (0x24, Instr(Opcode.stmg, RSYa)));
+                (0x04, Instr(Mnemonic.lmg, RSYa)),
+                (0x0A, Instr(Mnemonic.srag, RSYa)),
+                (0x0B, Instr(Mnemonic.slag, RSYa)),
+                (0x0C, Instr(Mnemonic.srlg, RSYa)),
+                (0x0D, Instr(Mnemonic.sllg, RSYa)),
+                (0x20, Instr(Mnemonic.clmh, RSYb)),
+                (0x24, Instr(Mnemonic.stmg, RSYa)));
 
             decoders = new Decoder[256]
             {
@@ -692,57 +663,57 @@ namespace Reko.Arch.zSeries
                 invalid,
                 invalid,
 
-                Instr(Opcode.spm, RR),
-                Instr(Opcode.balr, RR),
-                Instr(Opcode.bctr, RR),
+                Instr(Mnemonic.spm, RR),
+                Instr(Mnemonic.balr, RR),
+                Instr(Mnemonic.bctr, RR),
                 Mask(4, 4,
-                    Instr(Opcode.nopr, R),
-                    Instr(Opcode.bor, R),
-                    Instr(Opcode.bhr, R),
-                    Instr(Opcode.bnler, R),
-                    Instr(Opcode.blr, R),
-                    Instr(Opcode.bnher, R),
-                    Instr(Opcode.blhr, R),
-                    Instr(Opcode.bner, R),
-                    Instr(Opcode.ber, R),
-                    Instr(Opcode.bnlhr, R),
-                    Instr(Opcode.bher, R),
-                    Instr(Opcode.bnlr, R),
-                    Instr(Opcode.bler, R),
-                    Instr(Opcode.bnhr, R),
-                    Instr(Opcode.bnor, R),
-                    Instr(Opcode.br, R)),
+                    Instr(Mnemonic.nopr, R),
+                    Instr(Mnemonic.bor, R),
+                    Instr(Mnemonic.bhr, R),
+                    Instr(Mnemonic.bnler, R),
+                    Instr(Mnemonic.blr, R),
+                    Instr(Mnemonic.bnher, R),
+                    Instr(Mnemonic.blhr, R),
+                    Instr(Mnemonic.bner, R),
+                    Instr(Mnemonic.ber, R),
+                    Instr(Mnemonic.bnlhr, R),
+                    Instr(Mnemonic.bher, R),
+                    Instr(Mnemonic.bnlr, R),
+                    Instr(Mnemonic.bler, R),
+                    Instr(Mnemonic.bnhr, R),
+                    Instr(Mnemonic.bnor, R),
+                    Instr(Mnemonic.br, R)),
                 invalid,
                 invalid,
                 Nyi("*"),
-                Instr(Opcode.bsm, RR),
+                Instr(Mnemonic.bsm, RR),
 
-                Instr(Opcode.bassm, RR),
-                Instr(Opcode.basr, RR),
-                Instr(Opcode.mvcl, RR),
-                Instr(Opcode.clcl, RR),
+                Instr(Mnemonic.bassm, RR),
+                Instr(Mnemonic.basr, RR),
+                Instr(Mnemonic.mvcl, RR),
+                Instr(Mnemonic.clcl, RR),
                 // 10
-                Instr(Opcode.lpr, RR),
-                Instr(Opcode.lnr, RR),
-                Instr(Opcode.ltr, RR),
-                Instr(Opcode.lcr, RR),
+                Instr(Mnemonic.lpr, RR),
+                Instr(Mnemonic.lnr, RR),
+                Instr(Mnemonic.ltr, RR),
+                Instr(Mnemonic.lcr, RR),
 
-                Instr(Opcode.nr, RR),
-                Instr(Opcode.clr, RR),
-                Instr(Opcode.or, RR),
-                Instr(Opcode.xr, RR),
+                Instr(Mnemonic.nr, RR),
+                Instr(Mnemonic.clr, RR),
+                Instr(Mnemonic.or, RR),
+                Instr(Mnemonic.xr, RR),
 
-                Instr(Opcode.lr, RR),
-                Instr(Opcode.cr, RR),
-                Instr(Opcode.ar, RR),
-                Instr(Opcode.sr, RR),
+                Instr(Mnemonic.lr, RR),
+                Instr(Mnemonic.cr, RR),
+                Instr(Mnemonic.ar, RR),
+                Instr(Mnemonic.sr, RR),
 
-                Instr(Opcode.mr, RR),
-                Instr(Opcode.dr, RR),
-                Instr(Opcode.alr, RR),
-                Instr(Opcode.slr, RR),
+                Instr(Mnemonic.mr, RR),
+                Instr(Mnemonic.dr, RR),
+                Instr(Mnemonic.alr, RR),
+                Instr(Mnemonic.slr, RR),
                 // 20
-                Instr(Opcode.lpdr, RR),
+                Instr(Mnemonic.lpdr, RR),
                 Nyi("*"),
                 Nyi("*"),
                 Nyi("*"),
@@ -752,22 +723,22 @@ namespace Reko.Arch.zSeries
                 Nyi("*"),
                 Nyi("*"),
 
-                Instr(Opcode.ldr, FF),
-                Instr(Opcode.cdr, FF),
-                Instr(Opcode.adr, FF),
-                Instr(Opcode.sdr, FF),
+                Instr(Mnemonic.ldr, FF),
+                Instr(Mnemonic.cdr, FF),
+                Instr(Mnemonic.adr, FF),
+                Instr(Mnemonic.sdr, FF),
 
-                Instr(Opcode.mdr, FF),
-                Instr(Opcode.ddr, FF),
-                Instr(Opcode.awr, FF),
-                Instr(Opcode.swr, FF),
+                Instr(Mnemonic.mdr, FF),
+                Instr(Mnemonic.ddr, FF),
+                Instr(Mnemonic.awr, FF),
+                Instr(Mnemonic.swr, FF),
                 // 30
-                Instr(Opcode.lper, RR),
+                Instr(Mnemonic.lper, RR),
                 Nyi("*"),
                 Nyi("*"),
                 Nyi("*"),
 
-                Instr(Opcode.her, RR),
+                Instr(Mnemonic.her, RR),
                 Nyi("*"),
                 Nyi("*"),
                 Nyi("*"),
@@ -782,64 +753,64 @@ namespace Reko.Arch.zSeries
                 Nyi("*"),
                 Nyi("*"),
                 // 40
-                Instr32(Opcode.sth, RXa),
-                Instr32(Opcode.la, RXa),
-                Instr32(Opcode.stc, RXa),
-                Instr32(Opcode.ic, RXa),
+                Instr32(Mnemonic.sth, RXa),
+                Instr32(Mnemonic.la, RXa),
+                Instr32(Mnemonic.stc, RXa),
+                Instr32(Mnemonic.ic, RXa),
 
-                Instr32(Opcode.ex, RXa),
+                Instr32(Mnemonic.ex, RXa),
                 Nyi("*"),
                 Nyi("*"),
                 ExtendMask32(20, 4,
-                    Instr(Opcode.nop),
-                    Instr(Opcode.bo, RXb),
-                    Instr(Opcode.bh, RXb),
-                    Instr(Opcode.bnle, RXb),
-                    Instr(Opcode.bl, RXb),
-                    Instr(Opcode.bnhe, RXb),
-                    Instr(Opcode.blh, RXb),
-                    Instr(Opcode.bne, RXb),
-                    Instr(Opcode.be, RXb),
-                    Instr(Opcode.bnlh, RXb),
-                    Instr(Opcode.bhe, RXb),
-                    Instr(Opcode.bnl, RXb),
-                    Instr(Opcode.ble, RXb),
-                    Instr(Opcode.bnh, RXb),
-                    Instr(Opcode.bno, RXb),
-                    Instr(Opcode.b, RXb),
+                    Instr(Mnemonic.nop),
+                    Instr(Mnemonic.bo, RXb),
+                    Instr(Mnemonic.bh, RXb),
+                    Instr(Mnemonic.bnle, RXb),
+                    Instr(Mnemonic.bl, RXb),
+                    Instr(Mnemonic.bnhe, RXb),
+                    Instr(Mnemonic.blh, RXb),
+                    Instr(Mnemonic.bne, RXb),
+                    Instr(Mnemonic.be, RXb),
+                    Instr(Mnemonic.bnlh, RXb),
+                    Instr(Mnemonic.bhe, RXb),
+                    Instr(Mnemonic.bnl, RXb),
+                    Instr(Mnemonic.ble, RXb),
+                    Instr(Mnemonic.bnh, RXb),
+                    Instr(Mnemonic.bno, RXb),
+                    Instr(Mnemonic.b, RXb),
                     Nyi("*")),
 
-                Instr32(Opcode.lh, RXa),
-                Instr32(Opcode.ch, RXa),
-                Instr32(Opcode.ah, RXa),
-                Instr32(Opcode.sh, RXa),
+                Instr32(Mnemonic.lh, RXa),
+                Instr32(Mnemonic.ch, RXa),
+                Instr32(Mnemonic.ah, RXa),
+                Instr32(Mnemonic.sh, RXa),
 
-                Instr32(Opcode.mh, RXa),
-                Instr32(Opcode.bas, RXa),
-                Instr32(Opcode.cvd, RXa),
-                Instr32(Opcode.cvb, RXa),
+                Instr32(Mnemonic.mh, RXa),
+                Instr32(Mnemonic.bas, RXa),
+                Instr32(Mnemonic.cvd, RXa),
+                Instr32(Mnemonic.cvb, RXa),
                 // 50
-                Instr32(Opcode.st, RXa),
-                Instr32(Opcode.lae, RXa),
+                Instr32(Mnemonic.st, RXa),
+                Instr32(Mnemonic.lae, RXa),
                 invalid,
                 invalid,
 
-                Instr32(Opcode.n, RXa),
-                Instr32(Opcode.cl, RXa),
-                Instr32(Opcode.o, RXa),
-                Instr32(Opcode.x, RXa),
+                Instr32(Mnemonic.n, RXa),
+                Instr32(Mnemonic.cl, RXa),
+                Instr32(Mnemonic.o, RXa),
+                Instr32(Mnemonic.x, RXa),
 
-                Instr32(Opcode.l, RXa),
-                Instr32(Opcode.c, RXa),
-                Instr32(Opcode.a, RXa),
-                Instr32(Opcode.s, RXa),
+                Instr32(Mnemonic.l, RXa),
+                Instr32(Mnemonic.c, RXa),
+                Instr32(Mnemonic.a, RXa),
+                Instr32(Mnemonic.s, RXa),
 
-                Instr32(Opcode.m, RXa),
-                Instr32(Opcode.d, RXa),
+                Instr32(Mnemonic.m, RXa),
+                Instr32(Mnemonic.d, RXa),
                 Nyi("*"),
                 Nyi("*"),
                 // 60
-                Instr32(Opcode.std, FXa),
+                Instr32(Mnemonic.std, FXa),
                 invalid,
                 invalid,
                 invalid,
@@ -847,20 +818,20 @@ namespace Reko.Arch.zSeries
                 invalid,
                 invalid,
                 invalid,
-                Instr32(Opcode.mxd, FXa),
+                Instr32(Mnemonic.mxd, FXa),
 
-                Instr32(Opcode.ld, FXa),
-                Instr32(Opcode.cd, FXa),
-                Instr32(Opcode.ad, FXa),
-                Instr32(Opcode.sd, FXa),
+                Instr32(Mnemonic.ld, FXa),
+                Instr32(Mnemonic.cd, FXa),
+                Instr32(Mnemonic.ad, FXa),
+                Instr32(Mnemonic.sd, FXa),
 
-                Instr32(Opcode.md, FXa),
-                Instr32(Opcode.dd, FXa),
+                Instr32(Mnemonic.md, FXa),
+                Instr32(Mnemonic.dd, FXa),
                 Nyi("*"),
                 Nyi("*"),
                 // 70
-                Instr32(Opcode.ste, FXa),
-                Instr32(Opcode.ms, RXa),
+                Instr32(Mnemonic.ste, FXa),
+                Instr32(Mnemonic.ms, RXa),
                 invalid,
                 invalid,
 
@@ -871,48 +842,48 @@ namespace Reko.Arch.zSeries
 
                 Nyi("*"),
                 Nyi("*"),
-                Instr32(Opcode.ae, FXa),
-                Instr32(Opcode.se, FXa),
+                Instr32(Mnemonic.ae, FXa),
+                Instr32(Mnemonic.se, FXa),
 
                 Nyi("*"),
                 Nyi("*"),
-                Instr32(Opcode.au, FXa),
-                Instr32(Opcode.su, FXa),
+                Instr32(Mnemonic.au, FXa),
+                Instr32(Mnemonic.su, FXa),
                 // 80
-                Instr32(Opcode.ssm, S),
+                Instr32(Mnemonic.ssm, S),
                 Nyi("*"),
                 Nyi("*"),
                 Nyi("*"),
 
                 Nyi("*"),
                 Nyi("*"),
-                Instr32(Opcode.sra, RSa),
+                Instr32(Mnemonic.sra, RSa),
                 Nyi("*"),
 
-                Instr32(Opcode.srl, RSa),
-                Instr32(Opcode.sll, RSa),
-                Instr32(Opcode.sra, RSa),
-                Instr32(Opcode.sla, RSa),
+                Instr32(Mnemonic.srl, RSa),
+                Instr32(Mnemonic.sll, RSa),
+                Instr32(Mnemonic.sra, RSa),
+                Instr32(Mnemonic.sla, RSa),
 
                 Nyi("*"),
                 Nyi("*"),
                 Nyi("*"),
                 Nyi("*"),
                 // 90
-                Instr32(Opcode.stm, RSa3),
+                Instr32(Mnemonic.stm, RSa3),
                 Nyi("*"),
-                Instr32(Opcode.mvi, SI),
+                Instr32(Mnemonic.mvi, SI),
                 Nyi("*"),
 
                 Nyi("*"),
-                Instr32(Opcode.cli, SI),
-                Instr32(Opcode.oi, SI),
-                Instr32(Opcode.xi, SI),
+                Instr32(Mnemonic.cli, SI),
+                Instr32(Mnemonic.oi, SI),
+                Instr32(Mnemonic.xi, SI),
 
-                Instr32(Opcode.lm, RSa3),
+                Instr32(Mnemonic.lm, RSa3),
                 Nyi("*"),
-                Instr32(Opcode.lam, RSa3),
-                Instr32(Opcode.stam, RSa3),
+                Instr32(Mnemonic.lam, RSa3),
+                Instr32(Mnemonic.stam, RSa3),
 
                 invalid,
                 invalid,
@@ -926,44 +897,44 @@ namespace Reko.Arch.zSeries
 
                 invalid,
                 ExtendMask32(16, 4, 
-                    (0x00, Instr(Opcode.iihh, RIa)),
-                    (0x01, Instr(Opcode.iihl, RIa)),
-                    (0x02, Instr(Opcode.iilh, RIa)),
-                    (0x03, Instr(Opcode.iill, RIa)),
-                    (0x08, Instr(Opcode.lhi, RIa)),
-                    (0x09, Instr(Opcode.lghi, RIa)),
-                    (0x0A, Instr(Opcode.ahi, RIa)),
-                    (0x0F, Instr(Opcode.llill, RIa))),
+                    (0x00, Instr(Mnemonic.iihh, RIa)),
+                    (0x01, Instr(Mnemonic.iihl, RIa)),
+                    (0x02, Instr(Mnemonic.iilh, RIa)),
+                    (0x03, Instr(Mnemonic.iill, RIa)),
+                    (0x08, Instr(Mnemonic.lhi, RIa)),
+                    (0x09, Instr(Mnemonic.lghi, RIa)),
+                    (0x0A, Instr(Mnemonic.ahi, RIa)),
+                    (0x0F, Instr(Mnemonic.llill, RIa))),
                 Nyi("*"),
                 ExtendMask32(16, 4,
                     (0x04, Mask(20, 4,
-                        Instr(Opcode.brc, RIc),
-                        Instr(Opcode.jo, RIc),
-                        Instr(Opcode.jh, RIc),
-                        Instr(Opcode.jnle, RIc),
-                        Instr(Opcode.jl, RIc),
-                        Instr(Opcode.jnhe, RIc),
-                        Instr(Opcode.jlh, RIc),
-                        Instr(Opcode.jne, RIc),
-                        Instr(Opcode.je, RIc),
-                        Instr(Opcode.jnlh, RIc),
-                        Instr(Opcode.jhe, RIc),
-                        Instr(Opcode.jnl, RIc),
-                        Instr(Opcode.jle, RIc),
-                        Instr(Opcode.jnh, RIc),
-                        Instr(Opcode.jno, RIc),
-                        Instr(Opcode.j, RIc))),
-                    (0x7, Instr(Opcode.brctg, RIb)),
-                    (0x8, Instr(Opcode.lhi, RIa)),
-                    (0x9, Instr(Opcode.lghi, RIa)),
-                    (0xA, Instr(Opcode.ahi, RIa)),
-                    (0xB, Instr(Opcode.aghi, RIa)),
-                    (0xE, Instr(Opcode.chi, RIa)),
-                    (0xF, Instr(Opcode.cghi, RIa))),
+                        Instr(Mnemonic.brc, RIc),
+                        Instr(Mnemonic.jo, RIc),
+                        Instr(Mnemonic.jh, RIc),
+                        Instr(Mnemonic.jnle, RIc),
+                        Instr(Mnemonic.jl, RIc),
+                        Instr(Mnemonic.jnhe, RIc),
+                        Instr(Mnemonic.jlh, RIc),
+                        Instr(Mnemonic.jne, RIc),
+                        Instr(Mnemonic.je, RIc),
+                        Instr(Mnemonic.jnlh, RIc),
+                        Instr(Mnemonic.jhe, RIc),
+                        Instr(Mnemonic.jnl, RIc),
+                        Instr(Mnemonic.jle, RIc),
+                        Instr(Mnemonic.jnh, RIc),
+                        Instr(Mnemonic.jno, RIc),
+                        Instr(Mnemonic.j, RIc))),
+                    (0x7, Instr(Mnemonic.brctg, RIb)),
+                    (0x8, Instr(Mnemonic.lhi, RIa)),
+                    (0x9, Instr(Mnemonic.lghi, RIa)),
+                    (0xA, Instr(Mnemonic.ahi, RIa)),
+                    (0xB, Instr(Mnemonic.aghi, RIa)),
+                    (0xE, Instr(Mnemonic.chi, RIa)),
+                    (0xF, Instr(Mnemonic.cghi, RIa))),
 
-                Instr32(Opcode.mvcle, RSa3),
+                Instr32(Mnemonic.mvcle, RSa3),
                 Nyi("*"),
-                Instr32(Opcode.unpka, SSa),
+                Instr32(Mnemonic.unpka, SSa),
                 Nyi("*"),
 
                 Nyi("*"),
@@ -972,7 +943,7 @@ namespace Reko.Arch.zSeries
                 Nyi("*"),
                 // B0
                 invalid,
-                Instr32(Opcode.lra, RXa),
+                Instr32(Mnemonic.lra, RXa),
                 b2_decoders,
                 Nyi("*"),
 
@@ -983,47 +954,47 @@ namespace Reko.Arch.zSeries
 
                 Nyi("*"),
                 ExtendMask32(16, 8,
-                    (0x02, Instr(Opcode.ltgr, RRE)),
-                    (0x04, Instr(Opcode.lgr, RRE)),
-                    (0x08, Instr(Opcode.agr, RRE)),
-                    (0x09, Instr(Opcode.sgr, RRE)),
-                    (0x12, Instr(Opcode.ltgfr, RRE)),
-                    (0x14, Instr(Opcode.lgfr, RRE)),
-                    (0x80, Instr(Opcode.ngr, RRE))),
+                    (0x02, Instr(Mnemonic.ltgr, RRE)),
+                    (0x04, Instr(Mnemonic.lgr, RRE)),
+                    (0x08, Instr(Mnemonic.agr, RRE)),
+                    (0x09, Instr(Mnemonic.sgr, RRE)),
+                    (0x12, Instr(Mnemonic.ltgfr, RRE)),
+                    (0x14, Instr(Mnemonic.lgfr, RRE)),
+                    (0x80, Instr(Mnemonic.ngr, RRE))),
                 Nyi("*"),
                 Nyi("*"),
 
                 Nyi("*"),
                 Nyi("*"),
                 Nyi("*"),
-                Instr32(Opcode.icm, RSb),
+                Instr32(Mnemonic.icm, RSb),
                 // C0
                 ExtendMask48(32, 4,
-                    (0x0, Instr(Opcode.larl, RILb)),
+                    (0x0, Instr(Mnemonic.larl, RILb)),
                     (0x4, Mask(36, 4,
-                        Instr(Opcode.brcl, RILc),
-                        Instr(Opcode.jgo, RILc),
-                        Instr(Opcode.jgh, RILc),
-                        Instr(Opcode.jgnle, RILc),
-                        Instr(Opcode.jgl, RILc),
-                        Instr(Opcode.jgnhe, RILc),
-                        Instr(Opcode.jglh, RILc),
-                        Instr(Opcode.jgne, RILc),
-                        Instr(Opcode.jge, RILc),
-                        Instr(Opcode.jgnlh, RILc),
-                        Instr(Opcode.jghe, RILc),
-                        Instr(Opcode.jgnl, RILc),
-                        Instr(Opcode.jgle, RILc),
-                        Instr(Opcode.jgnh, RILc),
-                        Instr(Opcode.jgno, RILc),
-                        Instr(Opcode.jg, RILc))),
-                    (0x5, Instr(Opcode.brasl, RILb))),
+                        Instr(Mnemonic.brcl, RILc),
+                        Instr(Mnemonic.jgo, RILc),
+                        Instr(Mnemonic.jgh, RILc),
+                        Instr(Mnemonic.jgnle, RILc),
+                        Instr(Mnemonic.jgl, RILc),
+                        Instr(Mnemonic.jgnhe, RILc),
+                        Instr(Mnemonic.jglh, RILc),
+                        Instr(Mnemonic.jgne, RILc),
+                        Instr(Mnemonic.jge, RILc),
+                        Instr(Mnemonic.jgnlh, RILc),
+                        Instr(Mnemonic.jghe, RILc),
+                        Instr(Mnemonic.jgnl, RILc),
+                        Instr(Mnemonic.jgle, RILc),
+                        Instr(Mnemonic.jgnh, RILc),
+                        Instr(Mnemonic.jgno, RILc),
+                        Instr(Mnemonic.jg, RILc))),
+                    (0x5, Instr(Mnemonic.brasl, RILb))),
                 Nyi("*"),
                 Nyi("*"),
                 Nyi("*"),
 
                 Nyi("*"),
-                Instr48(Opcode.bprp, MII),
+                Instr48(Mnemonic.bprp, MII),
                 Nyi("*"),
                 Nyi("*"),
 
@@ -1037,29 +1008,29 @@ namespace Reko.Arch.zSeries
                 Nyi("*"),
                 Nyi("*"),
                 // D0
-                Instr48(Opcode.trtr, SSa),
-                Instr48(Opcode.mvc, SSa),
-                Instr48(Opcode.mvz, SSa),
-                Instr48(Opcode.xc, SSa),
+                Instr48(Mnemonic.trtr, SSa),
+                Instr48(Mnemonic.mvc, SSa),
+                Instr48(Mnemonic.mvz, SSa),
+                Instr48(Mnemonic.xc, SSa),
 
-                Instr48(Opcode.nc, SSa),
-                Instr48(Opcode.clc, SSa),
-                Instr48(Opcode.oc, SSa),
-                Instr48(Opcode.xc, SSa),
-
-                Nyi("*"),
-                Nyi("*"),
-                Nyi("*"),
-                Instr48(Opcode.mvcs, SSd),
+                Instr48(Mnemonic.nc, SSa),
+                Instr48(Mnemonic.clc, SSa),
+                Instr48(Mnemonic.oc, SSa),
+                Instr48(Mnemonic.xc, SSa),
 
                 Nyi("*"),
                 Nyi("*"),
                 Nyi("*"),
-                Instr48(Opcode.edmk, SSa),
+                Instr48(Mnemonic.mvcs, SSd),
+
+                Nyi("*"),
+                Nyi("*"),
+                Nyi("*"),
+                Instr48(Mnemonic.edmk, SSa),
                 // E0
                 invalid,
-                Instr48(Opcode.pku, SSf),
-                Instr48(Opcode.unpku, SSa),
+                Instr48(Mnemonic.pku, SSf),
+                Instr48(Mnemonic.unpku, SSa),
                 e3_decoders,
 
                 Nyi("*"),
@@ -1069,7 +1040,7 @@ namespace Reko.Arch.zSeries
 
                 Nyi("*"),
                 Nyi("*"),
-                Instr48(Opcode.unpka, SSa),
+                Instr48(Mnemonic.unpka, SSa),
                 eb_decoders,
 
                 Nyi("*"),
@@ -1077,8 +1048,8 @@ namespace Reko.Arch.zSeries
                 Nyi("*"),
                 Nyi("*"),
                 // F0
-                Instr48(Opcode.srp, SSc),
-                Instr48(Opcode.mvo, SSb),
+                Instr48(Mnemonic.srp, SSc),
+                Instr48(Mnemonic.mvo, SSb),
                 Nyi("*"),
                 Nyi("*"),
 
@@ -1089,11 +1060,11 @@ namespace Reko.Arch.zSeries
 
                 Nyi("*"),
                 Nyi("*"),
-                Instr48(Opcode.ap, SSb),
-                Instr48(Opcode.sp, SSb),
+                Instr48(Mnemonic.ap, SSb),
+                Instr48(Mnemonic.sp, SSb),
 
-                Instr48(Opcode.mp, SSb),
-                Instr48(Opcode.dp, SSb),
+                Instr48(Mnemonic.mp, SSb),
+                Instr48(Mnemonic.dp, SSb),
                 invalid,
                 invalid,
             };

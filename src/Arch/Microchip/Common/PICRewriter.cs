@@ -1,8 +1,8 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 2017-2019 Christian Hostelet.
+ * Copyright (C) 2017-2020 Christian Hostelet.
  * inspired by work from:
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,6 +28,7 @@ using Reko.Core.Rtl;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Reko.Core.Lib;
 
 namespace Reko.Arch.MicrochipPIC.Common
 {
@@ -44,7 +45,7 @@ namespace Reko.Arch.MicrochipPIC.Common
 
         protected IEnumerator<PICInstruction> dasm;
         protected PICInstruction instrCurr;
-        protected InstrClass rtlc;
+        protected InstrClass iclass;
         protected List<RtlInstruction> rtlInstructions;
         protected RtlEmitter m;
         protected Identifier Wreg;    // cached WREG register identifier
@@ -77,16 +78,13 @@ namespace Reko.Arch.MicrochipPIC.Common
             while (dasm.MoveNext())
             {
                 instrCurr = dasm.Current;
-                rtlc = InstrClass.Linear;
+                iclass = InstrClass.Linear;
                 rtlInstructions = new List<RtlInstruction>();
                 m = new RtlEmitter(rtlInstructions);
 
                 RewriteInstr();
 
-                yield return new RtlInstructionCluster(instrCurr.Address, instrCurr.Length, rtlInstructions.ToArray())
-                {
-                    Class = rtlc
-                };
+                yield return m.MakeCluster(instrCurr.Address, instrCurr.Length, iclass);
             }
             yield break;
         }
@@ -101,7 +99,15 @@ namespace Reko.Arch.MicrochipPIC.Common
         protected abstract void SetStatusFlags(Expression dst);
 
         protected Identifier FlagGroup(FlagM flags)
-            => binder.EnsureFlagGroup(PICRegisters.STATUS, (uint)flags, arch.GrfToString((uint)flags), PrimitiveType.Byte);
+            => binder.EnsureFlagGroup(
+                PICRegisters.STATUS, 
+                (uint)flags, 
+                arch.GrfToString(PICRegisters.STATUS, 
+                    "",
+                    (uint)flags), 
+                Bits.IsSingleBitSet((uint)flags)
+                    ? PrimitiveType.Bool
+                    : PrimitiveType.Byte);
 
         protected static MemoryAccess DataMem8(Expression ea)
             => new MemoryAccess(PICRegisters.GlobalData, ea, PrimitiveType.Byte);
@@ -178,36 +184,36 @@ namespace Reko.Arch.MicrochipPIC.Common
 
         protected void ArithCondSkip(Expression dst, Expression src, Expression cond, FSRIndexedMode indMode, Expression memPtr)
         {
-            rtlc = InstrClass.ConditionalTransfer;
+            iclass = InstrClass.ConditionalTransfer;
             switch (indMode)
             {
                 case FSRIndexedMode.None:
                     m.Assign(dst, src);
-                    m.Branch(cond, SkipToAddr(), rtlc);
+                    m.Branch(cond, SkipToAddr(), iclass);
                     break;
 
                 case FSRIndexedMode.INDF:
                 case FSRIndexedMode.PLUSW:
                     m.Assign(dst, src);
-                    m.Branch(cond, SkipToAddr(), rtlc);
+                    m.Branch(cond, SkipToAddr(), iclass);
                     break;
 
                 case FSRIndexedMode.POSTDEC:
                     m.Assign(dst, src);
-                    m.BranchInMiddleOfInstruction(cond, SkipToAddr(), rtlc);
+                    m.BranchInMiddleOfInstruction(cond, SkipToAddr(), iclass);
                     m.Assign(memPtr, m.ISub(memPtr, 1));
                     break;
 
                 case FSRIndexedMode.POSTINC:
                     m.Assign(dst, src);
-                    m.BranchInMiddleOfInstruction(cond, SkipToAddr(), rtlc);
+                    m.BranchInMiddleOfInstruction(cond, SkipToAddr(), iclass);
                     m.Assign(memPtr, m.IAdd(memPtr, 1));
                     break;
 
                 case FSRIndexedMode.PREINC:
                     m.Assign(memPtr, m.IAdd(memPtr, 1));
                     m.Assign(dst, src);
-                    m.Branch(cond, SkipToAddr(), rtlc);
+                    m.Branch(cond, SkipToAddr(), iclass);
                     break;
             }
         }
@@ -217,39 +223,39 @@ namespace Reko.Arch.MicrochipPIC.Common
 
         protected void CondBranch(TestCondition test)
         {
-            rtlc = InstrClass.ConditionalTransfer;
-            if (instrCurr.op1 is PICOperandProgMemoryAddress brop)
+            iclass = InstrClass.ConditionalTransfer;
+            if (instrCurr.Operands[0] is PICOperandProgMemoryAddress brop)
             {
-                m.Branch(test, PICProgAddress.Ptr(brop.CodeTarget.ToUInt32()), rtlc);
+                m.Branch(test, PICProgAddress.Ptr(brop.CodeTarget.ToUInt32()), iclass);
                 return;
             }
-            throw new InvalidOperationException($"Wrong PIC program relative address: op1={instrCurr.op1}.");
+            throw new InvalidOperationException($"Wrong PIC program relative address: op1={instrCurr.Operands[0]}.");
         }
 
         protected void CondSkipIndirect(Expression cond, FSRIndexedMode indMode, Expression memPtr)
         {
-            rtlc = InstrClass.ConditionalTransfer;
+            iclass = InstrClass.ConditionalTransfer;
             switch (indMode)
             {
                 case FSRIndexedMode.None:
                 case FSRIndexedMode.INDF:
                 case FSRIndexedMode.PLUSW:
-                    m.Branch(cond, SkipToAddr(), rtlc);
+                    m.Branch(cond, SkipToAddr(), iclass);
                     break;
 
                 case FSRIndexedMode.POSTINC:
-                    m.BranchInMiddleOfInstruction(cond, SkipToAddr(), rtlc);
+                    m.Branch(cond, SkipToAddr(), iclass);
                     m.Assign(memPtr, m.IAdd(memPtr, 1));
                     break;
 
                 case FSRIndexedMode.POSTDEC:
-                    m.BranchInMiddleOfInstruction(cond, SkipToAddr(), rtlc);
+                    m.Branch(cond, SkipToAddr(), iclass);
                     m.Assign(memPtr, m.ISub(memPtr, 1));
                     break;
 
                 case FSRIndexedMode.PREINC:
                     m.Assign(memPtr, m.IAdd(memPtr, 1));
-                    m.Branch(cond, SkipToAddr(), rtlc);
+                    m.Branch(cond, SkipToAddr(), iclass);
                     break;
             }
         }
@@ -365,8 +371,8 @@ namespace Reko.Arch.MicrochipPIC.Common
                 return false;
             }
 
-            var (indMode, memPtr) = GetUnaryPtrs(instrCurr.op1, out memExpr);
-            dst = (DestIsWreg(instrCurr.op2) ? Wreg : memExpr);
+            var (indMode, memPtr) = GetUnaryPtrs(instrCurr.Operands[0], out memExpr);
+            dst = (DestIsWreg(instrCurr.Operands[1]) ? Wreg : memExpr);
             return (indMode, memPtr);
         }
 

@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /*
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -48,11 +48,6 @@ namespace Reko.UnitTests.Arch.zSeries
         public override IProcessorArchitecture Architecture { get { return arch; } }
 
         public override Address LoadAddress { get; }
-
-        protected override ImageWriter CreateImageWriter(byte[] bytes)
-        {
-            throw new NotImplementedException();
-        }
 
         public void AssertCode(string sExp, string machineCode)
         {
@@ -549,7 +544,7 @@ namespace Reko.UnitTests.Arch.zSeries
         [Test]
         public void zSerDasm_mxd()
         {
-            AssertCode("mxd\tf1,-292(r7,r15)","6717FEDC");
+            AssertCode("mxd\tf1,-292(r7,r15)", "6717FEDC");
         }
 
         [Test]

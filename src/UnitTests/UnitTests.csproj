@@ -15,7 +15,7 @@
     <OldToolsVersion>3.5</OldToolsVersion>
     <UpgradeBackupLocation>
     </UpgradeBackupLocation>
-    <TargetFrameworkVersion>v4.7</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
     <PublishUrl>publish\</PublishUrl>
     <Install>true</Install>
     <InstallFrom>Disk</InstallFrom>
@@ -102,6 +102,7 @@
     <PlatformTarget>x64</PlatformTarget>
     <ErrorReport>prompt</ErrorReport>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <LangVersion>7.3</LangVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
     <OutputPath>bin\x64\Release\</OutputPath>
@@ -151,15 +152,56 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Analysis\AdjacentBranchCollectorTests.cs" />
+    <Compile Include="Analysis\CallApplicationBuilderTests.cs" />
+    <Compile Include="Analysis\FpuStackReturnGuesserTests.cs" />
+    <Compile Include="Analysis\ProjectionPropagatorTests.cs" />
+    <Compile Include="Analysis\ProcedureFlowTests.cs" />
+    <Compile Include="Analysis\SparseValuePropagationTests.cs" />
     <Compile Include="Analysis\SsaMutatorTests.cs" />
+    <Compile Include="Analysis\StackPointerBackpropagatorTests.cs" />
     <Compile Include="Arch\Alpha\AlphaDisassemblerTests.cs" />
     <Compile Include="Arch\Alpha\AlphaRewriterTests.cs" />
+    <Compile Include="Arch\Arc\ArcDisassemblerTests.cs" />
+    <Compile Include="Arch\Arc\ARCompactRewriterTests.cs" />
     <Compile Include="Arch\Arm\A64RewriterTests.cs" />
+    <Compile Include="Arch\Arm\Arm64ArchitectureTests.cs" />
+    <Compile Include="Arch\Blackfin\BlackfinDisassemblerTests.cs" />
+    <Compile Include="Arch\Blackfin\BlackfinRewriterTests.cs" />
+    <Compile Include="Arch\Cray\Cray1\Cray1DisassemblerTests.cs" />
+    <Compile Include="Arch\Cray\Ymp\YmpDisassemblerTests.cs" />
+    <Compile Include="Arch\Cray\Ymp\YmpRewriterTests.cs" />
     <Compile Include="Arch\i8051\i8051DisassemblerTests.cs" />
     <Compile Include="Arch\i8051\i8051RewriterTests.cs" />
-    <Compile Include="Arch\Intel\FastcallConventionTests.cs" />
+    <Compile Include="Arch\M68k\Assembler\M68kAssemblerTests.cs" />
+    <Compile Include="Arch\M68k\Assembler\M68kTextAssemblerTests.cs" />
+    <Compile Include="Arch\Pdp11\Assembler\Pdp11TextAssemblerTests.cs" />
+    <Compile Include="Arch\PowerPC\PowerPcDisassemblerTests.Xenon.cs" />
+    <Compile Include="Arch\PowerPC\PowerPcEmulatorTests.cs" />
+    <Compile Include="Arch\SuperH\SuperHArchitectureTests.cs" />
+    <Compile Include="Arch\X86\Assembler\AssembleFragmentTests.cs" />
+    <Compile Include="Arch\X86\Assembler\AssemblerAdvanced.cs" />
+    <Compile Include="Arch\X86\Assembler\AssemblerBasic.cs" />
+    <Compile Include="Arch\X86\Assembler\AssemblerData.cs" />
+    <Compile Include="Arch\X86\Assembler\AssemblerOverrides.cs" />
+    <Compile Include="Arch\X86\Assembler\IntelCodeAssemblerTests.cs" />
+    <Compile Include="Arch\X86\Assembler\OperandParserTests.cs" />
+    <Compile Include="Arch\X86\Assembler\X86TextAssemblerTests.cs" />
+    <Compile Include="Arch\X86\FastcallConventionTests.cs" />
+    <Compile Include="Arch\LatticeMico\LatticeMico32DisassemblerTests.cs" />
+    <Compile Include="Arch\LatticeMico\LatticeMico32RewriterTests.cs" />
+    <Compile Include="Arch\M6800\M6809DisassemblerTests.cs" />
+    <Compile Include="Arch\M6800\M6809RewriterTests.cs" />
     <Compile Include="Arch\M6800\M6812DisassemblerTests.cs" />
     <Compile Include="Arch\M6800\M6812RewriterTests.cs" />
+    <Compile Include="Arch\MicroBlaze\MicroBlazeDisassemblerTests.cs" />
+    <Compile Include="Arch\MicroBlaze\MicroBlazeRewriterTests.cs" />
+    <Compile Include="Arch\Mips\MicroMipsDisassemblerTests.cs" />
+    <Compile Include="Arch\Mips\Mips16eDisassemblerTests.cs" />
+    <Compile Include="Arch\Mips\Mips16eRewriterTests.cs" />
+    <Compile Include="Arch\Mips\NanoMipsDisassemblerTests.cs" />
+    <Compile Include="Arch\Mos6502\EmulatorTests.cs" />
+    <Compile Include="Arch\OpenRISC\OpenRISCDisassemblerTests.cs" />
+    <Compile Include="Arch\OpenRISC\OpenRISCRewriterTests.cs" />
     <Compile Include="Arch\PaRisc\PaRiscDisassemblerTests.cs" />
     <Compile Include="Arch\PaRisc\PaRiscRewriterTests.cs" />
     <Compile Include="Arch\Pdp11\Pdp11ArchitectureTests.cs" />
@@ -169,6 +211,7 @@
     <Compile Include="Arch\Sparc\SparcDisassemblerTests.cs" />
     <Compile Include="Arch\Tms7000\Tms7000DisassemblerTests.cs" />
     <Compile Include="Arch\Tms7000\Tms7000RewriterTests.cs" />
+    <Compile Include="Arch\WE32100\WE32100DisassemblerTests.cs" />
     <Compile Include="Arch\zSeries\zSeriesDisassemblerTests.cs" />
     <Compile Include="Arch\zSeries\zSeriesRewriterTests.cs" />
     <Compile Include="Core\CriticalInstructionTests.cs" />
@@ -217,14 +260,18 @@
     <Compile Include="Arch\Microchip\PIC18\PIC18LgcyTrad_RewriterTests.cs" />
     <Compile Include="Core\ImportReferenceTests.cs" />
     <Compile Include="Core\Lib\BitfieldTests.cs" />
+    <Compile Include="Core\Lib\ConcurrentBTreeDictionaryTests.cs" />
     <Compile Include="Core\Lib\BTreeDictionaryTests.cs" />
     <Compile Include="Core\Lib\Float16Tests.cs" />
-    <Compile Include="Core\Lib\IntervalTreeTests.cs" />
+    <Compile Include="Core\Lib\MBFFloatTests.cs" />
+    <Compile Include="Core\Output\SegmentFilePolicyTests.cs" />
+    <Compile Include="Core\Output\SingleFilePolicyTests.cs" />
     <Compile Include="Core\Pascal\PascalLexerTests.cs" />
     <Compile Include="Core\Pascal\PascalParserTests.cs" />
     <Compile Include="Arch\MSP430\MSP430DisassemblerTests.cs" />
     <Compile Include="Arch\MSP430\Msp430RewriterTests.cs" />
     <Compile Include="Core\Serialization\Json\JsonProjectSerializerTests.cs" />
+    <Compile Include="Analysis\TrashedRegisterFinderTests.cs" />
     <Compile Include="Analysis\UnalignedMemoryAccessFuserTests.cs" />
     <Compile Include="Arch\Avr\Avr8ArchitectureTests.cs" />
     <Compile Include="Arch\Avr\Avr8DisassemblerTests.cs" />
@@ -235,14 +282,19 @@
     <Compile Include="Arch\RiscV\RiscVRewriterTests.cs" />
     <Compile Include="Arch\SuperH\SuperHDisassemblerTests.cs" />
     <Compile Include="Arch\SuperH\SuperHRewriterTests.cs" />
+    <Compile Include="Analysis\SsaStateTests.cs" />
+    <Compile Include="Arch\X86\X86FrameApplicationBuilderTests.cs" />
     <Compile Include="Arch\Tlcs\Tlcs900DisassemblerTests.cs" />
     <Compile Include="Arch\Tlcs\Tlcs900RewriterTests.cs" />
     <Compile Include="Arch\Tlcs\Tlcs90DisassemblerTests.cs" />
     <Compile Include="Arch\Tlcs\Tlcs90RewriterTests.cs" />
     <Compile Include="Arch\Xtensa\XtensaDisassemblerTests.cs" />
     <Compile Include="Arch\Xtensa\XtensaRewriterTests.cs" />
+    <Compile Include="Arch\Z80\Z80ArchitectureTests.cs" />
     <Compile Include="Core\Analysis\PyArgFormatParserTests.cs" />
+    <Compile Include="Analysis\UnusedOutValuesRemoverTests.cs" />
     <Compile Include="Core\Analysis\ScanfFormatParserTests.cs" />
+    <Compile Include="Core\BitRangeTests.cs" />
     <Compile Include="Core\DumperTests.cs" />
     <Compile Include="Core\IRFormat\IRParserTests.cs" />
     <Compile Include="Core\Lib\Float80Tests.cs" />
@@ -257,37 +309,57 @@
     <Compile Include="Core\StridedIntervalTests.cs" />
     <Compile Include="Core\TypedDataDumperTests.cs" />
     <Compile Include="Core\Types\DataTypeComparerTests.cs" />
+    <Compile Include="DecompiledFileServiceTests.cs" />
     <Compile Include="Drivers\CmdLine\CmdLineDriverTests.cs" />
-    <Compile Include="Environments\MacOS\MacOSClassicTests.cs" />
-    <Compile Include="Environments\MacOS\MacsBugSymbolScannerTests.cs" />
-    <Compile Include="Environments\MacOS\MpwPascalInterfaceLoaderTests.cs" />
-    <Compile Include="Environments\MacOS\PascalCallingConventionTests.cs" />
-    <Compile Include="Environments\MacOS\InlineCodeInterpreterTests.cs" />
+    <Compile Include="Environments\MacOS\Classic\A5RelocatorTests.cs" />
+    <Compile Include="Environments\MacOS\Classic\MacOSClassicTests.cs" />
+    <Compile Include="Environments\MacOS\Classic\MacsBugSymbolScannerTests.cs" />
+    <Compile Include="Environments\MacOS\Classic\MpwPascalInterfaceLoaderTests.cs" />
+    <Compile Include="Environments\MacOS\Classic\PascalCallingConventionTests.cs" />
+    <Compile Include="Environments\MacOS\Classic\InlineCodeInterpreterTests.cs" />
+    <Compile Include="Core\Expressions\ExpressionTreeTests.cs" />
+    <Compile Include="Core\Lib\IntervalTreeTests.cs" />
+    <Compile Include="Environments\MacOS\Classic\TypeImporterTests.cs" />
     <Compile Include="Environments\RT11\LdaFileLoaderTests.cs" />
     <Compile Include="Environments\SysV\ArchSpecific\Arm32CallingConventionTests.cs" />
+    <Compile Include="Environments\SysV\ArchSpecific\Arm64CallingConventionTests.cs" />
     <Compile Include="Environments\SysV\ArchSpecific\Avr8CallingConventionTests.cs" />
+    <Compile Include="Environments\SysV\ArchSpecific\PowerPc64CallingConventionTests.cs" />
+    <Compile Include="Environments\SysV\ArchSpecific\XtensaCallingConventionTests.cs" />
     <Compile Include="Environments\SysV\GccMangledNameParserTests.cs" />
     <Compile Include="Environments\Windows\AlphaCallingConventionTests.cs" />
     <Compile Include="Environments\Windows\BorlandMangledNameParserTests.cs" />
     <Compile Include="Environments\Windows\MsPrintfFormatParserTests.cs" />
     <Compile Include="Environments\Windows\X86_64CallingConventionTests.cs" />
     <Compile Include="Environments\Windows\X86_64ProcedureSerializerTests.cs" />
+    <Compile Include="Evaluation\MkSeqFromSlices_RuleTest.cs" />
+    <Compile Include="Fragments\DpbFragment.cs" />
     <Compile Include="Fragments\FCmpFragment.cs" />
     <Compile Include="Environments\SysV\ArchSpecific\SuperHCallingConventionTests.cs" />
+    <Compile Include="Fragments\Fib2Fragment.cs" />
     <Compile Include="Fragments\RorChainFragment.cs" />
     <Compile Include="Gui\Design\ProgramDesignerTests.cs" />
     <Compile Include="Gui\Windows\CallHierarchyInteractorTests.cs" />
     <Compile Include="Gui\Windows\Forms\CommentFormInteractorTests.cs" />
     <Compile Include="Gui\Windows\Forms\SymbolSourceInteractorTests.cs" />
+    <Compile Include="ImageLoaders\Elf\Relocators\AArch32RelocatorTests.cs" />
+    <Compile Include="ImageLoaders\Elf\Relocators\ElfRelocatorTestBase.cs" />
     <Compile Include="ImageLoaders\Elf\Relocators\x86RelocatorTests.cs" />
     <Compile Include="ImageLoaders\IntelHex\HexLoaderTests.cs" />
-    <Compile Include="ImageLoaders\OdbgScript\OllyLang.Tests.cs" />
+    <Compile Include="ImageLoaders\MzExe\CodeView\CodeViewTypeLoaderTests.cs" />
+    <Compile Include="ImageLoaders\MzExe\CodeView\TypeBuilderTests.cs" />
+    <Compile Include="ImageLoaders\OdbgScript\OllyScriptHostTests.cs" />
+    <Compile Include="ImageLoaders\OdbgScript\OllyLangInterpreterTests.cs" />
+    <Compile Include="ImageLoaders\OdbgScript\OllyScriptParserTests.cs" />
+    <Compile Include="ImageLoaders\Omf\OmfLoaderTests.cs" />
     <Compile Include="Loading\NullImageLoaderTests.cs" />
     <Compile Include="Loading\SymbolLoadingServiceTests.cs" />
     <Compile Include="ImageLoaders\Llvm\LlvmLexerTests.cs" />
     <Compile Include="ImageLoaders\Llvm\LlvmParserTests.cs" />
     <Compile Include="ImageLoaders\Llvm\ProgramBuilderTests.cs" />
     <Compile Include="ImageLoaders\MzExe\Borland\SymbolLoaderTests.cs" />
+    <Compile Include="Mocks\FakeCallingConvention.cs" />
+    <Compile Include="Mocks\FakeFrameApplicationBuilder.cs" />
     <Compile Include="Mocks\FakeTextBox.cs" />
     <Compile Include="Mocks\FakeTypeDeserializer.cs" />
     <Compile Include="Core\Analysis\PyBuildValueFormatParserTests.cs" />
@@ -296,10 +368,7 @@
     <Compile Include="Mocks\SsaProcedureBuilder.cs" />
     <Compile Include="Mocks\XmlnsHidingWriter.cs" />
     <Compile Include="OsPath.cs" />
-    <Compile Include="Analysis\AliasStateTests.cs" />
-    <Compile Include="Analysis\AliasTests.cs" />
     <Compile Include="Analysis\AnalysisTestBase.cs" />
-    <Compile Include="Analysis\AnalysisTests.cs" />
     <Compile Include="Analysis\CallRewriterTests.cs" />
     <Compile Include="Analysis\CoalescerTests.cs" />
     <Compile Include="Analysis\ConditionCodeEliminatorTests.cs" />
@@ -309,11 +378,11 @@
     <Compile Include="Analysis\DeclarationInserterTests.cs" />
     <Compile Include="Analysis\BlockDominatorGraphTests.cs" />
     <Compile Include="Analysis\DominatorGraphTests.cs" />
-    <Compile Include="Analysis\ExpressionPropagatorTests.cs" />
     <Compile Include="Analysis\IndirectCallRewriterTests.cs" />
-    <Compile Include="Analysis\RegisterPreservationTests.cs" />
+    <Compile Include="Analysis\SequenceIdentifierGeneratorTests.cs" />
+    <Compile Include="Analysis\UsedRegisterFinderTests.cs" />
     <Compile Include="Analysis\UserSignatureBuilderTests.cs" />
-    <Compile Include="Arch\Intel\X86InstructionComparer.Tests.cs" />
+    <Compile Include="Arch\X86\X86InstructionComparer.Tests.cs" />
     <Compile Include="Arch\Mips\MipsPointerScannerTests.cs" />
     <Compile Include="Arch\Vax\VaxDisassemblerTests.cs" />
     <Compile Include="Arch\Vax\VaxRewriterTests.cs" />
@@ -353,17 +422,13 @@
     <Compile Include="Environments\Windows\WineSpecFileLoaderTests.cs" />
     <Compile Include="Evaluation\ConstDivisionImplementedByMultiplicationTests.cs" />
     <Compile Include="Fragments\EvenOdd.cs" />
-    <Compile Include="Analysis\GlobalCallRewriterTests.cs" />
     <Compile Include="Analysis\GrfDefinitionFinderTests.cs" />
     <Compile Include="Analysis\InterferenceGraphTests.cs" />
     <Compile Include="Analysis\InterferenceTests.cs" />
     <Compile Include="Analysis\IntraBlockDeadRegistersTests.cs" />
-    <Compile Include="Analysis\IsLiveHelperTests.cs" />
     <Compile Include="Analysis\LinearInductionVariableTests.cs" />
     <Compile Include="Analysis\LiveCopyInserterTests.cs" />
-    <Compile Include="Analysis\OutParameterTransformerTests.cs" />
     <Compile Include="Analysis\RegisterLivenessTests.cs" />
-    <Compile Include="Analysis\RegisterLivenessUnitTests.cs" />
     <Compile Include="Analysis\SegmentedAccessClassifierTests.cs" />
     <Compile Include="Analysis\SideEffectFinderTests.cs" />
     <Compile Include="Analysis\SignatureBuilderTests.cs" />
@@ -371,16 +436,8 @@
     <Compile Include="Analysis\SsaTests.cs" />
     <Compile Include="Analysis\SsaTransformTests.cs" />
     <Compile Include="Analysis\StrengthReductionTests.cs" />
-    <Compile Include="Analysis\TerminationAnalysisTests.cs" />
-    <Compile Include="Analysis\TrashedRegisterFinder2Tests.cs" />
-    <Compile Include="Analysis\TrashedRegisterFinderTests.cs" />
-    <Compile Include="Analysis\TrashedRegisterSummarizerTests.cs" />
-    <Compile Include="Analysis\TrashRegisterFinderUpdateCodeTests.cs" />
-    <Compile Include="Analysis\TrashStorageHelperTests.cs" />
-    <Compile Include="Analysis\UsedIdentifierFinderTests.cs" />
-    <Compile Include="Analysis\ValueNumberingTest.cs" />
+    <Compile Include="Analysis\ExpressionIdentifierUseFinderTests.cs" />
     <Compile Include="Analysis\ValuePropagationTests.cs" />
-    <Compile Include="Analysis\IdentifierLivenessTests.cs" />
     <Compile Include="Analysis\WebBuilderTests.cs" />
     <Compile Include="Arch\ArchTestBase.cs" />
     <Compile Include="Arch\Arm\AArch64DisassemblerTests.cs" />
@@ -391,10 +448,10 @@
     <Compile Include="Arch\Arm\T32RewriterTests.cs" />
     <Compile Include="Arch\Cil\CilDisassemblerTests.cs" />
     <Compile Include="Arch\DisassemblerTestBase.cs" />
-    <Compile Include="Arch\Intel\AssemblerFragment.cs" />
-    <Compile Include="Arch\Intel\FstswChainMatcherTests.cs" />
-    <Compile Include="Arch\Intel\X86EmulatorTests.cs" />
-    <Compile Include="Arch\Intel\X86PointerScannerTests.cs" />
+    <Compile Include="Arch\X86\AssemblerFragment.cs" />
+    <Compile Include="Arch\X86\FstswChainMatcherTests.cs" />
+    <Compile Include="Arch\X86\X86EmulatorTests.cs" />
+    <Compile Include="Arch\X86\X86PointerScannerTests.cs" />
     <Compile Include="Arch\M68k\M68kStateTests.cs" />
     <Compile Include="Arch\M68k\M68kPointerScannerTests.cs" />
     <Compile Include="Arch\M68k\OperandRewriterTests.cs" />
@@ -414,13 +471,10 @@
     <Compile Include="Arch\Sparc\SparcRewriterTests.cs" />
     <Compile Include="Arch\Z80\DisassemblerTests.cs" />
     <Compile Include="Arch\Z80\RewriterTests.cs" />
-    <Compile Include="Assemblers\M68k\M68kAssemblerTests.cs" />
-    <Compile Include="Assemblers\M68k\M68kTextAssemblerTests.cs" />
-    <Compile Include="Assemblers\Pdp11\Pdp11TextAssemblerTests.cs" />
     <Compile Include="Core\AbsynCodeFormatterTests.cs" />
     <Compile Include="Core\CodeEmitterTests.cs" />
     <Compile Include="Core\ImageReaderTests.cs" />
-    <Compile Include="Core\ImportResolverTests.cs" />
+    <Compile Include="Core\DynamicLinkerTests.cs" />
     <Compile Include="Core\Output\GlobalDataWriterTests.cs" />
     <Compile Include="Core\PrintfApplicationBuilderTests.cs" />
     <Compile Include="Core\ProcedureStateTests.cs" />
@@ -495,32 +549,23 @@
     <Compile Include="Mocks\RtlTraceBuilder.cs" />
     <Compile Include="Scanning\BackwalkerTests.cs" />
     <Compile Include="Scanning\Backwalker_x86_Tests.cs" />
-    <Compile Include="Arch\Intel\DeadConditionFlagsFinderTests.cs" />
-    <Compile Include="Arch\Intel\X86DisassemblerTests.cs" />
-    <Compile Include="Arch\Intel\Fragments\Factorial.cs" />
-    <Compile Include="Arch\Intel\ImportResolution.cs" />
-    <Compile Include="Arch\Intel\X86ArchitectureTests.cs" />
-    <Compile Include="Arch\Intel\IntelAssemblerTests.cs" />
-    <Compile Include="Arch\Intel\IntelInstructionTrieTests.cs" />
-    <Compile Include="Arch\Intel\IntelRegisterTests.cs" />
+    <Compile Include="Arch\X86\X86DisassemblerTests.cs" />
+    <Compile Include="Arch\X86\Fragments\Factorial.cs" />
+    <Compile Include="Arch\X86\X86ArchitectureTests.cs" />
+    <Compile Include="Arch\X86\IntelAssemblerTests.cs" />
+    <Compile Include="Arch\X86\IntelInstructionTrieTests.cs" />
+    <Compile Include="Arch\X86\IntelRegisterTests.cs" />
     <Compile Include="Environments\Msdos\MsdosPlatformTests.cs" />
-    <Compile Include="Arch\Intel\OperandRewriterRealModeTests.cs" />
-    <Compile Include="Arch\Intel\OperandRewriterTests.cs" />
-    <Compile Include="Arch\Intel\Rewrite32.cs" />
-    <Compile Include="Arch\Intel\RewriteFpuInstructionTests.cs" />
-    <Compile Include="Arch\Intel\RewriterTests.cs" />
-    <Compile Include="Arch\Intel\RewriterTests2.cs" />
-    <Compile Include="Arch\Intel\X86RewriterTests.cs" />
+    <Compile Include="Arch\X86\OperandRewriterRealModeTests.cs" />
+    <Compile Include="Arch\X86\OperandRewriterTests.cs" />
+    <Compile Include="Arch\X86\Rewrite32.cs" />
+    <Compile Include="Arch\X86\RewriteFpuInstructionTests.cs" />
+    <Compile Include="Arch\X86\RewriterTests.cs" />
+    <Compile Include="Arch\X86\RewriterTests2.cs" />
+    <Compile Include="Arch\X86\X86RewriterTests.cs" />
     <Compile Include="Arch\M68k\M68kDisassemblerTests.cs" />
     <Compile Include="Arch\PowerPC\PowerPcArchitectureTests.cs" />
     <Compile Include="Arch\PowerPC\PowerPcDisassemblerTests.cs" />
-    <Compile Include="Assemblers\x86\AssembleFragmentTests.cs" />
-    <Compile Include="Assemblers\x86\AssemblerAdvanced.cs" />
-    <Compile Include="Assemblers\x86\AssemblerBasic.cs" />
-    <Compile Include="Assemblers\x86\AssemblerData.cs" />
-    <Compile Include="Assemblers\x86\AssemblerOverrides.cs" />
-    <Compile Include="Assemblers\x86\IntelCodeAssemblerTests.cs" />
-    <Compile Include="Assemblers\x86\OperandParserTests.cs" />
     <Compile Include="Core\AddressTests.cs" />
     <Compile Include="Core\ApplicationBuilderTests.cs" />
     <Compile Include="Core\Assemblers\SymbolTableTests.cs" />
@@ -552,7 +597,7 @@
     <Compile Include="Core\ProcedureTests.cs" />
     <Compile Include="Core\ProgramImageTests.cs" />
     <Compile Include="Core\ProgramTests.cs" />
-    <Compile Include="Core\RegisterTests.cs" />
+    <Compile Include="Core\StorageTests.cs" />
     <Compile Include="Core\RelocationDictionaryTests.cs" />
     <Compile Include="Core\Serialization\ProcedureCharacteristicsTests.cs" />
     <Compile Include="Core\Serialization\ArgumentTests.cs" />
@@ -563,7 +608,7 @@
     <Compile Include="Core\Serialization\SerializedServiceTests.cs" />
     <Compile Include="Core\Serialization\SerializedSignatureTests.cs" />
     <Compile Include="Core\Serialization\SerializedTypeTests.cs" />
-    <Compile Include="Arch\Intel\X86CallingConventionTests.cs" />
+    <Compile Include="Arch\X86\X86CallingConventionTests.cs" />
     <Compile Include="Core\SignatureLibraryTests.cs" />
     <Compile Include="Core\StructureTypeTests.cs" />
     <Compile Include="Core\TypeComparerTests.cs" />
@@ -575,7 +620,7 @@
     <Compile Include="Core\StorageVisitorTests.cs" />
     <Compile Include="Core\WorkListTests.cs" />
     <Compile Include="DecompilerTests.cs" />
-    <Compile Include="Environments\MacOS\ResourceForkTests.cs" />
+    <Compile Include="Environments\MacOS\Classic\ResourceForkTests.cs" />
     <Compile Include="FileUnitTester.cs" />
     <Compile Include="Gui\CodeLocationTests.cs">
       <SubType>Code</SubType>
@@ -782,6 +827,10 @@
       <Project>{C4C56725-BFD0-405A-802C-2C66FCD0EF06}</Project>
       <Name>Alpha</Name>
     </ProjectReference>
+    <ProjectReference Include="..\Arch\Arc\Arc.csproj">
+      <Project>{F9C628DF-EB23-46D7-9580-3A2B749E8BDA}</Project>
+      <Name>Arc</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Arch\Arm\Arm.csproj">
       <Project>{32F09304-51BE-4797-A86A-C0BEFED2422B}</Project>
       <Name>Arm</Name>
@@ -790,13 +839,25 @@
       <Project>{5E75D702-3032-41FE-8D09-86428555A8ED}</Project>
       <Name>Avr</Name>
     </ProjectReference>
+    <ProjectReference Include="..\Arch\Blackfin\Blackfin.csproj">
+      <Project>{0bccefdd-63a8-47f2-9a39-8ce7b5f9cfab}</Project>
+      <Name>Blackfin</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Arch\Cil\Cil.csproj">
       <Project>{F6F2225D-B778-4FD2-9BA9-A8E2B58ACCCC}</Project>
       <Name>Cil</Name>
     </ProjectReference>
+    <ProjectReference Include="..\Arch\Cray\Cray.csproj">
+      <Project>{47B16677-2BFC-4A5C-A830-E1683C574AEC}</Project>
+      <Name>Cray</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Arch\i8051\i8051.csproj">
       <Project>{AB5DDEB2-87C0-42C7-8CD3-72CB2B1282FB}</Project>
       <Name>i8051</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Arch\LatticeMico\LatticeMico.csproj">
+      <Project>{75d6bc51-64d8-4f1c-bffd-ee2debfd83ba}</Project>
+      <Name>LatticeMico</Name>
     </ProjectReference>
     <ProjectReference Include="..\Arch\M6800\M6800.csproj">
       <Project>{54944B1E-7C12-4FB1-A208-996AD6D04B80}</Project>
@@ -809,6 +870,10 @@
     <ProjectReference Include="..\Arch\M68k\M68k.csproj">
       <Project>{38A94634-B2B2-4A89-AF02-2A2898B93343}</Project>
       <Name>M68k</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Arch\MicroBlaze\MicroBlaze.csproj">
+      <Project>{9E952B82-A52F-4221-BC4A-DD9D8B9F7854}</Project>
+      <Name>MicroBlaze</Name>
     </ProjectReference>
     <ProjectReference Include="..\Arch\Microchip\MicrochipPIC.csproj">
       <Project>{a959c1a2-a622-4600-81ad-29e08545b2f7}</Project>
@@ -825,6 +890,10 @@
     <ProjectReference Include="..\Arch\MSP430\MSP430.csproj">
       <Project>{ff9e9894-f7e2-464d-b288-4157b864d053}</Project>
       <Name>MSP430</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Arch\OpenRISC\OpenRISC.csproj">
+      <Project>{A2D0EB22-6807-4C6F-9974-3B9721980F06}</Project>
+      <Name>OpenRISC</Name>
     </ProjectReference>
     <ProjectReference Include="..\Arch\PaRisc\PaRisc.csproj">
       <Project>{C57B1AD7-336A-4CE6-8A8C-836760029EBB}</Project>
@@ -862,6 +931,10 @@
       <Project>{82777964-B370-431A-AC97-733C594C02B5}</Project>
       <Name>Vax</Name>
     </ProjectReference>
+    <ProjectReference Include="..\Arch\WE32100\WE32100.csproj">
+      <Project>{a3d277db-5f5d-41f7-80f1-1c84a5026b90}</Project>
+      <Name>WE32100</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Arch\X86.Design\X86.Design.csproj">
       <Project>{370a707f-3b17-4680-bc35-8edc846f058f}</Project>
       <Name>X86.Design</Name>
@@ -881,18 +954,6 @@
     <ProjectReference Include="..\Arch\zSeries\zSeries.csproj">
       <Project>{33CE0D6A-8762-4505-975F-EE61C355FD04}</Project>
       <Name>zSeries</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Assemblers\M68k\M68kAssembler.csproj">
-      <Project>{FD6AD906-BED1-4AC1-A7C5-0A04CCA2D7DC}</Project>
-      <Name>M68kAssembler</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Assemblers\Pdp11\Pdp11Assembler.csproj">
-      <Project>{3BB6B0FB-6686-428B-9DC9-A32F349E50E6}</Project>
-      <Name>Pdp11Assembler</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\Assemblers\x86\X86Assembler.csproj">
-      <Project>{3805DE2C-659A-442D-8C34-E88822A4D27C}</Project>
-      <Name>X86Assembler</Name>
     </ProjectReference>
     <ProjectReference Include="..\Core\Core.csproj">
       <Project>{5C315C78-1F97-4B16-81AA-917284969DFE}</Project>
@@ -930,6 +991,10 @@
       <Project>{908b208a-becc-42ad-8253-a167ec40b20b}</Project>
       <Name>Dreamcast</Name>
     </ProjectReference>
+    <ProjectReference Include="..\Environments\Hpux\Hpux.csproj">
+      <Project>{3488c24e-187c-4477-a310-d2292892d257}</Project>
+      <Name>Hpux</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Environments\MacOS\MacOS.csproj">
       <Project>{D0D1798C-08F7-4DE6-94E9-CC382E1FBEC8}</Project>
       <Name>MacOS</Name>
@@ -962,6 +1027,10 @@
       <Project>{46D47AC5-DEC2-44E6-942A-F1D9B77BB514}</Project>
       <Name>SegaGenesis</Name>
     </ProjectReference>
+    <ProjectReference Include="..\Environments\Switch\Switch.csproj">
+      <Project>{c1bae231-5a72-40d2-8b75-328849d58c0f}</Project>
+      <Name>Switch</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Environments\SysV\SysV.csproj">
       <Project>{5307665E-072F-4398-872D-6550BE6FC1EB}</Project>
       <Name>SysV</Name>
@@ -977,6 +1046,10 @@
     <ProjectReference Include="..\Environments\Windows\Windows.csproj">
       <Project>{4A298321-9855-43DE-AA9C-79E4EFA0AE56}</Project>
       <Name>Windows</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Environments\Xbox360\Xbox360.csproj">
+      <Project>{e45b5b79-17ed-4b74-a68b-ce9119c51677}</Project>
+      <Name>Xbox360</Name>
     </ProjectReference>
     <ProjectReference Include="..\Environments\ZX81\ZX81.csproj">
       <Project>{2b4e0f2e-b458-4bc2-96ac-6a4d9324f974}</Project>
@@ -1002,6 +1075,10 @@
       <Project>{33DCEC6D-66F2-4AB7-9DD9-293DBB5414B1}</Project>
       <Name>Elf</Name>
     </ProjectReference>
+    <ProjectReference Include="..\ImageLoaders\HpSom\HpSom.csproj">
+      <Project>{6faa0b0c-f6c2-4091-9cc8-1dc2cf708bc2}</Project>
+      <Name>HpSom</Name>
+    </ProjectReference>
     <ProjectReference Include="..\ImageLoaders\Hunk\Hunk.csproj">
       <Project>{F1B0C3C9-1C64-4744-9217-C25FBC5D0DCC}</Project>
       <Name>Hunk</Name>
@@ -1022,9 +1099,17 @@
       <Project>{0A1B3397-06E3-4C23-A667-FCCC19DC7D12}</Project>
       <Name>MzExe</Name>
     </ProjectReference>
+    <ProjectReference Include="..\ImageLoaders\Nro\Nro.csproj">
+      <Project>{0ab0aab7-292e-4827-a480-a32561b07fd7}</Project>
+      <Name>Nro</Name>
+    </ProjectReference>
     <ProjectReference Include="..\ImageLoaders\OdbgScript\OdbgScript.csproj">
       <Project>{2882376f-663a-4fc8-842c-b0300a6829e8}</Project>
       <Name>OdbgScript</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\ImageLoaders\Omf\Omf.csproj">
+      <Project>{0e00ed86-372c-4497-85bb-428bdd1c5ccf}</Project>
+      <Name>Omf</Name>
     </ProjectReference>
     <ProjectReference Include="..\ImageLoaders\TypeLib\TypeLib.csproj">
       <Project>{a4def935-217c-4107-998c-c7845893cfa0}</Project>
@@ -1033,6 +1118,10 @@
     <ProjectReference Include="..\ImageLoaders\VmsExe\VmsExe.csproj">
       <Project>{4059bebf-7b5c-4701-ac98-ade2515d8823}</Project>
       <Name>VmsExe</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\ImageLoaders\XexLoader\Xex.csproj">
+      <Project>{e6d43750-9abc-407d-b247-c91593c77062}</Project>
+      <Name>Xex</Name>
     </ProjectReference>
     <ProjectReference Include="..\Libraries\Libc\Libc.csproj">
       <Project>{FDAF4CA9-085C-473E-BCB5-0D2A4354A949}</Project>
@@ -1064,7 +1153,7 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Arch\Intel\X86StateTests.cs" />
+    <Compile Include="Arch\X86\X86StateTests.cs" />
     <Compile Include="Evaluation\Add_id_c_id_Rule.cs" />
     <Compile Include="Evaluation\Add_id_c_id_RuleTest.cs" />
     <Compile Include="Evaluation\ExpressionMatcherTests.cs" />
@@ -1072,7 +1161,6 @@
     <Compile Include="Evaluation\IdConstantTests.cs" />
     <Compile Include="Evaluation\Shl_mul_e_RuleTest.cs" />
     <Compile Include="Evaluation\SliceMem_RuleTest.cs" />
-    <Compile Include="Evaluation\SymbolicEvaluatorTests.cs" />
     <Compile Include="Mocks\FakePlatform.cs" />
     <Compile Include="Scanning\BlockPromoterTests.cs" />
     <Compile Include="Analysis\LongAddRewriterTests.cs" />

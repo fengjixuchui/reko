@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -63,16 +63,25 @@ namespace Reko.Core
 			graphStms.AddNode(proc);
 		}
 
-		public void AddStatement(Statement stm)
-		{
-			graphStms.AddNode(stm);
-		}
+        public void RemoveCaller(Statement stm)
+        {
+            if (!graphStms.Nodes.Contains(stm))
+                return;
+            var callees = this.Callees(stm).ToArray();
+            foreach (var callee in callees)
+            {
+                graphStms.RemoveEdge(stm, callee);
+            }
+        }
 
-		public IEnumerable<object> Callees(Statement stm)
+        public IEnumerable<object> Callees(Statement stm)
 		{
             return graphStms.Successors(stm);
 		}
 
+        /// <summary>
+        /// Returns all the procedures that the given procedure calls.
+        /// </summary>
 		public IEnumerable<Procedure> Callees(Procedure proc)
 		{
 			return graphProcs.Successors(proc);
@@ -90,7 +99,8 @@ namespace Reko.Core
 		{
             if (!graphStms.Nodes.Contains(proc))
                 return Array.Empty<Statement>();
-            return graphStms.Predecessors(proc).OfType<Statement>();
+            return graphStms.Predecessors(proc).OfType<Statement>()
+                .Where(s => s.Block.Procedure != null);
 		}
 
 		public void Write(TextWriter wri)
@@ -116,6 +126,5 @@ namespace Reko.Core
             }
 		}
 
-		
     }
 }

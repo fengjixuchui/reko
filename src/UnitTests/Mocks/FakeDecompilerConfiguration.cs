@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,6 +30,12 @@ namespace Reko.UnitTests.Mocks
     public class FakeDecompilerConfiguration : IConfigurationService
     {
         private List<LoaderDefinition> imageLoaders = new List<LoaderDefinition>();
+        private IServiceProvider services;
+
+        public FakeDecompilerConfiguration(IServiceProvider services = null)
+        {
+            this.services = services;
+        }
 
         public ICollection<LoaderDefinition> GetImageLoaders()
         {
@@ -43,11 +49,6 @@ namespace Reko.UnitTests.Mocks
 
 
         public ICollection<ArchitectureDefinition> GetArchitectures()
-        {
-            throw new NotImplementedException();
-        }
-
-        public ICollection<AssemblerDefinition> GetAssemblers()
         {
             throw new NotImplementedException();
         }
@@ -78,11 +79,6 @@ namespace Reko.UnitTests.Mocks
         }
 
         public IProcessorArchitecture GetArchitecture(string sArch)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Assembler GetAssembler(string sAsm)
         {
             throw new NotImplementedException();
         }

@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,18 +31,18 @@ namespace Reko.Analysis
 {
     public class SsaEvaluationContext : EvaluationContext
     {
-        private IProcessorArchitecture arch;
-        private SsaIdentifierCollection ssaIds;
-        private IImportResolver importResolver;
+        private readonly IProcessorArchitecture arch;
+        private readonly SsaIdentifierCollection ssaIds;
+        private readonly IDynamicLinker dynamicLinker;
 
         public SsaEvaluationContext(
             IProcessorArchitecture arch, 
             SsaIdentifierCollection ssaIds, 
-            IImportResolver importResolver)
+            IDynamicLinker dynamicLinker)
         {
             this.arch = arch;
             this.ssaIds = ssaIds;
-            this.importResolver = importResolver;
+            this.dynamicLinker = dynamicLinker;
         }
 
         public Statement Statement { get; set; }
@@ -72,9 +72,11 @@ namespace Reko.Analysis
 
         public Expression GetValue(MemoryAccess access, SegmentMap segmentMap)
         {
-            if (access.EffectiveAddress is Constant c)
+            if (access.EffectiveAddress is Constant c &&
+                // Search imported procedures only in Global Memory
+                access.MemoryId.Storage == MemoryStorage.Instance)
             {
-                var pc = importResolver.ResolveToImportedValue(this.Statement, c);
+                var pc = dynamicLinker.ResolveToImportedValue(this.Statement, c);
                 if (pc != null)
                     return pc;
             }
@@ -89,6 +91,52 @@ namespace Reko.Analysis
         public Expression GetDefiningExpression(Identifier id)
         {
             return ssaIds[id].DefExpression;
+        }
+
+        public List<Statement> GetDefiningStatementClosure(Identifier id)
+        {
+            var visited = new HashSet<SsaIdentifier>();
+            var wl = new WorkList<SsaIdentifier>();
+            var stms = new List<Statement>();
+            wl.Add(ssaIds[id]);
+            while (wl.GetWorkItem(out var sid))
+            {
+                if (visited.Contains(sid))
+                    continue;
+                visited.Add(sid);
+                if (sid.DefStatement == null)
+                    continue;
+                switch (sid.DefStatement.Instruction)
+                {
+                case AliasAssignment alias:
+                    if (alias.Src is Identifier idAlias)
+                    {
+                        wl.Add(ssaIds[idAlias]);
+                    }
+                    else
+                    {
+                        stms.Add(sid.DefStatement);
+                    }
+                    break;
+                case Assignment ass:
+                    if (ass.Src is Identifier idSrc)
+                    {
+                        wl.Add(ssaIds[idSrc]);
+                    }
+                    else
+                    {
+                        stms.Add(sid.DefStatement);
+                    }
+                    break;
+                case PhiAssignment phi:
+                    wl.AddRange(phi.Src.Arguments.Select(a => ssaIds[(Identifier) a.Value]));
+                    break;
+                default:
+                    stms.Add(sid.DefStatement);
+                    break;
+                }
+            }
+            return stms;
         }
 
         public Expression MakeSegmentedAddress(Constant seg, Constant off)
@@ -141,8 +189,7 @@ namespace Reko.Analysis
             var assSrc = src.Instruction as Assignment;
             if (assSrc == null)
                 return false;
-            new DefinedIdentifierFinder();
-            return UsedIdentifierFinder.Find(ssaIds, assSrc.Src)
+            return ExpressionIdentifierUseFinder.Find(ssaIds, assSrc.Src)
                 .Select(c => ssaIds[c].DefStatement)
                 .Where(d => d != null)
                 .Select(ph => ph.Instruction as PhiAssignment)
@@ -155,9 +202,9 @@ namespace Reko.Analysis
                 //.Any();
             /*
              function shouldPropagateInto(r )
-src := the assignment dening r
+src := the assignment defining r
 for each subscripted component c of the RHS of r
-  if the denition for c is a phi-function ph then
+  if the definition for c is a phi-function ph then
     for each operand op of ph
       opdef := the denition for op
       if opdef is an overwriting statement and either

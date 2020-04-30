@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -145,6 +145,8 @@ namespace Reko.UserInterfaces.WindowsForms.Controls
 
         protected override void OnPaint(PaintEventArgs e)
         {
+            if (Width <= 0 || Height <= 0)
+                return;
             using (var bmp = new Bitmap(Width, Height, e.Graphics))
             using (var g = Graphics.FromImage(bmp))
             using (var bytesImage = RenderVisualization())

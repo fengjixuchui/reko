@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,12 +30,15 @@ using System.Text;
 
 namespace Reko.Arch.M6800
 {
+    using FlagM = Reko.Arch.M6800.M6812.FlagM;
+
     public class M6812Architecture : ProcessorArchitecture
     {
         private readonly Dictionary<uint, FlagGroupStorage> flagGroups;
 
         public M6812Architecture(string archId) : base(archId)
         {
+            Endianness = EndianServices.Big;
             InstructionBitSize = 8;
             FramePointerType = PrimitiveType.Ptr16;
             PointerType = PrimitiveType.Ptr16;
@@ -49,29 +52,9 @@ namespace Reko.Arch.M6800
             return new M6812.M6812Disassembler(imageReader);
         }
 
-        public override EndianImageReader CreateImageReader(MemoryArea img, Address addr)
+        public override IProcessorEmulator CreateEmulator(SegmentMap segmentMap, IPlatformEmulator envEmulator)
         {
-            return new BeImageReader(img, addr);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea img, Address addrBegin, Address addrEnd)
-        {
-            return new BeImageReader(img, addrBegin, addrEnd);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea img, ulong off)
-        {
-            return new BeImageReader(img, off);
-        }
-
-        public override ImageWriter CreateImageWriter()
-        {
-            return new BeImageWriter();
-        }
-
-        public override ImageWriter CreateImageWriter(MemoryArea img, Address addr)
-        {
-            return new BeImageWriter(img, addr);
+            throw new NotImplementedException();
         }
 
         public override IEqualityComparer<MachineInstruction> CreateInstructionComparer(Normalize norm)
@@ -94,7 +77,7 @@ namespace Reko.Arch.M6800
             return new M6812.M6812Rewriter(this, rdr, (M6812.M6812State)state, binder, host);
         }
 
-        public override FlagGroupStorage GetFlagGroup(uint grf)
+        public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)
         {
             if (flagGroups.TryGetValue(grf, out var f))
             {
@@ -103,7 +86,7 @@ namespace Reko.Arch.M6800
 
             var dt = Bits.IsSingleBitSet(grf) ? PrimitiveType.Bool : PrimitiveType.Byte;
             var flagregister = M6812.Registers.ccr;
-            var fl = new FlagGroupStorage(flagregister, grf, GrfToString(grf), dt);
+            var fl = new FlagGroupStorage(flagregister, grf, GrfToString(flagRegister, "", grf), dt);
             flagGroups.Add(grf, fl);
             return fl;
         }
@@ -113,17 +96,17 @@ namespace Reko.Arch.M6800
             throw new NotImplementedException();
         }
 
-        public override SortedList<string, int> GetOpcodeNames()
+        public override SortedList<string, int> GetMnemonicNames()
         {
             throw new NotImplementedException();
         }
 
-        public override int? GetOpcodeNumber(string name)
+        public override int? GetMnemonicNumber(string name)
         {
             throw new NotImplementedException();
         }
 
-        public override RegisterStorage GetRegister(int i)
+        public override RegisterStorage GetRegister(StorageDomain domain, BitRange range)
         {
             throw new NotImplementedException();
         }
@@ -138,7 +121,7 @@ namespace Reko.Arch.M6800
             throw new NotImplementedException();
         }
 
-        public override string GrfToString(uint grf)
+        public override string GrfToString(RegisterStorage flagRegister, string prefix, uint grf)
         {
             var sb = new StringBuilder();
             if ((grf & (uint)FlagM.NF) != 0) sb.Append('N');
@@ -148,7 +131,7 @@ namespace Reko.Arch.M6800
             return sb.ToString();
         }
 
-        public override Address MakeAddressFromConstant(Constant c)
+        public override Address MakeAddressFromConstant(Constant c, bool codeAlign)
         {
             return Address.Ptr16(c.ToUInt16());
         }
@@ -167,19 +150,5 @@ namespace Reko.Arch.M6800
         {
             return Address.TryParse16(txtAddr, out addr);
         }
-
-        public override bool TryRead(MemoryArea mem, Address addr, PrimitiveType dt, out Constant value)
-        {
-            throw new NotImplementedException();
-        }
-    }
-
-    [Flags]
-    public enum FlagM : byte
-    {
-        CF = 1,             // carry
-        VF = 2,             // overflow
-        ZF = 4,             // zero
-        NF = 8,             // sign
     }
 }

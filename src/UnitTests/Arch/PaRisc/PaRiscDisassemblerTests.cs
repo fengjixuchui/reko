@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,12 +38,6 @@ namespace Reko.UnitTests.Arch.PaRisc
         public override IProcessorArchitecture Architecture => arch;
 
         public override Address LoadAddress => Address.Ptr32(0x00100000);
-
-
-        protected override ImageWriter CreateImageWriter(byte[] bytes)
-        {
-            return new BeImageWriter(bytes);
-        }
 
         private void AssertCode(string sExp, string hexBytes)
         {

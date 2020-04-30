@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,11 +38,10 @@ namespace Reko.Scanning
 
     public class ScannerInLinq
     {
-        private IServiceProvider services;
-        private Program program;
-        private IRewriterHost host;
-        private DecompilerEventListener eventListener;
-        private ScanResults sr;
+        private readonly IServiceProvider services;
+        private readonly Program program;
+        private readonly IRewriterHost host;
+        private readonly DecompilerEventListener eventListener;
 
         public ScannerInLinq(IServiceProvider services, Program program, IRewriterHost host, DecompilerEventListener eventListener)
         {
@@ -54,10 +53,9 @@ namespace Reko.Scanning
 
         public ScanResults ScanImage(ScanResults sr)
         {
-            this.sr = sr;
-
-            // sr.WatchedAddresses.Add(Address.Ptr32(0x00404F5C)); //$DEBUG
-
+            sr.WatchedAddresses.Add(Address.Ptr32(0x001126FC)); //$DEBUG
+            sr.WatchedAddresses.Add(Address.Ptr32(0x00112762)); //$DEBUG
+            
             // At this point, we have some entries in the image map
             // that are data, and unscanned ranges in betweeen. We
             // have hopefully a bunch of procedure addresses to
@@ -88,7 +86,6 @@ namespace Reko.Scanning
                 sr,
                 program.SegmentMap.IsValidAddress,
                 host);
-            Probe(sr);
             hsc.ResolveBlockConflicts(sr.KnownProcedures.Concat(sr.DirectlyCalledAddresses.Keys));
             Probe(sr);
             sr.Dump("After block conflict resolution");
@@ -99,6 +96,7 @@ namespace Reko.Scanning
             var pads = ppf.FindPaddingBlocks();
             ppf.Remove(pads);
 
+            // Detect procedures from the "soup" of basic blocks in sr.
             var pd = new ProcedureDetector(program, sr, this.eventListener);
             var procs = pd.DetectProcedures();
             sr.Procedures = procs;
@@ -106,10 +104,20 @@ namespace Reko.Scanning
             return sr;
         }
 
+        /// <summary>
+        /// Shingle scan all unscanned regions of the image map, returning an unstructured
+        /// "soup" of instructions in the <see cref="ScanResults"/>.
+        /// </summary>
+        /// <param name="sr">Initial scan results, with known entry points,
+        /// procedures, etc.</param>
+        /// <returns>The <paramref name="sr"/> object, mutated to contain all the
+        /// new instructions.
+        /// </returns>
         public ScanResults ScanInstructions(ScanResults sr)
         {
             var ranges = FindUnscannedRanges().ToList();
             DumpRanges(ranges);
+            var workToDo = (ulong)ranges.Sum(r => r.Item4);
             var binder = new StorageBinder();
             var shsc = new ShingledScanner(this.program, this.host, binder, sr, this.eventListener);
             bool unscanned = false;
@@ -118,10 +126,12 @@ namespace Reko.Scanning
                 unscanned = true;
                 try
                 {
-                    shsc.ScanRange(range.Item1,
+                    shsc.ScanRange(
+                        range.Item1,
                         range.Item2,
                         range.Item3,
-                        range.Item3);
+                        range.Item4,
+                        workToDo);
                 }
                 catch (AddressCorrelatedException aex)
                 {
@@ -138,11 +148,11 @@ namespace Reko.Scanning
         }
 
         [Conditional("DEBUG")]
-        private void DumpRanges(List<Tuple<MemoryArea, Address, uint>> ranges)
+        private void DumpRanges(List<(IProcessorArchitecture, MemoryArea, Address, uint)> ranges)
         {
             foreach (var range in ranges)
             {
-                Debug.Print("{0} - {1}", range.Item2, range.Item3);
+                Debug.Print("{0}: {1} - {2}", range.Item1, range.Item3, range.Item4);
             }
         }
 
@@ -157,27 +167,112 @@ namespace Reko.Scanning
         /// been identified as code/data yet.
         /// </summary>
         /// <returns></returns>
-        public IEnumerable<Tuple<MemoryArea, Address, uint>> FindUnscannedRanges()
+        public IEnumerable<(IProcessorArchitecture, MemoryArea, Address, uint)> FindUnscannedRanges()
         {
-            return this.program.ImageMap.Items
-                .Where(de => de.Value.DataType is UnknownType)
-                .Select(de => CreateUnscannedArea(de))
-                .Where(tup => tup != null);
+            return MakeTriples(program.ImageMap.Items.Values)
+                .Select(triple => CreateUnscannedArea(triple))
+                .Where(triple => triple.HasValue)
+                .Select(triple => triple.Value);
         }
 
-        private Tuple<MemoryArea, Address, uint> CreateUnscannedArea(KeyValuePair<Address, ImageMapItem> de)
+        /// <summary>
+        /// From an <see cref="IEnumerable{T}"/> of items, generate an <see cref="IEnumerable{T}"/> of 
+        /// triples, where the middle item of each triple corresponds to the items from <paramref name="items"/>.
+        /// </summary>
+        /// <remarks>
+        /// Consider the sequence A B C D..X Y Z. The output of this method is:
+        /// (_ A B)
+        /// (A B C)
+        /// (B C D)
+        /// ...
+        /// (X Y Z)
+        /// (Y Z _)
+        /// (where '_' is the default element.
+        /// </remarks>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="items"></param>
+        /// <returns>A sequence of triples</returns>
+        private static IEnumerable<(T, T, T)> MakeTriples<T>(IEnumerable<T> items)
         {
-            if (!this.program.SegmentMap.TryFindSegment(de.Key, out ImageSegment seg))
+            T prev = default(T);
+            var e = items.GetEnumerator();
+            if (!e.MoveNext())
+                yield break;
+            T item = e.Current;
+            while (e.MoveNext())
+            {
+                var next = e.Current;
+                yield return (prev, item, next);
+                prev = item;
+                item = next;
+            }
+            yield return (prev, item, default(T));
+        }
+
+        /// <summary>
+        /// Given a triple of blocks, decides whether the middle block is an unscanned area
+        /// that could be fed to the shingle scanner.
+        /// </summary>
+        /// <param name="triple"></param>
+        /// <returns></returns>
+        private (IProcessorArchitecture, MemoryArea, Address, uint)? CreateUnscannedArea((ImageMapItem, ImageMapItem, ImageMapItem) triple)
+        {
+            var (prev, item, next) = triple;
+            if (!(item.DataType is UnknownType unk))
+                return null;
+            if (unk.Size > 0)
+                return null;
+            if (!this.program.SegmentMap.TryFindSegment(item.Address, out ImageSegment seg))
                 return null;
             if (!seg.IsExecutable)
                 return null;
-            return Tuple.Create(
+
+            // Determine an architecture for the item.
+            var prevArch = GetBlockArchitecture(prev);
+            var nextArch = GetBlockArchitecture(next);
+            IProcessorArchitecture arch = null;
+            if (prevArch == null)
+            {
+                arch = nextArch ?? program.Architecture;
+            }
+            else if (nextArch == null)
+            {
+                arch = prevArch ?? program.Architecture;
+            }
+            else
+            {
+                // Both prev and next have an architecture.
+                if (prevArch == nextArch)
+                {
+                    arch = prevArch;
+                }
+                else
+                {
+                    // Different architectures on both sides. 
+                    // Arbitrarily pick the architecture of the largest 
+                    // adjacent block. If they're the same size, default 
+                    // to the predecessor.
+                    arch = (prev.Size < next.Size)
+                        ? nextArch
+                        : prevArch;
+                }
+            }
+
+            return (
+                arch,
                 seg.MemoryArea,
-                de.Key,
-                de.Value.Size);
+                item.Address,
+                item.Size);
         }
 
-        private void BuildWeaklyConnectedComponents(Dictionary<long, block> the_blocks)
+        private static IProcessorArchitecture GetBlockArchitecture(ImageMapItem item)
+        {
+            return (item is ImageMapBlock imb)
+                ? imb.Block.Procedure.Architecture
+                : null;
+        }
+
+        private void BuildWeaklyConnectedComponents(ScanResults sr, Dictionary<long, block> the_blocks)
         {
             while (true)
             {
@@ -320,6 +415,7 @@ namespace Reko.Scanning
             var new_bad = bad_blocks;
             var preds = sr.FlatEdges.ToLookup(e => e.second);
             //Debug.Print("Bad {0}",
+
             //    string.Join(
             //        "\r\n      ",
             //        bad_blocks

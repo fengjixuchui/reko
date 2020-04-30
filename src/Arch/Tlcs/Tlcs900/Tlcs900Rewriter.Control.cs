@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,40 +34,38 @@ namespace Reko.Arch.Tlcs.Tlcs900
     {
         private void RewriteCall()
         {
-            var co = instr.op1 as ConditionOperand;
-            if (co != null)
+            if (instr.Operands[0] is ConditionOperand co)
             {
-                rtlc = InstrClass.ConditionalTransfer | InstrClass.Call;
+                iclass = InstrClass.ConditionalTransfer | InstrClass.Call;
                 m.BranchInMiddleOfInstruction(
                     GenerateTestExpression(co, true),
                     instr.Address + instr.Length,
                     InstrClass.ConditionalTransfer);
-                m.Call(RewriteSrc(instr.op2), 4);
+                m.Call(RewriteSrc(instr.Operands[1]), 4);
             }
             else
             {
-                rtlc = InstrClass.Transfer | InstrClass.Call;
-                m.Call(RewriteSrc(instr.op1), 4);
+                iclass = InstrClass.Transfer | InstrClass.Call;
+                m.Call(RewriteSrc(instr.Operands[0]), 4);
             }
         }
 
         private void RewriteDjnz()
         {
-            rtlc = InstrClass.ConditionalTransfer;
-            var reg = RewriteSrc(instr.op1);
-            var dst = ((AddressOperand)instr.op2).Address;
+            iclass = InstrClass.ConditionalTransfer;
+            var reg = RewriteSrc(instr.Operands[0]);
+            var dst = ((AddressOperand)instr.Operands[1]).Address;
             m.Assign(reg, m.ISub(reg, 1));
             m.Branch(m.Ne0(reg), dst, InstrClass.ConditionalTransfer);
         }
 
         private void RewriteJp()
         {
-            var co = instr.op1 as ConditionOperand;
-            if (co != null)
+            if (instr.Operands[0] is ConditionOperand co)
             {
-                rtlc = InstrClass.ConditionalTransfer;
+                iclass = InstrClass.ConditionalTransfer;
                 var test = GenerateTestExpression(co, false);
-                var dst = RewriteSrc(instr.op2);
+                var dst = RewriteSrc(instr.Operands[1]);
                 var addr = dst as Address;
                 if (addr != null)
                 {
@@ -82,18 +80,17 @@ namespace Reko.Arch.Tlcs.Tlcs900
             }
             else
             {
-                rtlc = InstrClass.Transfer;
-                var dst = RewriteSrc(instr.op1);
+                iclass = InstrClass.Transfer;
+                var dst = RewriteSrc(instr.Operands[0]);
                 m.Goto(dst);
             }
         }
 
         private void RewriteRet()
         {
-            var co = instr.op1 as ConditionOperand;
-            if (co != null)
+            if (instr.Operands.Length == 1 && instr.Operands[0] is ConditionOperand co)
             {
-                rtlc = InstrClass.ConditionalTransfer;
+                iclass = InstrClass.ConditionalTransfer;
 
                 var test = GenerateTestExpression(co, true);
                 m.Branch(test, instr.Address + instr.Length, InstrClass.ConditionalTransfer);
@@ -101,20 +98,20 @@ namespace Reko.Arch.Tlcs.Tlcs900
             }
             else
             {
-                rtlc = InstrClass.Transfer;
+                iclass = InstrClass.Transfer;
                 m.Return(4, 0);
             }
         }
 
         private void RewriteRetd()
         {
-            rtlc = InstrClass.Transfer;
-            m.Return(4, ((ImmediateOperand) instr.op1).Value.ToInt32());
+            iclass = InstrClass.Transfer;
+            m.Return(4, ((ImmediateOperand) instr.Operands[0]).Value.ToInt32());
         }
 
         private void RewriteReti()
         {
-            rtlc = InstrClass.Transfer;
+            iclass = InstrClass.Transfer;
             var sr = binder.EnsureRegister(Registers.sr);
             var sp = binder.EnsureRegister(Registers.xsp);
             m.Assign(sr, m.Mem16(sp));

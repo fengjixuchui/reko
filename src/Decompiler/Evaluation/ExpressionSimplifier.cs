@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,6 +40,7 @@ namespace Reko.Evaluation
     {
         private readonly SegmentMap segmentMap;
         private EvaluationContext ctx;
+        private readonly ExpressionValueComparer cmp;
 
         private AddTwoIdsRule add2ids;
         private Add_e_c_cRule addEcc;
@@ -65,11 +66,16 @@ namespace Reko.Evaluation
         private IdProcConstRule idProcConstRule;
         private CastCastRule castCastRule;
         private DistributedCastRule distributedCast;
-        
+        private DistributedSliceRule distributedSlice;
+        private MkSeqFromSlices_Rule mkSeqFromSlicesRule;
+        private ComparisonConstOnLeft constOnLeft;
+        private SliceSequence sliceSeq;
+
         public ExpressionSimplifier(SegmentMap segmentMap, EvaluationContext ctx, DecompilerEventListener listener)
         {
             this.segmentMap = segmentMap ?? throw new ArgumentNullException(nameof(SegmentMap));
             this.ctx = ctx;
+            this.cmp = new ExpressionValueComparer();
 
             this.add2ids = new AddTwoIdsRule(ctx);
             this.addEcc = new Add_e_c_cRule(ctx);
@@ -95,6 +101,10 @@ namespace Reko.Evaluation
             this.idProcConstRule = new IdProcConstRule(ctx);
             this.castCastRule = new CastCastRule(ctx);
             this.distributedCast = new DistributedCastRule();
+            this.distributedSlice = new DistributedSliceRule();
+            this.mkSeqFromSlicesRule = new MkSeqFromSlices_Rule(ctx);
+            this.constOnLeft = new ComparisonConstOnLeft();
+            this.sliceSeq = new SliceSequence(ctx);
         }
 
         public bool Changed { get { return changed; } set { changed = value; } }
@@ -125,8 +135,6 @@ namespace Reko.Evaluation
         {
             var lType = (PrimitiveType)l.DataType;
             var rType = (PrimitiveType)r.DataType;
-            if ((lType.Domain & rType.Domain) == 0)
-                throw new ArgumentException(string.Format("Can't add types of disjoint domains {0} and {1}", l.DataType, r.DataType));
             return op.ApplyConstants(l, r);
         }
 
@@ -206,6 +214,11 @@ namespace Reko.Evaluation
                 Changed = true;
                 return distributedCast.Transform(ctx).Accept(this);
             }
+            if (distributedSlice.Match(binExp))
+            {
+                Changed = true;
+                return distributedSlice.Transform(ctx).Accept(this);
+            }
 
             var left = binExp.Left.Accept(this);
             var right = binExp.Right.Accept(this);
@@ -252,7 +265,11 @@ namespace Reko.Evaluation
             {
                 cRight = ReinterpretAsIeeeFloat(cRight);
                 right = cRight;
-                binExp.Right = cRight;
+                binExp = new BinaryExpression(
+                    binExp.Operator,
+                    binExp.DataType,
+                    binExp.Left,
+                    cRight);
             }
 
             var binLeft = left as BinaryExpression;
@@ -266,7 +283,7 @@ namespace Reko.Evaluation
             if (binLeft != null && cLeftRight != null && cRight != null)
             {
                 if (IsAddOrSub(binExp.Operator) && IsAddOrSub(binLeft.Operator) &&
-                    !cLeftRight.IsReal && !cRight.IsReal)
+                !cLeftRight.IsReal && !cRight.IsReal)
                 {
                     Changed = true;
                     var binOperator = binExp.Operator;
@@ -347,6 +364,12 @@ namespace Reko.Evaluation
                 }
             }
 
+            // (rel C non-C) => (trans(rel) non-C C)
+            if (constOnLeft.Match(binExp))
+            {
+                Changed = true;
+                return constOnLeft.Transform();
+            }
             if (addMici.Match(binExp))
             {
                 Changed = true;
@@ -403,9 +426,11 @@ namespace Reko.Evaluation
         {
             PrimitiveType lType = (PrimitiveType) l.DataType;
             PrimitiveType rType = (PrimitiveType) r.DataType;
-            if ((lType.Domain & rType.Domain) == 0)
-                throw new ArgumentException(string.Format("Can't add types of different domains {0} and {1}", l.DataType, r.DataType));
-            return ((BinaryOperator) op).ApplyConstants(l, r);
+            if ((lType.Domain & rType.Domain) != 0)
+            {
+                return ((BinaryOperator) op).ApplyConstants(l, r);
+            }
+            throw new ArgumentException(string.Format("Can't add types of different domains {0} and {1}", l.DataType, r.DataType));
         }
 
         public virtual Expression VisitCast(Cast cast)
@@ -454,6 +479,19 @@ namespace Reko.Evaluation
                         {
                             return dpb.InsertedBits;
                         }
+                    }
+                }
+                if (exp is ProcedureConstant pc && cast.DataType.BitSize == pc.DataType.BitSize)
+                {
+                    // (wordnn) procedure_const => procedure_const
+                    return pc;
+                }
+                if (exp.DataType.BitSize == cast.DataType.BitSize)
+                {
+                    // Redundant word-casts can be stripped.
+                    if (cast.DataType.IsWord())
+                    {
+                        return exp;
                     }
                 }
                 cast = new Cast(cast.DataType, exp);
@@ -505,15 +543,15 @@ namespace Reko.Evaluation
                 return Constant.Invalid;
             }
             d = new DepositBits(src, bits, d.BitPosition);
+            while (dpbdpbRule.Match(d))
+            {
+                Changed = true;
+                d = dpbdpbRule.Transform();
+            }
             if (dpbConstantRule.Match(d))
             {
                 Changed = true;
                 return dpbConstantRule.Transform();
-            }
-            if (dpbdpbRule.Match(d))
-            {
-                Changed = true;
-                return dpbdpbRule.Transform();
             }
             if (selfdpbRule.Match(d))
             {
@@ -616,7 +654,7 @@ namespace Reko.Evaluation
                     }
                 }
             }
-            if (newSeq.Take(newSeq.Length-1).All(e => e.IsZero))
+            if (newSeq.Take(newSeq.Length - 1).All(e => e.IsZero))
             {
                 var tail = newSeq.Last();
                 // leading zeros imply a conversion to unsigned.
@@ -626,7 +664,66 @@ namespace Reko.Evaluation
                         PrimitiveType.Create(Domain.UnsignedInt, tail.DataType.BitSize),
                         tail));
             }
-            return new MkSequence(seq.DataType, newSeq);
+            return FuseAdjacentSlices(seq.DataType, newSeq);
+        }
+
+        private Expression FuseAdjacentSlices(DataType dataType, Expression[] elems)
+        {
+            var fused = new List<Expression> { AsSlice(elems[0]) ?? elems[0] };
+            bool changed = false;
+            for (int i = 1; i < elems.Length; ++i)
+            {
+                Slice slNext = AsSlice(elems[i]);
+                if (fused[fused.Count - 1] is Slice slPrev && slNext != null &&
+                    cmp.Equals(slPrev.Expression, slNext.Expression) &&
+                    slPrev.Offset == slNext.Offset + slNext.DataType.BitSize)
+                {
+                    // Fuse the two consecutive slices. 
+                    var newSlice = new Slice(
+                        PrimitiveType.CreateWord(slPrev.DataType.BitSize + slNext.DataType.BitSize),
+                        slNext.Expression,
+                        slNext.Offset);
+                    fused[fused.Count - 1] = newSlice.Accept(this);
+                    changed = true;
+                }
+                else
+                {
+                    fused.Add(elems[i]);
+                }
+            }
+            if (changed)
+            {
+                foreach (var e in elems)
+                    ctx.RemoveExpressionUse(e);
+                foreach (var f in fused)
+                    ctx.UseExpression(f);
+                if (fused.Count == 1)
+                    return fused[0];
+                else
+                    return new MkSequence(dataType, fused.ToArray());
+            }
+            else
+            {
+                return new MkSequence(dataType, elems);
+            }
+        }
+
+        private Slice AsSlice(Expression e)
+        {
+            if (e is Identifier id)
+            {
+                e = ctx.GetDefiningExpression(id);
+            }
+            Slice slNext;
+            if (e is Cast c)
+            {
+                slNext = new Slice(c.DataType, c.Expression, 0);
+            }
+            else
+            {
+                slNext = e as Slice;
+            }
+            return slNext;
         }
 
         public virtual Expression VisitOutArgument(OutArgument outArg)
@@ -714,12 +811,15 @@ namespace Reko.Evaluation
 
         public virtual Expression VisitSegmentedAccess(SegmentedAccess segMem)
         {
-            segMem =
-                new SegmentedAccess(
-                segMem.MemoryId,
-                segMem.BasePointer.Accept(this),
-                segMem.EffectiveAddress.Accept(this),
-                segMem.DataType);
+            var basePtr = segMem.BasePointer.Accept(this);
+            var offset = segMem.EffectiveAddress.Accept(this);
+            if (basePtr is Constant cBase && offset is Constant cOffset)
+            {
+                var addr = ctx.MakeSegmentedAddress(cBase, cOffset);
+                var mem = new MemoryAccess(segMem.MemoryId, addr, segMem.DataType);
+                return ctx.GetValue(mem, segmentMap);
+            }
+            segMem = new SegmentedAccess(segMem.MemoryId, basePtr, offset, segMem.DataType);
             if (sliceSegPtr.Match(segMem))
             {
                 Changed = true;
@@ -731,6 +831,9 @@ namespace Reko.Evaluation
         public virtual Expression VisitSlice(Slice slice)
         {
             var e = slice.Expression.Accept(this);
+            // Is the slice the same size as the expression?
+            if (slice.Offset == 0 && slice.DataType.BitSize == e.DataType.BitSize)
+                return e;
             slice = new Slice(slice.DataType, e, slice.Offset);
             if (sliceConst.Match(slice))
             {
@@ -748,6 +851,11 @@ namespace Reko.Evaluation
             {
                 Changed = true;
                 return sliceShift.Transform();
+            }
+            if (sliceSeq.Match(slice))
+            {
+                Changed = true;
+                return sliceSeq.Transform();
             }
             return slice;
         }

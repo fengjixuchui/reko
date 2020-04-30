@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -206,14 +206,14 @@ namespace Reko.Arch.X86
             }
             if (!IsSegmentedAccessRequired && expr is Constant c && mem.SegOverride == RegisterStorage.None)
             {
-                return arch.MakeAddressFromConstant(c);
+                return arch.MakeAddressFromConstant(c, false);
             }
             return expr;
         }
 
         public Identifier FlagGroup(FlagM flags)
         {
-            return binder.EnsureFlagGroup(arch.GetFlagGroup((uint)flags)); ;
+            return binder.EnsureFlagGroup(arch.GetFlagGroup(Registers.eflags, (uint)flags)); ;
         }
 
 
@@ -224,9 +224,14 @@ namespace Reko.Arch.X86
         /// </summary>
         /// <param name="reg"></param>
         /// <returns></returns>
-        public Identifier FpuRegister(int reg, X86State state)
+        public Expression FpuRegister(int reg, X86State state)
         {
-            return binder.EnsureFpuStackVariable(reg - state.FpuStackItems, PrimitiveType.Real64);
+            Expression idx = binder.EnsureRegister(Registers.Top);
+            if (reg != 0)
+            {
+                idx = m.IAddS(idx, reg);
+            }
+            return new MemoryAccess(Registers.ST, idx, PrimitiveType.Real64);
         }
 
         [Obsolete("Retire these?")]

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -234,7 +234,7 @@ namespace Reko.Scanning
 
         public Address MakeAddressFromConstant(Constant c)
         {
-            return program.Platform.MakeAddressFromConstant(c);
+            return program.Platform.MakeAddressFromConstant(c, true);
         }
 
         public Address MakeSegmentedAddress(Constant seg, Constant off)

@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,9 +37,9 @@ namespace Reko.Arch.X86
     /// </summary>
     public partial class X86Rewriter
     {
-        private Expression CreateTestCondition(ConditionCode cc, Opcode opcode)
+        private Expression CreateTestCondition(ConditionCode cc, Mnemonic mnemonic)
         {
-            var grf = orw.FlagGroup(X86Instruction.UseCc(opcode));
+            var grf = orw.FlagGroup(X86Instruction.UseCc(mnemonic));
             var tc = new TestCondition(cc, grf);
             return tc;
         }
@@ -47,7 +47,7 @@ namespace Reko.Arch.X86
             /*
             if (i < 2)
                 return tc;
-            if (instrs[i-1].code != Opcode.test)
+            if (instrs[i-1].code != Mnemonic.test)
                 return tc;
             var ah = instrs[i-1].op1 as RegisterOperand;
             if (ah == null || ah.Register != Registers.ah)
@@ -56,7 +56,7 @@ namespace Reko.Arch.X86
             if (m == null)
                 return tc;
 
-            if (instrs[i-2].code != Opcode.fstsw)
+            if (instrs[i-2].code != Mnemonic.fstsw)
                 return tc;
             int mask = m.Value.ToInt32();
 
@@ -97,8 +97,9 @@ namespace Reko.Arch.X86
                     // Calling the following address. Is the call followed by a 
                     // pop?
                     var next = dasm.Peek(1);
-                    RegisterOperand reg = next.op1 as RegisterOperand;
-                    if (next.code == Opcode.pop && reg != null)
+                    if (next.Mnemonic == Mnemonic.pop && 
+                        next.Operands.Length > 0 &&
+                        next.Operands[0] is RegisterOperand reg)
                     {
                         // call $+5,pop<reg> idiom
                         dasm.MoveNext();
@@ -113,7 +114,7 @@ namespace Reko.Arch.X86
                             m.Assign(r, addr);
                         }
                         this.len += 1;
-                        rtlc = InstrClass.Linear;
+                        iclass = InstrClass.Linear;
                         return;
                     }
                 }
@@ -127,7 +128,7 @@ namespace Reko.Arch.X86
                     if (arch.WordWidth.Size > 2)
                     {
                         // call bx doesn't work on 32- or 64-bit architectures.
-                        rtlc = InstrClass.Invalid;
+                        iclass = InstrClass.Invalid;
                         m.Invalid();
                         return;
                     }
@@ -136,19 +137,27 @@ namespace Reko.Arch.X86
                 }
                 m.Call(target, (byte) opsize.Size);
             }
-            rtlc = InstrClass.Transfer | InstrClass.Call;
+            iclass = InstrClass.Transfer | InstrClass.Call;
         }
 
         private void RewriteConditionalGoto(ConditionCode cc, MachineOperand op1)
         {
-            rtlc = InstrClass.ConditionalTransfer;
-            m.Branch(CreateTestCondition(cc, instrCur.code), OperandAsCodeAddress(op1), InstrClass.ConditionalTransfer);
+            iclass = InstrClass.ConditionalTransfer;
+            m.Branch(CreateTestCondition(cc, instrCur.Mnemonic), OperandAsCodeAddress(op1), InstrClass.ConditionalTransfer);
         }
 
         private void RewriteInt()
         {
-            m.SideEffect(host.PseudoProcedure(PseudoProcedure.Syscall, VoidType.Instance, SrcOp(instrCur.op1)));
-            rtlc |= InstrClass.Call | InstrClass.Transfer;
+            m.SideEffect(host.PseudoProcedure(PseudoProcedure.Syscall, VoidType.Instance, SrcOp(instrCur.Operands[0])));
+            iclass |= InstrClass.Call | InstrClass.Transfer;
+        }
+
+        private void RewriteIcebp()
+        {
+            // This is not supposed to be executed, so we mark the cluster as invalid.
+            //$REVIEW: the new scanner being developed should make this less necessary.
+            this.iclass = InstrClass.Invalid;
+            m.Invalid();
         }
 
         private void RewriteInto()
@@ -161,11 +170,11 @@ namespace Reko.Arch.X86
                     host.PseudoProcedure(PseudoProcedure.Syscall, VoidType.Instance, Constant.Byte(4)));
         }
 
-        private void RewriteJcxz()
+        private void RewriteJcxz(RegisterStorage cx)
         {
             m.Branch(
-                m.Eq0(orw.AluRegister(Registers.rcx, instrCur.dataWidth)),
-                OperandAsCodeAddress(instrCur.op1),
+                m.Eq0(orw.AluRegister(cx)),
+                OperandAsCodeAddress(instrCur.Operands[0]),
                 InstrClass.ConditionalTransfer);
         }
 
@@ -188,21 +197,26 @@ namespace Reko.Arch.X86
 				return;
 			}
 
-            rtlc = InstrClass.Transfer;
-			if (instrCur.op1 is ImmediateOperand)
+            iclass = InstrClass.Transfer;
+			if (instrCur.Operands[0] is ImmediateOperand)
 			{
-				Address addr = OperandAsCodeAddress(instrCur.op1);
+				Address addr = OperandAsCodeAddress(instrCur.Operands[0]);
                 m.Goto(addr);
 				return;
 			}
-            var target = SrcOp(instrCur.op1);
+            var target = SrcOp(instrCur.Operands[0]);
             if (target.DataType.Size == 2 && arch.WordWidth.Size > 2)
             {
-                rtlc = InstrClass.Invalid;
+                iclass = InstrClass.Invalid;
                 m.Invalid();
                 return;
             }
             m.Goto(target);
+        }
+
+        private void RewriteJmpe()
+        {
+            m.SideEffect(host.PseudoProcedure("__jmpe", VoidType.Instance));
         }
 
         private void RewriteLoop(FlagM useFlags, ConditionCode cc)
@@ -215,29 +229,36 @@ namespace Reko.Arch.X86
                     m.Cand(
                         m.Test(cc, orw.FlagGroup(useFlags)),
                         m.Ne0(cx)),
-                    OperandAsCodeAddress(instrCur.op1),
+                    OperandAsCodeAddress(instrCur.Operands[0]),
                     InstrClass.ConditionalTransfer);
             }
             else
             {
-                m.Branch(m.Ne0(cx), OperandAsCodeAddress(instrCur.op1), InstrClass.ConditionalTransfer);
+                m.Branch(m.Ne0(cx), OperandAsCodeAddress(instrCur.Operands[0]), InstrClass.ConditionalTransfer);
             }
+        }
+
+        private void RewriteLtr()
+        {
+            m.SideEffect(host.PseudoProcedure("__load_task_register",
+                VoidType.Instance,
+                SrcOp(instrCur.Operands[0])));
         }
 
         public void RewriteRet()
         {
-            int extraBytesPopped = instrCur.Operands == 1 
-                ? ((ImmediateOperand)instrCur.op1).Value.ToInt32() 
+            int extraBytesPopped = instrCur.Operands.Length == 1 
+                ? ((ImmediateOperand)instrCur.Operands[0]).Value.ToInt32() 
                 : 0;
             if ((extraBytesPopped & 1) == 1)
             {
                 // Unlikely that an odd number of bytes are pushed on the stack.
-                rtlc = InstrClass.Invalid;
+                iclass = InstrClass.Invalid;
                 m.Invalid();
                 return;
             }
             m.Return(
-                this.arch.WordWidth.Size + (instrCur.code == Opcode.retf ? Registers.cs.DataType.Size : 0),
+                this.arch.WordWidth.Size + (instrCur.Mnemonic == Mnemonic.retf ? Registers.cs.DataType.Size : 0),
                 extraBytesPopped);
         }
 
@@ -249,6 +270,19 @@ namespace Reko.Arch.X86
                 Registers.cs.DataType.Size +
                 arch.WordWidth.Size, 
                 0);
+        }
+
+        private void RewriteRsm()
+        {
+            m.Return(0, 0);
+        }
+
+        private void RewriteStr()
+        {
+            m.Assign(
+                SrcOp(instrCur.Operands[0]),
+                host.PseudoProcedure("__store_task_register",
+                    PrimitiveType.Word16));
         }
 
         private void RewriteSyscall()
@@ -273,6 +307,13 @@ namespace Reko.Arch.X86
             m.Return(0,0);
         }
 
+        private void RewriteVerrw(string intrinsicName)
+        {
+            var z = orw.FlagGroup(FlagM.ZF);
+            m.Assign(z, host.PseudoProcedure(intrinsicName,
+                z.DataType,
+                SrcOp(instrCur.Operands[0])));
+        }
 
         /// <summary>
         /// A jump to 0xFFFF:0x0000 in real mode is a reboot.
@@ -281,7 +322,7 @@ namespace Reko.Arch.X86
         /// <returns></returns>
         private bool IsRealModeReboot(X86Instruction instrCur)
         {
-            var addrOp = instrCur.op1 as X86AddressOperand;
+            var addrOp = instrCur.Operands[0] as X86AddressOperand;
             bool isRealModeReboot = addrOp != null && addrOp.Address.ToLinear() == 0xFFFF0;
             return isRealModeReboot;
         }

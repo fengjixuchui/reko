@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@
 
 using NUnit.Framework;
 using Reko.Arch.X86;
-using Reko.Assemblers.x86;
+using Reko.Arch.X86.Assembler;
 using Reko.Core;
 using Reko.Core.Services;
 using Reko.Environments.Msdos;
@@ -61,17 +61,18 @@ namespace Reko.UnitTests.Scanning
             var sc = new ServiceContainer();
             var eventListener = new FakeDecompilerEventListener();
             sc.AddService<DecompilerEventListener>(eventListener);
-            sc.AddService<DecompilerHost>(new FakeDecompilerHost());
+            sc.AddService<IDecompiledFileService>(new FakeDecompiledFileService());
             sc.AddService<IFileSystemService>(new FileSystemServiceImpl());
             var entryPoints = new List<ImageSymbol>();
-            var asm = new X86Assembler(sc, platform, addrBase, entryPoints);
+            var asm = new X86Assembler(arch, addrBase, entryPoints);
             asmProg(asm);
 
             program = asm.GetImage();
+            program.Platform = platform;
             var project = new Project { Programs = { program } };
             scanner = new Scanner(
                 program,
-                new ImportResolver(project, program, eventListener),
+                new DynamicLinker(project, program, eventListener),
                 sc);
             scanner.EnqueueImageSymbol(ImageSymbol.Procedure(arch, addrBase), true);
             scanner.ScanImage();
@@ -122,17 +123,18 @@ namespace Reko.UnitTests.Scanning
             program.Procedures.Values[0].Write(false, sw);
             var sExp = @"// fn0C00_0000
 // Return size: 2
-void fn0C00_0000()
+define fn0C00_0000
 fn0C00_0000_entry:
 	sp = fp
+	Top = 0<i8>
 	// succ:  l0C00_0000
 l0C00_0000:
-	branch cx == 0x0000 l0C00_0002
+	branch cx == 0<16> l0C00_0002
 	// succ:  l0C00_0000_1 l0C00_0002
 l0C00_0000_1:
 	SCZO = cond(ax - Mem0[es:di:word16])
-	di = di + 0x0002
-	cx = cx - 0x0001
+	di = di + 2<16>
+	cx = cx - 1<16>
 	branch Test(NE,Z) l0C00_0000
 	// succ:  l0C00_0002 l0C00_0000
 l0C00_0002:

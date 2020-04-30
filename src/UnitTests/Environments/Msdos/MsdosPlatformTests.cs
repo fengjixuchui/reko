@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -74,24 +74,24 @@ namespace Reko.UnitTests.Environments.Msdos
 
             var state = arch.CreateProcessorState();
             state.SetRegister(Registers.ah, Constant.Byte(0x3E));
-            SystemService svc = platform.FindService(0x21, state);
+            SystemService svc = platform.FindService(0x21, state, null);
             Assert.AreEqual("msdos_close_file", svc.Name);
             Assert.AreEqual(1, svc.Signature.Parameters.Length);
             Assert.IsFalse(svc.Characteristics.Terminates, "close() shouldn't terminate program");
 
             state.SetRegister(Registers.ah, Constant.Byte(0x4C));
-            svc = platform.FindService(0x21, state);
+            svc = platform.FindService(0x21, state, null);
             Assert.AreEqual("msdos_terminate", svc.Name);
             Assert.AreEqual(1, svc.Signature.Parameters.Length);
             Assert.IsTrue(svc.Characteristics.Terminates, "terminate() should terminate program");
 
             state.SetRegister(Registers.ah, Constant.Byte(0x2F));
-            svc = platform.FindService(0x21, state);
+            svc = platform.FindService(0x21, state, null);
             Assert.AreEqual("msdos_get_disk_transfer_area_address", svc.Name);
             Assert.AreEqual(0, svc.Signature.Parameters.Length);
             SequenceStorage seq = (SequenceStorage)svc.Signature.ReturnValue.Storage;
-            Assert.AreEqual("es", seq.Head.Name);
-            Assert.AreEqual("bx", seq.Tail.Name);
+            Assert.AreEqual("es", seq.Elements[0].Name);
+            Assert.AreEqual("bx", seq.Elements[1].Name);
         }
 
         [Test]
@@ -116,7 +116,7 @@ namespace Reko.UnitTests.Environments.Msdos
         {
             Given_MsdosPlatform();
             Given_Procedure();
-            var dx_ax = proc.Frame.EnsureSequence(Registers.dx, Registers.ax, PrimitiveType.Word32);
+            var dx_ax = proc.Frame.EnsureSequence(PrimitiveType.Word32, Registers.dx, Registers.ax);
             var arg06 = proc.Frame.EnsureStackArgument(6, PrimitiveType.Word16);
             var sb = new SignatureBuilder(proc.Frame, arch);
             sb.AddOutParam(dx_ax);

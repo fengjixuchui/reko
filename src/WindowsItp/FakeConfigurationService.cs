@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,11 +35,6 @@ namespace Reko.WindowsItp
             throw new NotImplementedException();
         }
 
-        public ICollection<AssemblerDefinition> GetAssemblers()
-        {
-            throw new NotImplementedException();
-        }
-
         public ICollection<PlatformDefinition> GetEnvironments()
         {
             throw new NotImplementedException();
@@ -61,11 +56,6 @@ namespace Reko.WindowsItp
         }
 
         public IProcessorArchitecture GetArchitecture(string archLabel)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Assembler GetAssembler(string assemblerName)
         {
             throw new NotImplementedException();
         }

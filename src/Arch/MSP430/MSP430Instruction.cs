@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,64 +29,54 @@ namespace Reko.Arch.Msp430
 {
     public class Msp430Instruction : MachineInstruction
     {
-        public Opcode opcode;
+        public Mnemonics Mnemonic;
         public PrimitiveType dataWidth;
-        public MachineOperand op1;
-        public MachineOperand op2;
         public int repeatImm;
         public RegisterStorage repeatReg;
 
-        public override int OpcodeAsInteger => (int) opcode;
-
-        public override MachineOperand GetOperand(int i)
-        {
-            throw new NotImplementedException();
-        }
+        public override int MnemonicAsInteger => (int) Mnemonic;
 
         public override void Render(MachineInstructionWriter writer, MachineInstructionWriterOptions options)
         {
+            RenderMnemonic(writer);
+            RenderOperands(writer, options);
+        }
+
+        private void RenderMnemonic(MachineInstructionWriter writer)
+        {
             if (repeatReg != null)
             {
-                writer.WriteOpcode("rpt");
+                writer.WriteMnemonic("rpt");
                 writer.WriteString(" ");
                 writer.WriteString(repeatReg.Name);
                 writer.WriteString(" ");
-            } else if (repeatImm > 1)
+            }
+            else if (repeatImm > 1)
             {
-                writer.WriteOpcode("rpt");
+                writer.WriteMnemonic("rpt");
                 writer.WriteString(" #");
                 writer.WriteString(repeatImm.ToString());
                 writer.WriteString(" ");
             }
-            var sb = new StringBuilder(opcode.ToString());
+            var sb = new StringBuilder(Mnemonic.ToString());
             if (dataWidth != null)
             {
-                sb.AppendFormat(".{0}", dataWidth.BitSize == 8 
-                    ? "b" 
+                sb.AppendFormat(".{0}", dataWidth.BitSize == 8
+                    ? "b"
                     : dataWidth.BitSize == 16
                         ? "w"
-                        : "a" );
+                        : "a");
             }
-            writer.WriteOpcode(sb.ToString());
-            if (op1 != null)
-            {
-                writer.Tab();
-                Write(op1, writer, options);
-                if (op2 != null)
-                {
-                    writer.WriteString(",");
-                    Write(op2, writer, options);
-                }
-            }
+            writer.WriteMnemonic(sb.ToString());
         }
 
-        private void Write(MachineOperand op, MachineInstructionWriter writer, MachineInstructionWriterOptions options)
+        protected override void RenderOperand(MachineOperand op, MachineInstructionWriter writer, MachineInstructionWriterOptions options)
         {
             if (op is AddressOperand && (base.InstructionClass & InstrClass.Transfer) == 0)
             {
                 writer.WriteString("&");
             }
-            if (op is ImmediateOperand && opcode != Opcode.call)
+            if (op is ImmediateOperand && Mnemonic != Mnemonics.call)
             {
                 writer.WriteString("#");
             }

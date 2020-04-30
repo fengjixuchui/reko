@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -78,10 +78,6 @@ namespace Reko.Arch.Sparc
                 valid[reg.Number] = true;
                 regs[reg.Number] = v.ToUInt64();
             }
-        }
-
-        public override void SetInstructionPointer(Address addr)
-        {
         }
 
         public override void OnProcedureEntered()

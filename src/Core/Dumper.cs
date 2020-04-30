@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,26 +50,25 @@ namespace Reko.Core
         public void Dump(Formatter formatter)
         {
             var map = program.SegmentMap;
-            var mappedItems =
-                from seg in map.Segments.Values
-                from item in program.ImageMap.Items.Values
-                where seg.IsInRange(item.Address) && !seg.IsHidden
-                group new { seg, item } by seg into g
-                orderby g.Key.Address
-                select new { g.Key, Items = g.Select(gg => gg.item) }; 
+            var mappedItems = program.GetItemsBySegment();
+            Dump(mappedItems, formatter);
+        }
 
-            foreach (var g in mappedItems)
+        public void Dump(Dictionary<ImageSegment, List<ImageMapItem>> segmentItems, Formatter formatter)
+        {
+            foreach (var segmentEntry in segmentItems)
             {
-                formatter.WriteLine(";;; Segment {0} ({1})", g.Key.Name, g.Key.Address);
-                if (g.Key.Designer != null)
+                var seg = segmentEntry.Key;
+                formatter.WriteLine(";;; Segment {0} ({1})", seg.Name, seg.Address);
+                if (seg.Designer != null)
                 {
-                    g.Key.Designer.Render(g.Key, program, new AsmCommentFormatter(formatter));
+                    seg.Designer.Render(seg, program, new AsmCommentFormatter(formatter));
                 }
                 else
                 {
-                    foreach (var item in g.Items)
+                    foreach (var item in segmentEntry.Value)
                     {
-                        DumpItem(g.Key, item, formatter);
+                        DumpItem(seg, item, formatter);
                     }
                 }
             }
@@ -115,7 +114,7 @@ namespace Reko.Core
                 var segLast = segment.Address + segment.Size;
                 var size = segLast - i.Address;
                 size = Math.Min(i.Size, size);
-                if (i.DataType == null || i.DataType is UnknownType ||
+                if (i.DataType == null || (i.DataType is UnknownType && i.DataType.Size == 0) ||
                     i.DataType is CodeType)
                 {
                     DumpData(program.SegmentMap, program.Architecture, i.Address, size, formatter);
@@ -172,9 +171,12 @@ namespace Reko.Core
                 return;
             byte[] prevLine = null;
             bool showEllipsis = true;
+            cbBytes = Math.Min(cbBytes, segment.MemoryArea.Length - (address - segment.MemoryArea.BaseAddress));
+            if (cbBytes <= 0)
+                return;
 			var rdr = arch.CreateImageReader(segment.MemoryArea, address);
 			while (cbBytes > 0)
-			{
+            {
 				StringBuilder sb = new StringBuilder(0x12);
                 var bytes = new List<byte>();
                 var sbBytes = new StringBuilder();
@@ -295,6 +297,14 @@ namespace Reko.Core
             item.DataType.Accept(new TypedDataDumper(rdr, item.Size, w));
         }
 
+        private ImageSegment FindSegment(Address addr)
+        {
+            if (program.SegmentMap.TryFindSegment(addr, out var segment))
+                return segment;
+            else
+                return null;
+        }
+
         private void WriteLabel(Address addr, Formatter w)
         {
             if (program.ImageSymbols.TryGetValue(addr, out var sym) &&
@@ -386,10 +396,10 @@ namespace Reko.Core
                 formatter.WriteHyperlink(formattedAddress, addr);
             }
 
-            public void WriteOpcode(string opcode)
+            public void WriteMnemonic(string sMnemonic)
             {
-                chars += opcode.Length;
-                formatter.Write(opcode);
+                chars += sMnemonic.Length;
+                formatter.Write(sMnemonic);
             }
 
             public void WriteLine()

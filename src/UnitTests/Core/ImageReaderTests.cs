@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -54,6 +54,7 @@ namespace Reko.UnitTests.Core
                     2);
             StringConstant str = img.ReadLengthPrefixedString(PrimitiveType.Int32, PrimitiveType.WChar, Encoding.Unicode);
             Assert.AreEqual("Foo", str.ToString());
+            Assert.AreEqual(9, img.Offset);
         }
 
         [Test(Description = "Tests a bounded image")]

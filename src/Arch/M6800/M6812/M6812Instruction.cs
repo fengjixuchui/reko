@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,34 +26,17 @@ namespace Reko.Arch.M6800.M6812
 {
     public class M6812Instruction : MachineInstruction
     {
-        public MachineOperand[] Operands;
+        public override int MnemonicAsInteger => (int) Mnemonic;
 
-        public override int OpcodeAsInteger => (int) Opcode;
-
-        public Opcode Opcode { get; set; }
-
-        public override MachineOperand GetOperand(int i)
-        {
-            throw new NotImplementedException();
-        }
+        public Mnemonic Mnemonic { get; set; }
 
         public override void Render(MachineInstructionWriter writer, MachineInstructionWriterOptions options)
         {
-            writer.WriteOpcode(Opcode.ToString());
-            if (Operands.Length > 0)
-            {
-                writer.Tab();
-                var sep = "";
-                foreach (var op in Operands)
-                {
-                    writer.WriteString(sep);
-                    sep = ",";
-                    RenderOperand(op, writer, options);
-                }
-            }
+            writer.WriteMnemonic(Mnemonic.ToString());
+            RenderOperands(writer, options);
         }
 
-        private static void RenderOperand(MachineOperand op, MachineInstructionWriter writer, MachineInstructionWriterOptions options)
+        protected override void RenderOperand(MachineOperand op, MachineInstructionWriter writer, MachineInstructionWriterOptions options)
         {
             switch (op)
             {

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -48,6 +48,10 @@ namespace Reko.Environments.C64
             get { return ""; }
         }
 
+        public override IPlatformEmulator CreateEmulator(SegmentMap segmentMap, Dictionary<Address, ImportReference> importReferences)
+        {
+            throw new NotImplementedException();
+        }
         public override HashSet<RegisterStorage> CreateImplicitArgumentRegisters()
         {
             return new HashSet<RegisterStorage>
@@ -69,12 +73,7 @@ namespace Reko.Environments.C64
             throw new NotImplementedException();
         }
 
-        public override SystemService FindService(RtlInstruction rtl, ProcessorState state)
-        {
-            return base.FindService(rtl, state);
-        }
-
-        public override SystemService FindService(int vector, ProcessorState state)
+        public override SystemService FindService(int vector, ProcessorState state, SegmentMap segmentMap)
         {
             throw new NotImplementedException();
         }
@@ -102,7 +101,7 @@ namespace Reko.Environments.C64
             throw new NotImplementedException();
         }
 
-        public override Address MakeAddressFromConstant(Constant c)
+        public override Address MakeAddressFromConstant(Constant c, bool codeAlign)
         {
             return Address.Ptr16(c.ToUInt16());
         }

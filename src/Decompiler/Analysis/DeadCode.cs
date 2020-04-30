@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,16 +35,14 @@ namespace Reko.Analysis
 	/// </summary>
 	public class DeadCode : InstructionVisitorBase
 	{
-		private Procedure proc;
 		private SsaState ssa;
 		private WorkList<SsaIdentifier> liveIds;
 		private CriticalInstruction critical;
 
 		private static TraceSwitch trace = new TraceSwitch("DeadCode", "Traces dead code elimination");
 
-		private DeadCode(Procedure proc, SsaState ssa) 
+		private DeadCode(SsaState ssa) 
 		{
-			this.proc = proc;
 			this.ssa = ssa;
 			this.critical = new CriticalInstruction();
 		}
@@ -55,7 +53,7 @@ namespace Reko.Analysis
 		/// </summary>
 		public void AdjustApplicationsWithDeadReturnValues()
 		{
-			foreach (Block b in proc.ControlGraph.Blocks)
+			foreach (Block b in ssa.Procedure.ControlGraph.Blocks)
 			{
 				for (int iStm = 0; iStm < b.Statements.Count; ++iStm)
 				{
@@ -105,9 +103,32 @@ namespace Reko.Analysis
             }
         }
 
-		public static void Eliminate(Procedure proc, SsaState ssa)
+        /// <summary>
+        /// Remove dead "def variables in a call instruction".
+        /// </summary>
+        /// <param name="call"></param>
+        public void AdjustCallWithDeadDefinitions(CallInstruction call)
+        {
+            call.Definitions.RemoveWhere(def =>
+            {
+                var id =(Identifier)def.Expression;
+                var sid = ssa.Identifiers[id];
+                if (sid.Uses.Count == 0)
+                {
+                    sid.DefExpression = null;
+                    sid.DefStatement = null;
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+            });
+        }
+
+        public static void Eliminate(SsaState ssa)
 		{
-			new DeadCode(proc, ssa).Eliminate();
+			new DeadCode(ssa).Eliminate();
 		}
 
 		private void Eliminate()
@@ -119,7 +140,7 @@ namespace Reko.Analysis
 			// These are calls to other functions, functions (which have side effects) and use statements.
 			// Critical instructions must never be considered dead.
 
-            foreach (var stm in proc.Statements)
+            foreach (var stm in ssa.Procedure.Statements)
             {
                 if (critical.IsCritical(stm.Instruction))
                 {
@@ -131,8 +152,7 @@ namespace Reko.Analysis
 			
 			// Each identifier is live, so its defining statement is also live.
 
-            SsaIdentifier sid;
-			while (liveIds.GetWorkItem(out sid))
+			while (liveIds.GetWorkItem(out SsaIdentifier sid))
 			{
 				Statement def = sid.DefStatement;
 				if (def != null)
@@ -149,11 +169,15 @@ namespace Reko.Analysis
 			// We have now marked all the useful instructions in the code. Any non-marked
 			// instruction is now useless and should be deleted.
 
-			foreach (Block b in proc.ControlGraph.Blocks)
+			foreach (Block b in ssa.Procedure.ControlGraph.Blocks)
 			{
 				for (int iStm = 0; iStm < b.Statements.Count; ++iStm)
 				{
 					Statement stm = b.Statements[iStm];
+                    if (stm.Instruction is CallInstruction call)
+                    {
+                        AdjustCallWithDeadDefinitions(call);
+                    }
 					if (!marks.Contains(stm))
 					{
 						if (trace.TraceInfo) Debug.WriteLineIf(trace.TraceInfo, string.Format("Deleting: {0}", stm.Instruction));
@@ -171,7 +195,16 @@ namespace Reko.Analysis
 			a.Src.Accept(this);
 		}
 
-		public override void VisitIdentifier(Identifier id)
+        public override void VisitCallInstruction(CallInstruction ci)
+        {
+            base.VisitCallInstruction(ci);
+            foreach (var use in ci.Uses)
+            {
+                use.Expression.Accept(this);
+            }
+        }
+
+        public override void VisitIdentifier(Identifier id)
 		{
 			SsaIdentifier sid = ssa.Identifiers[id];
 			if (sid.DefStatement != null)
@@ -180,7 +213,11 @@ namespace Reko.Analysis
 
 		public override void VisitStore(Store store)
 		{
-			store.Dst.Accept(this);
+            var idDst = store.Dst as Identifier;
+            if (idDst == null || (!(idDst.Storage is OutArgumentStorage)))
+            {
+                store.Dst.Accept(this);
+            }
 			store.Src.Accept(this);
 		}
 	}

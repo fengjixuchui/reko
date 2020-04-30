@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,29 +30,14 @@ namespace Reko.Arch.Tlcs.Tlcs90
 {
     public class Tlcs90Instruction : MachineInstruction
     {
-        public Opcode Opcode { get; set; }
-        internal MachineOperand op1;
-        internal MachineOperand op2;
+        public Mnemonic Mnemonic { get; set; }
 
-
-        public override int OpcodeAsInteger => (int) Opcode;
-
-        public override MachineOperand GetOperand(int i)
-        {
-            throw new NotImplementedException();
-        }
+        public override int MnemonicAsInteger => (int) Mnemonic;
 
         public override void Render(MachineInstructionWriter writer, MachineInstructionWriterOptions options)
         {
-            writer.WriteOpcode(Opcode.ToString());
-            if (op1 == null)
-                return;
-            writer.Tab();
-            op1.Write(writer, options);
-            if (op2 == null)
-                return;
-            writer.WriteString(",");
-            op2.Write(writer, options);
+            writer.WriteMnemonic(Mnemonic.ToString());
+            RenderOperands(writer, options);
         }
     }
 }

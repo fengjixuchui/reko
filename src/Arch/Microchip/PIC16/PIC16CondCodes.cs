@@ -1,8 +1,8 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 2017-2019 Christian Hostelet.
+ * Copyright (C) 2017-2020 Christian Hostelet.
  * inspired by work from:
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,60 +35,60 @@ namespace Reko.Arch.MicrochipPIC.PIC16
     /// </summary>
     public static class PIC16CC
     {
-        private static Dictionary<Opcode, FlagM> defCC = new Dictionary<Opcode, FlagM>()
+        private static Dictionary<Mnemonic, FlagM> defCC = new Dictionary<Mnemonic, FlagM>()
         {
-            { Opcode.ANDLW,  FlagM.Z },
-            { Opcode.ANDWF,  FlagM.Z },
-            { Opcode.CLRF,   FlagM.Z },
-            { Opcode.CLRW,   FlagM.Z },
-            { Opcode.COMF,   FlagM.Z },
-            { Opcode.DECF,   FlagM.Z },
-            { Opcode.INCF,   FlagM.Z },
-            { Opcode.IORLW,  FlagM.Z },
-            { Opcode.IORWF,  FlagM.Z },
-            { Opcode.MOVF,   FlagM.Z },
-            { Opcode.MOVIW,  FlagM.Z },
-            { Opcode.XORLW,  FlagM.Z },
-            { Opcode.XORWF,  FlagM.Z },
-            { Opcode.RLF,    FlagM.C },
-            { Opcode.RRF,    FlagM.C },
-            { Opcode.ASRF,   FlagM.C | FlagM.Z },
-            { Opcode.LSLF,   FlagM.C | FlagM.Z },
-            { Opcode.LSRF,   FlagM.C | FlagM.Z },
-            { Opcode.ADDLW,  FlagM.C | FlagM.DC | FlagM.Z },
-            { Opcode.ADDWF,  FlagM.C | FlagM.DC | FlagM.Z },
-            { Opcode.ADDWFC, FlagM.C | FlagM.DC | FlagM.Z },
-            { Opcode.SUBLW,  FlagM.C | FlagM.DC | FlagM.Z },
-            { Opcode.SUBWF,  FlagM.C | FlagM.DC | FlagM.Z },
-            { Opcode.SUBWFB, FlagM.C | FlagM.DC | FlagM.Z },
+            { Mnemonic.ANDLW,  FlagM.Z },
+            { Mnemonic.ANDWF,  FlagM.Z },
+            { Mnemonic.CLRF,   FlagM.Z },
+            { Mnemonic.CLRW,   FlagM.Z },
+            { Mnemonic.COMF,   FlagM.Z },
+            { Mnemonic.DECF,   FlagM.Z },
+            { Mnemonic.INCF,   FlagM.Z },
+            { Mnemonic.IORLW,  FlagM.Z },
+            { Mnemonic.IORWF,  FlagM.Z },
+            { Mnemonic.MOVF,   FlagM.Z },
+            { Mnemonic.MOVIW,  FlagM.Z },
+            { Mnemonic.XORLW,  FlagM.Z },
+            { Mnemonic.XORWF,  FlagM.Z },
+            { Mnemonic.RLF,    FlagM.C },
+            { Mnemonic.RRF,    FlagM.C },
+            { Mnemonic.ASRF,   FlagM.C | FlagM.Z },
+            { Mnemonic.LSLF,   FlagM.C | FlagM.Z },
+            { Mnemonic.LSRF,   FlagM.C | FlagM.Z },
+            { Mnemonic.ADDLW,  FlagM.C | FlagM.DC | FlagM.Z },
+            { Mnemonic.ADDWF,  FlagM.C | FlagM.DC | FlagM.Z },
+            { Mnemonic.ADDWFC, FlagM.C | FlagM.DC | FlagM.Z },
+            { Mnemonic.SUBLW,  FlagM.C | FlagM.DC | FlagM.Z },
+            { Mnemonic.SUBWF,  FlagM.C | FlagM.DC | FlagM.Z },
+            { Mnemonic.SUBWFB, FlagM.C | FlagM.DC | FlagM.Z },
         };
 
-        private static Dictionary<Opcode, FlagM> useCC = new Dictionary<Opcode, FlagM>()
+        private static Dictionary<Mnemonic, FlagM> useCC = new Dictionary<Mnemonic, FlagM>()
         {
-            { Opcode.ADDWFC, FlagM.C },
-            { Opcode.RLF,    FlagM.C },
-            { Opcode.RRF,    FlagM.C },
-            { Opcode.SUBWFB, FlagM.C },
+            { Mnemonic.ADDWFC, FlagM.C },
+            { Mnemonic.RLF,    FlagM.C },
+            { Mnemonic.RRF,    FlagM.C },
+            { Mnemonic.SUBWFB, FlagM.C },
         };
 
         /// <summary>
-        /// Gets the condition code flags altered by the given opcode.
+        /// Gets the condition code flags altered by the given instruction.
         /// </summary>
-        /// <param name="opc">The opcode.</param>
-        public static FlagM Defined(Opcode opc)
+        /// <param name="mnemonic">The mnemonic for the instruction.</param>
+        public static FlagM Defined(Mnemonic mnemonic)
         {
-            if (defCC.TryGetValue(opc, out FlagM flg))
+            if (defCC.TryGetValue(mnemonic, out FlagM flg))
                 return flg;
             return 0;
         }
 
         /// <summary>
-        /// Gets the condition code flags used by the given opcode.
+        /// Gets the condition code flags used by the given instruction.
         /// </summary>
-        /// <param name="opc">The opcode.</param>
-        public static FlagM Used(Opcode opc)
+        /// <param name="mnemonic">The mnemonic for the instruction.</param>
+        public static FlagM Used(Mnemonic mnemonic)
         {
-            if (useCC.TryGetValue(opc, out FlagM flg))
+            if (useCC.TryGetValue(mnemonic, out FlagM flg))
                 return flg;
             return 0;
         }

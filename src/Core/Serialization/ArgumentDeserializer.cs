@@ -1,6 +1,6 @@
 ﻿#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -133,7 +133,7 @@ namespace Reko.Core.Serialization
                 dt = this.argCur.Type.Accept(procSer.TypeLoader);
             else 
                 dt = PrimitiveType.CreateWord(h.DataType.BitSize + h.DataType.BitSize);
-            return frame.EnsureSequence(h, t, dt);
+            return frame.EnsureSequence(dt, h, t);
         }
 
         public Identifier Deserialize(Argument_v1 arg)

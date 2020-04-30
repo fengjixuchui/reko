@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -105,8 +105,15 @@ namespace Reko.Scanning
             while (rtlStream.MoveNext())
             {
                 this.ric = rtlStream.Current;
+                if (ric.Address.Offset == 0x1BBF)   //$DEBUG
+                    ric.ToString();
                 if (blockCur != scanner.FindContainingBlock(ric.Address))
                     break;  // Fell off the end of this block.
+                if (program.User.Patches.TryGetValue(ric.Address, out var patch))
+                {
+                    Debug.Print("BWI: Applying patch at address {0}", ric.Address);
+                    ric = patch.Code;
+                }
                 if (!ProcessRtlCluster(ric))
                     break;
                 var addrInstrEnd = ric.Address + ric.Length;
@@ -128,7 +135,7 @@ namespace Reko.Scanning
 
         private bool ProcessRtlCluster(RtlInstructionCluster ric)
         {
-            state.SetInstructionPointer(ric.Address);
+            state.InstructionPointer = ric.Address;
             SetAssumedRegisterValues(ric.Address);
             foreach (var rtlInstr in ric.Instructions)
             {
@@ -190,22 +197,10 @@ namespace Reko.Scanning
             return block.Statements.Count > 0;
         }
 
-        private Instruction BuildApplication(Expression fn, FunctionType sig, CallSite site)
+        private Instruction BuildApplication(Expression fn, FunctionType sig, ProcedureCharacteristics c, CallSite site)
         {
-            var ab = CreateApplicationBuilder(fn, sig, site);
-            return ab.CreateInstruction();
-        }
-
-        private ApplicationBuilder CreateApplicationBuilder(Expression callee, FunctionType sig, CallSite site)
-        {
-            var ab = new ApplicationBuilder(
-                arch,
-                frame,
-                site,
-                callee,
-                sig, 
-                false);
-            return ab;
+            var ab = arch.CreateFrameApplicationBuilder(frame, site, fn);
+            return ab.CreateInstruction(sig, c);
         }
 
         public Expression GetValue(Expression op)
@@ -270,6 +265,8 @@ namespace Reko.Scanning
                 ric = ricDelayed;
             }
             var fallthruAddress = ric.Address + ric.Length;
+            if (!blockCur.IsSynthesized)
+                scanner.TerminateBlock(blockCur, fallthruAddress);
 
             Block blockThen;
             if (!program.SegmentMap.IsValidAddress((Address)b.Target))
@@ -420,7 +417,10 @@ namespace Reko.Scanning
                 var impProc = scanner.GetImportedProcedure(this.arch, addrTarget, this.ric.Address);
                 if (impProc != null)
                 {
-                    site = state.OnBeforeCall(stackReg, arch.PointerType.Size);
+                    // Since we are tail jumping to another procedure, if there is a return
+                    // address (continuation) pushed on the stack, we reuse that 
+                    // continuation.
+                    site = state.OnBeforeCall(stackReg, 0);
                     var sig = impProc.Signature;
                     var chr = impProc.Characteristics;
                     if (chr != null && chr.IsAlloca)
@@ -432,7 +432,7 @@ namespace Reko.Scanning
                 }
                 if (!program.SegmentMap.IsValidAddress(addrTarget))
                 {
-                    var jmpSite = state.OnBeforeCall(stackReg, arch.PointerType.Size);
+                    var jmpSite = state.OnBeforeCall(stackReg, 0);
                     GenerateCallToOutsideProcedure(jmpSite, addrTarget);
                     Emit(new ReturnInstruction());
                     blockCur.Procedure.ControlGraph.AddEdge(blockCur, blockCur.Procedure.ExitBlock);
@@ -441,38 +441,14 @@ namespace Reko.Scanning
                 var trampoline = scanner.GetTrampoline(blockCur.Procedure.Architecture, addrTarget);
                 if (trampoline != null)
                 {
-                    var jmpSite = state.OnBeforeCall(stackReg, arch.PointerType.Size);
+                    var jmpSite = state.OnBeforeCall(stackReg, 0);
                     if (trampoline is DispatchProcedure disp)
                     {
                         trampoline = ResolveDispatchProcedureCall(disp, state);
                     }
                     var sig = trampoline.Signature;
                     var chr = trampoline.Characteristics;
-                    // Adjust stack to "hide" any pushed return value since
-                    // currently Reko treats the return value as an implicit detail
-                    // of the calling convention. Had the x86 rewriter explicity
-                    // generated code to predecrement the stack pointer
-                    // when encountering CALL instructions this would 
-                    // not be necessary.
-                    if (sig != null && sig.ReturnAddressOnStack != 0)
-                    {
-                        Emit(new Assignment(stackReg, new BinaryExpression(
-                            Operator.IAdd,
-                            stackReg.DataType,
-                            stackReg,
-                            Constant.Word(stackReg.DataType.BitSize, sig.ReturnAddressOnStack))));
-                    }
                     EmitCall(CreateProcedureConstant(trampoline), sig, chr, jmpSite);
-                    if (sig != null && sig.ReturnAddressOnStack != 0)
-                    {
-                        //$TODO: make x86 calls' implicit storage explicit
-                        // to avoid this hacky dance,
-                        Emit(new Assignment(stackReg, new BinaryExpression(
-                            Operator.ISub,
-                            stackReg.DataType,
-                            stackReg,
-                            Constant.Word(stackReg.DataType.BitSize, sig.ReturnAddressOnStack))));
-                    }
                     Emit(new ReturnInstruction());
                     blockCur.Procedure.ControlGraph.AddEdge(blockCur, blockCur.Procedure.ExitBlock);
                     return false;
@@ -502,7 +478,7 @@ namespace Reko.Scanning
             if (g.Target is MemoryAccess mem && mem.EffectiveAddress is Constant)
             {
                 // jmp [address]
-                site = state.OnBeforeCall(this.stackReg, mem.DataType.Size);
+                site = state.OnBeforeCall(this.stackReg, 0);
                 Emit(new CallInstruction(g.Target, site));
                 Emit(new ReturnInstruction());
                 blockCur.Procedure.ControlGraph.AddEdge(blockCur, blockCur.Procedure.ExitBlock);
@@ -516,7 +492,7 @@ namespace Reko.Scanning
             // We've encountered JMP <exp> and we can't determine the limits of <exp>.
             // We emit a call-return pair and call it a day.
 
-            site = state.OnBeforeCall(this.stackReg, g.Target.DataType.Size);
+            site = state.OnBeforeCall(this.stackReg, 0);
             Emit(new CallInstruction(g.Target, site));
             Emit(new ReturnInstruction());
             blockCur.Procedure.ControlGraph.AddEdge(blockCur, blockCur.Procedure.ExitBlock);
@@ -595,7 +571,7 @@ namespace Reko.Scanning
             if (sig != null)
             {
                 EmitCall(call.Target, sig, chr, site);
-                return OnAfterCall(sig, chr);  //$TODO: make characteristics available
+                return OnAfterCall(sig, chr);
             }
 
             if (call.Target is Identifier id)
@@ -623,10 +599,10 @@ namespace Reko.Scanning
                 return OnAfterCall(sig, chr);
             }
 
-            var syscall = program.Platform.FindService(call, state);
+            var syscall = program.Platform.FindService(call, state, program.SegmentMap);
             if (syscall != null)
             {
-                return !EmitSystemServiceCall(syscall);
+                return EmitSystemServiceCall(syscall);
             }
 
             ProcessIndirectControlTransfer(ric.Address, call);
@@ -635,8 +611,7 @@ namespace Reko.Scanning
             sig = GuessProcedureSignature(ic);
             return OnAfterCall(sig, chr);
         }
-
-
+        
         /// <summary>
         /// If the architecture can inline this call, do so.
         /// </summary>
@@ -662,7 +637,7 @@ namespace Reko.Scanning
             {
                 if (c.IsValid)
                 {
-                    return arch.MakeAddressFromConstant(c);
+                    return arch.MakeAddressFromConstant(c, true);
                 }
                 else
                 {
@@ -683,11 +658,8 @@ namespace Reko.Scanning
             var sig = new FunctionType();
             ProcedureCharacteristics chr = null;
             var name = NamingPolicy.Instance.ProcedureName(addr);
-            EmitCall(
-                CreateProcedureConstant(new ExternalProcedure(name, sig)),
-                sig,
-                chr,
-                site);
+            var pc = CreateProcedureConstant(new ExternalProcedure(name, sig));
+            EmitCall(pc, sig, chr, site);
             return OnAfterCall(sig, chr);
         }
 
@@ -699,11 +671,11 @@ namespace Reko.Scanning
         {
             if (vaScanner.TryScan(ric.Address, callee, sig, chr))
             {
-                Emit(vaScanner.BuildInstruction(callee, site));
+                Emit(vaScanner.BuildInstruction(callee, site, chr));
             }
             else if (sig != null && sig.ParametersValid)
             {
-                Emit(BuildApplication(callee, sig, site));
+                Emit(BuildApplication(callee, sig, chr, site));
             }
             else
             {
@@ -764,7 +736,8 @@ namespace Reko.Scanning
             }
             state.OnAfterCall(sigCallee);
 
-            // Adjust stack after call
+            // Adjust stack after call 
+            //$REVIEW: looks like common code; consider refactoring this.
             if (sigCallee != null)
             {
                 int delta = sigCallee.StackDelta - sigCallee.ReturnAddressOnStack;
@@ -775,8 +748,37 @@ namespace Reko.Scanning
                         stackReg,
                         new BinaryExpression(Operator.IAdd, stackReg.DataType, stackReg, d)));
                 }
+                if (sigCallee.FpuStackDelta != 0)
+                {
+                    BinaryOperator op;
+                    int dd = sigCallee.FpuStackDelta;
+                    if (sigCallee.FpuStackDelta > 0)
+                    {
+                        op = Operator.ISub;
+                    }
+                    else
+                    {
+                        op = Operator.IAdd;
+                        dd = -sigCallee.FpuStackDelta;
+                    }
+                    var fpuStackReg = frame.EnsureRegister(arch.FpuStackRegister);
+                    var d = Constant.Create(fpuStackReg.DataType, dd);
+                    this.Emit(new Assignment(
+                        fpuStackReg,
+                        new BinaryExpression(op, fpuStackReg.DataType, fpuStackReg, d)));
+                }
             }
+
             TrashRegistersAfterCall();
+            if (characteristics != null && characteristics.ReturnAddressAdjustment > 0)
+            {
+                var addrNext = ric.Address + characteristics.ReturnAddressAdjustment;
+                scanner.TerminateBlock(blockCur, addrNext);
+                var blockNext = scanner.EnqueueJumpTarget(ric.Address, addrNext, blockCur.Procedure, state);
+                Emit(new GotoInstruction(addrNext));
+                blockCur.Procedure.ControlGraph.AddEdge(blockCur, blockNext);
+                return false;
+            }
             return true;
         }
 
@@ -796,6 +798,16 @@ namespace Reko.Scanning
             if (!program.User.Calls.TryGetValue(addrCallInstruction, out var call))
                 return null;
             return call.Signature;
+        }
+
+        public bool VisitMicroGoto(RtlMicroGoto uGoto)
+        {
+            throw new NotImplementedException();
+        }
+
+        public bool VisitMicroLabel(RtlMicroLabel uLabel)
+        {
+            throw new NotImplementedException();
         }
 
         public bool VisitReturn(RtlReturn ret)
@@ -837,7 +849,7 @@ namespace Reko.Scanning
             var svc = MatchSyscallToService(side);
             if (svc != null)
             {
-                return !EmitSystemServiceCall(svc);
+                return EmitSystemServiceCall(svc);
             }
             else
             {
@@ -857,7 +869,8 @@ namespace Reko.Scanning
         /// Takes a system service description and generates a system call from it.
         /// </summary>
         /// <param name="svc"></param>
-        /// <returns>True if the system service terminates.</returns>
+        /// <returns>True if the system service does not terminate, false if it does
+        /// and scanning should stop.</returns>
         private bool EmitSystemServiceCall(SystemService svc)
         {
             var ep = svc.CreateExternalProcedure(arch);
@@ -865,22 +878,21 @@ namespace Reko.Scanning
             if (svc.Signature != null)
             {
                 var site = state.OnBeforeCall(stackReg, svc.Signature.ReturnAddressOnStack);
-                Emit(BuildApplication(fn, ep.Signature, site));
+                Emit(BuildApplication(fn, ep.Signature, ep.Characteristics, site));
                 if (svc.Characteristics.Terminates)
                 {
                     scanner.TerminateBlock(blockCur, ric.Address + ric.Length);
-                    //blockCur.Procedure.ControlGraph.AddEdge(blockCur, blockCur.Procedure.ExitBlock);
-                    return true;
+                    return false;
                 }
                 AffectProcessorState(svc.Signature);
-                OnAfterCall(svc.Signature, svc.Characteristics);
+                return OnAfterCall(svc.Signature, svc.Characteristics);
             }
             else
             {
                 var site = state.OnBeforeCall(stackReg, 0);
                 Emit(new CallInstruction(fn, site));
             }
-            return false;
+            return true;
         }
 
         private FunctionType GuessProcedureSignature(CallInstruction call)
@@ -895,7 +907,10 @@ namespace Reko.Scanning
         {
             if (impProc.Signature == null)
                 throw new ApplicationException(string.Format("You must specify a procedure signature for {0} since it has been marked as 'alloca'.", impProc.Name));
-            var ab = CreateApplicationBuilder(new ProcedureConstant(program.Platform.PointerType, impProc), impProc.Signature, site);
+            var ab = arch.CreateFrameApplicationBuilder(
+                frame,
+                site,
+                new ProcedureConstant(program.Platform.PointerType, impProc));
             if (impProc.Signature.Parameters.Length != 1)
                 throw new ApplicationException(string.Format("An alloca function must have exactly one parameter, but {0} has {1}.", impProc.Name, impProc.Signature.Parameters.Length));
             var target = ab.Bind(impProc.Signature.Parameters[0]);
@@ -907,7 +922,7 @@ namespace Reko.Scanning
             }
             else
             {
-                Emit(ab.CreateInstruction());
+                Emit(ab.CreateInstruction(impProc.Signature, impProc.Characteristics));
             }
             return true;
         }
@@ -927,7 +942,7 @@ namespace Reko.Scanning
             List<Address> vector;
             ImageMapVectorTable imgVector;
             Expression switchExp;
-
+            var eventListener = this.scanner.Services.RequireService<DecompilerEventListener>();
             if (program.User.IndirectJumps.TryGetValue(addrSwitch, out var indJump))
             {
                 // Trust the user knows what they're doing.
@@ -935,10 +950,10 @@ namespace Reko.Scanning
                 switchExp = this.frame.EnsureIdentifier(indJump.IndexRegister);
                 imgVector = indJump.Table;
             }
-            else
+            else if (!DiscoverTableExtent(addrSwitch, xfer, out vector, out imgVector, out switchExp))
             {
-                if (!DiscoverTableExtent(addrSwitch, xfer, out vector, out imgVector, out switchExp))
-                    return false;
+                var navigator = eventListener.CreateJumpTableNavigator(program, this.arch, addrSwitch, null, 0);
+                return false;
             }
 
             if (xfer is RtlCall)
@@ -1003,7 +1018,7 @@ namespace Reko.Scanning
             imgVector = null;
             switchExp = null;
 
-            var bwsHost = new BackwardSlicerHost(program);
+            var bwsHost = new BackwardSlicerHost(program, this.arch);
             var rtlBlock = bwsHost.GetRtlBlock(blockCur);
             var bws = new BackwardSlicer(bwsHost, rtlBlock, state);
             var te = bws.DiscoverTableExtent(addrSwitch, xfer, listener);
@@ -1168,7 +1183,7 @@ namespace Reko.Scanning
             {
                 if (!(mem.EffectiveAddress is Constant offset))
                     return null;
-                addrTarget = program.Platform.MakeAddressFromConstant(offset);
+                addrTarget = program.Platform.MakeAddressFromConstant(offset, true);
             }
             var impEp = scanner.GetImportedProcedure(this.arch, addrTarget, ric.Address);
             //if (impEp != null)
@@ -1202,8 +1217,10 @@ namespace Reko.Scanning
                 state.SetValue(reg, Constant.Invalid);
                 break;
             case SequenceStorage seq:
-                TrashVariable(seq.Head);
-                TrashVariable(seq.Tail);
+                foreach (var e in seq.Elements)
+                {
+                    TrashVariable(e);
+                }
                 break;
             }
         }
@@ -1237,7 +1254,7 @@ namespace Reko.Scanning
 
             if (!(fn.Arguments[0] is Constant vector))
                 return null;
-            var svc = program.Platform.FindService(vector.ToInt32(), state);
+            var svc = program.Platform.FindService(vector.ToInt32(), state, program.SegmentMap);
             //$TODO if SVC uis null (and not-speculating) report the error.
             if (svc != null && svc.Signature == null)
             {

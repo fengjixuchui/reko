@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -57,6 +57,16 @@ namespace Reko.Environments.MacOS.Classic
             {
                 ccr.StackReturn(dtRet);
             }
+        }
+
+        public bool IsArgument(Storage stg)
+        {
+            return stg is StackStorage;
+        }
+
+        public bool IsOutArgument(Storage stg)
+        {
+            return false;
         }
     }
 }

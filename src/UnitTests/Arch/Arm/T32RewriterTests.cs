@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,40 +38,15 @@ namespace Reko.UnitTests.Arch.Arm
     public class T32RewriterTests : RewriterTestBase
     {
         private ThumbArchitecture arch;
-        private MemoryArea image;
         private Address baseAddress;
 
-        public override IProcessorArchitecture Architecture
-        {
-            get { return arch; }
-        }
+        public override IProcessorArchitecture Architecture => arch;
+        public override Address LoadAddress => baseAddress;
 
-        public override Address LoadAddress
-        {
-            get { return baseAddress; }
-        }
-
-        protected override IEnumerable<RtlInstructionCluster> GetInstructionStream(IStorageBinder binder, IRewriterHost host)
+        protected override IEnumerable<RtlInstructionCluster> GetRtlStream(MemoryArea mem, IStorageBinder binder, IRewriterHost host)
         {
             AArch32ProcessorState state = new AArch32ProcessorState(arch);
-            return arch.CreateRewriter(new LeImageReader(image, 0), state, binder, host);
-        }
-
-        private void BuildTest(params ushort[] words)
-        {
-            var bytes = words
-                .SelectMany(u => new byte[] { (byte)u, (byte)(u >> 8), })
-                .ToArray();
-            image = new MemoryArea(Address.Ptr32(0x00100000), bytes);
-        }
-
-
-        protected override MemoryArea RewriteCode(string hexBytes)
-        {
-            var bytes = PlatformDefinition.LoadHexBytes(hexBytes)
-                .ToArray();
-            this.image = new MemoryArea(LoadAddress, bytes);
-            return image;
+            return arch.CreateRewriter(new LeImageReader(mem, 0), state, binder, host);
         }
 
         private class FakeRewriterHost : IRewriterHost
@@ -79,6 +54,11 @@ namespace Reko.UnitTests.Arch.Arm
             public PseudoProcedure EnsurePseudoProcedure(string name, DataType returnType, int arity)
             {
                 return new PseudoProcedure(name, returnType, arity);
+            }
+
+            public Expression CallIntrinsic(string name, FunctionType fnType, params Expression[] args)
+            {
+                throw new NotImplementedException();
             }
 
             public Expression PseudoProcedure(string name, DataType returnType, params Expression[] args)
@@ -125,22 +105,22 @@ namespace Reko.UnitTests.Arch.Arm
         #region Lots of Thumb!
         public const string ThumbBlock =
 @"
-  0040100C: F242 1C21 mov         r12,#0x2121
+  0040100C: F242 1C21 mov         r12,#0x2121<16>
   00401010: F2C0 0C40 movt        r12,#0x40
   00401014: 4760      bx          r12
   00401016: 0000      movs        r0,r0
-  00401018: F242 1C79 mov         r12,#0x2179
+  00401018: F242 1C79 mov         r12,#0x2179<16>
   0040101C: F2C0 0C40 movt        r12,#0x40
   00401020: 4760      bx          r12
 
   0040103C: B081      sub         sp,sp,#4
-  0040103E: F24A 0C20 mov         r12,#0xA020
+  0040103E: F24A 0C20 mov         r12,#0xA020<16>
   00401042: F2C0 0C40 movt        r12,#0x40
   00401046: F8DC C000 ldr         r12,[r12]
   0040104A: EBAD 0C0C sub         r12,sp,r12
   0040104E: F8CD C000 str         r12,[sp]
   00401052: 4770      bx          lr
-  00401054: F24A 0C20 mov         r12,#0xA020
+  00401054: F24A 0C20 mov         r12,#0xA020<16>
   00401058: F2C0 0C40 movt        r12,#0x40
   0040105C: 9B00      ldr         r3,[sp]
   0040105E: F8DC C000 ldr         r12,[r12]
@@ -189,7 +169,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402126: F10D 0B08 add         r11,sp,#8
   0040212A: B084      sub         sp,sp,#0x10
   0040212C: 4668      mov         r0,sp
-  0040212E: F04F 31CC mov         r1,#0xCCCCCCCC
+  0040212E: F04F 31CC mov         r1,#0xCCCCCCCC<32>
   00402132: 2210      movs        r2,#0x10
   00402134: F000 F8D2 bl          004022DC
   00402138: 9B08      ldr         r3,[sp,#0x20]
@@ -225,7 +205,7 @@ namespace Reko.UnitTests.Arch.Arm
   0040217E: F10D 0B08 add         r11,sp,#8
   00402182: B084      sub         sp,sp,#0x10
   00402184: 4668      mov         r0,sp
-  00402186: F04F 31CC mov         r1,#0xCCCCCCCC
+  00402186: F04F 31CC mov         r1,#0xCCCCCCCC<32>
   0040218A: 2210      movs        r2,#0x10
   0040218C: F000 F8A6 bl          004022DC
   00402190: 2300      movs        r3,#0
@@ -265,15 +245,15 @@ namespace Reko.UnitTests.Arch.Arm
   004021E0: 7858      ldrb        r0,[r3,#1]
   004021E2: 0040      lsls        r0,r0,#1
 
-  00402230: F24C 1C10 mov         r12,#0xC110
+  00402230: F24C 1C10 mov         r12,#0xC110<16>
   00402234: F2C0 0C40 movt        r12,#0x40
   00402238: F8DC F000 ldr         pc,[r12]
-  0040223C: F24C 1C08 mov         r12,#0xC108
+  0040223C: F24C 1C08 mov         r12,#0xC108<16>
   00402240: F2C0 0C40 movt        r12,#0x40
   00402244: F8DC F000 ldr         pc,[r12]
   00402248: E92D 480C push        {r2,r3,r11,lr}
   0040224C: F10D 0B08 add         r11,sp,#8
-  00402250: F24A 1230 mov         r2,#0xA130
+  00402250: F24A 1230 mov         r2,#0xA130<16>
   00402254: F2C0 0240 movt        r2,#0x40
   00402258: 7813      ldrb        r3,[r2]
   0040225A: B95B      cbnz        r3,00402274
@@ -311,7 +291,7 @@ namespace Reko.UnitTests.Arch.Arm
   004022D6: 0000      movs        r0,r0
   004022D8: 0000      movs        r0,r0
   004022DA: 0000      movs        r0,r0
-  004022DC: F24C 1C04 mov         r12,#0xC104
+  004022DC: F24C 1C04 mov         r12,#0xC104<16>
   004022E0: F2C0 0C40 movt        r12,#0x40
   004022E4: F8DC F000 ldr         pc,[r12]
   004022E8: E92D 4800 push        {r11,lr}
@@ -350,7 +330,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402344: 4B0B      ldr         r3,00402374
   00402348: 4798      blx         r3
   0040234A: 4B09      ldr         r3,00402370
-  0040234E: F1B3 3FFF cmp         r3,#0xFFFFFFFF
+  0040234E: F1B3 3FFF cmp         r3,#0xFFFFFFFF<32>
   00402352: D104      bne         0040235E
   00402354: F06F 0000 mvn         r0,#0
   00402358: 4B04      ldr         r3,0040236C
@@ -752,7 +732,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402766: 9302      str         r3,[sp,#8]
   00402768: 9B02      ldr         r3,[sp,#8]
   0040276A: 881A      ldrh        r2,[r3]
-  0040276C: F645 234D mov         r3,#0x5A4D
+  0040276C: F645 234D mov         r3,#0x5A4D<16>
   00402770: 429A      cmp         r2,r3
   00402772: D002      beq         0040277A
   00402774: 2300      movs        r3,#0
@@ -764,7 +744,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402782: 4413      add         r3,r3,r2
   00402784: 9301      str         r3,[sp,#4]
   00402786: 9B01      ldr         r3,[sp,#4]
-  0040278A: F244 5350 mov         r3,#0x4550
+  0040278A: F244 5350 mov         r3,#0x4550<16>
   0040278E: 429A      cmp         r2,r3
   00402790: D002      beq         00402798
   00402792: 2300      movs        r3,#0
@@ -842,19 +822,19 @@ namespace Reko.UnitTests.Arch.Arm
   00402832: 0000      movs        r0,r0
   00402834: E92D 4800 push        {r11,lr}
   00402838: 46EB      mov         r11,sp
-  0040283A: F24A 1354 mov         r3,#0xA154
+  0040283A: F24A 1354 mov         r3,#0xA154<16>
   0040283E: F2C0 0340 movt        r3,#0x40
   00402844: E8BD 8800 pop         {r11,pc}
   00402848: E92D 4800 push        {r11,lr}
   0040284C: 46EB      mov         r11,sp
-  0040284E: F24A 1358 mov         r3,#0xA158
+  0040284E: F24A 1358 mov         r3,#0xA158<16>
   00402852: F2C0 0340 movt        r3,#0x40
   00402858: E8BD 8800 pop         {r11,pc}
   0040285C: E92D 4800 push        {r11,lr}
   00402860: 46EB      mov         r11,sp
   00402862: 2804      cmp         r0,#4
   00402864: D807      bhi         00402876
-  00402866: F647 1310 mov         r3,#0x7910
+  00402866: F647 1310 mov         r3,#0x7910<16>
   0040286A: F2C0 0340 movt        r3,#0x40
   0040286E: F853 0020 ldr         r0,[r3,r0,lsl #2]
   00402872: E8BD 8800 pop         {r11,pc}
@@ -868,7 +848,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402888: E8BD 8800 pop         {r11,pc}
   0040288C: E92D 4800 push        {r11,lr}
   00402890: 46EB      mov         r11,sp
-  00402892: F24A 1254 mov         r2,#0xA154
+  00402892: F24A 1254 mov         r2,#0xA154<16>
   00402896: F2C0 0240 movt        r2,#0x40
   0040289A: 4603      mov         r3,r0
   0040289E: 6013      str         r3,[r2]
@@ -877,7 +857,7 @@ namespace Reko.UnitTests.Arch.Arm
   004028A4: E8BD 8800 pop         {r11,pc}
   004028A8: E92D 4800 push        {r11,lr}
   004028AC: 46EB      mov         r11,sp
-  004028AE: F24A 1254 mov         r2,#0xA154
+  004028AE: F24A 1254 mov         r2,#0xA154<16>
   004028B2: F2C0 0240 movt        r2,#0x40
   004028B6: 4603      mov         r3,r0
   004028B8: 6850      ldr         r0,[r2,#4]
@@ -890,14 +870,14 @@ namespace Reko.UnitTests.Arch.Arm
   004028CA: 4602      mov         r2,r0
   004028CC: 2A04      cmp         r2,#4
   004028CE: D809      bhi         004028E4
-  004028D0: F24A 030C mov         r3,#0xA00C
+  004028D0: F24A 030C mov         r3,#0xA00C<16>
   004028D4: F2C0 0340 movt        r3,#0x40
   004028D8: F853 0020 ldr         r0,[r3,r0,lsl #2]
   004028DC: F843 1022 str         r1,[r3,r2,lsl #2]
   004028E0: E8BD 8800 pop         {r11,pc}
   004028E4: F06F 0000 mvn         r0,#0
   004028E8: E8BD 8800 pop         {r11,pc}
-  004028EC: F24C 1C00 movw        r12,#0xC100
+  004028EC: F24C 1C00 movw        r12,#0xC100<16>
   004028F0: F2C0 0C40 movt        r12,#0x40
   004028F4: F8DC F000 ldr         pc,[r12]
   004028F8: B403      push        {r0,r1}
@@ -989,10 +969,10 @@ namespace Reko.UnitTests.Arch.Arm
   004029CA: 0000      movs        r0,r0
   004029CC: 0000      movs        r0,r0
   004029CE: 0000      movs        r0,r0
-  004029D0: F24C 0CFC mov         r12,#0xC0FC
+  004029D0: F24C 0CFC mov         r12,#0xC0FC<16>
   004029D4: F2C0 0C40 movt        r12,#0x40
   004029D8: F8DC F000 ldr         pc,[r12]
-  004029DC: F24C 0CF8 mov         r12,#0xC0F8
+  004029DC: F24C 0CF8 mov         r12,#0xC0F8<16>
   004029E0: F2C0 0C40 movt        r12,#0x40
   004029E4: F8DC F000 ldr         pc,[r12]
   004029E8: E92D 4800 push        {r11,lr}
@@ -1003,16 +983,16 @@ namespace Reko.UnitTests.Arch.Arm
   004029F4: 9800      ldr         r0,[sp]
   004029F6: B002      add         sp,sp,#8
   004029F8: E8BD 8800 pop         {r11,pc}
-  004029FC: F24C 0CF4 mov         r12,#0xC0F4
+  004029FC: F24C 0CF4 mov         r12,#0xC0F4<16>
   00402A00: F2C0 0C40 movt        r12,#0x40
   00402A04: F8DC F000 ldr         pc,[r12]
-  00402A08: F24C 0CF0 mov         r12,#0xC0F0
+  00402A08: F24C 0CF0 mov         r12,#0xC0F0<16>
   00402A0C: F2C0 0C40 movt        r12,#0x40
   00402A10: F8DC F000 ldr         pc,[r12]
-  00402A14: F24C 0CEC mov         r12,#0xC0EC
+  00402A14: F24C 0CEC mov         r12,#0xC0EC<16>
   00402A18: F2C0 0C40 movt        r12,#0x40
   00402A1C: F8DC F000 ldr         pc,[r12]
-  00402A20: F24C 0CE8 mov         r12,#0xC0E8
+  00402A20: F24C 0CE8 mov         r12,#0xC0E8<16>
   00402A24: F2C0 0C40 movt        r12,#0x40
   00402A28: F8DC F000 ldr         pc,[r12]
   00402A2C: B403      push        {r0,r1}
@@ -1108,7 +1088,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402AFA: E016      b           00402B2A
   00402AFC: 68BB      ldr         r3,[r7,#8]
   00402AFE: 3324      adds        r3,r3,#0x24
-  00402B02: F013 4F00 tst         r3,#0x80000000
+  00402B02: F013 4F00 tst         r3,#0x80000000<32>
   00402B06: D102      bne         00402B0E
   00402B08: 2301      movs        r3,#1
   00402B0A: 60FB      str         r3,[r7,#0xC]
@@ -1165,7 +1145,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402B78: 9301      str         r3,[sp,#4]
   00402B7A: 9B01      ldr         r3,[sp,#4]
   00402B7C: 881A      ldrh        r2,[r3]
-  00402B7E: F645 234D mov         r3,#0x5A4D
+  00402B7E: F645 234D mov         r3,#0x5A4D<16>
   00402B82: 429A      cmp         r2,r3
   00402B84: D002      beq         00402B8C
   00402B86: 2300      movs        r3,#0
@@ -1177,7 +1157,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402B94: 4413      add         r3,r3,r2
   00402B96: 9302      str         r3,[sp,#8]
   00402B98: 9B02      ldr         r3,[sp,#8]
-  00402B9C: F244 5350 mov         r3,#0x4550
+  00402B9C: F244 5350 mov         r3,#0x4550<16>
   00402BA0: 429A      cmp         r2,r3
   00402BA2: D002      beq         00402BAA
   00402BA4: 2300      movs        r3,#0
@@ -1201,13 +1181,13 @@ namespace Reko.UnitTests.Arch.Arm
   00402BCA: F85D BB04 pop         {r11}
   00402BCE: F85D FB0C ldr         pc,[sp],#0xC
   00402BD2: 0000      movs        r0,r0
-  00402BD4: F24C 0CE4 mov         r12,#0xC0E4
+  00402BD4: F24C 0CE4 mov         r12,#0xC0E4<16>
   00402BD8: F2C0 0C40 movt        r12,#0x40
   00402BDC: F8DC F000 ldr         pc,[r12]
-  00402BE0: F24C 0CE0 mov         r12,#0xC0E0
+  00402BE0: F24C 0CE0 mov         r12,#0xC0E0<16>
   00402BE4: F2C0 0C40 movt        r12,#0x40
   00402BE8: F8DC F000 ldr         pc,[r12]
-  00402BEC: F24C 0CDC mov         r12,#0xC0DC
+  00402BEC: F24C 0CDC mov         r12,#0xC0DC<16>
   00402BF0: F2C0 0C40 movt        r12,#0x40
   00402BF4: F8DC F000 ldr         pc,[r12]
   00402BF8: E92D 4800 push        {r11,lr}
@@ -1419,7 +1399,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402DCC: 6138      str         r0,[r7,#0x10]
   00402DCE: 693B      ldr         r3,[r7,#0x10]
   00402DD0: 603B      str         r3,[r7]
-  00402DD4: F1B3 3FFF cmp         r3,#0xFFFFFFFF
+  00402DD4: F1B3 3FFF cmp         r3,#0xFFFFFFFF<32>
   00402DD8: D107      bne         00402DEA
   00402DDA: 6C38      ldr         r0,[r7,#0x40]
   00402DDC: 4B24      ldr         r3,00402E70
@@ -1520,9 +1500,9 @@ namespace Reko.UnitTests.Arch.Arm
   00402F06: 0000      movs        r0,r0
   00402F08: E92D 4830 push        {r4,r5,r11,lr}
   00402F0C: F10D 0B08 add         r11,sp,#8
-  00402F10: F248 7390 mov         r3,#0x8790
+  00402F10: F248 7390 mov         r3,#0x8790<16>
   00402F14: F2C0 0340 movt        r3,#0x40
-  00402F18: F648 1598 mov         r5,#0x8998
+  00402F18: F648 1598 mov         r5,#0x8998<16>
   00402F1C: F2C0 0540 movt        r5,#0x40
   00402F20: 1D1C      adds        r4,r3,#4
   00402F22: 1D1B      adds        r3,r3,#4
@@ -1536,9 +1516,9 @@ namespace Reko.UnitTests.Arch.Arm
   00402F34: E8BD 8830 pop         {r4,r5,r11,pc}
   00402F38: E92D 4830 push        {r4,r5,r11,lr}
   00402F3C: F10D 0B08 add         r11,sp,#8
-  00402F40: F648 239C mov         r3,#0x8A9C
+  00402F40: F648 239C mov         r3,#0x8A9C<16>
   00402F44: F2C0 0340 movt        r3,#0x40
-  00402F48: F648 45A4 mov         r5,#0x8CA4
+  00402F48: F648 45A4 mov         r5,#0x8CA4<16>
   00402F4C: F2C0 0540 movt        r5,#0x40
   00402F50: 1D1C      adds        r4,r3,#4
   00402F52: 1D1B      adds        r3,r3,#4
@@ -1550,19 +1530,19 @@ namespace Reko.UnitTests.Arch.Arm
   00402F60: 42AC      cmp         r4,r5
   00402F62: D3F9      bcc         00402F58
   00402F64: E8BD 8830 pop         {r4,r5,r11,pc}
-  00402F68: F24C 0CD8 mov         r12,#0xC0D8
+  00402F68: F24C 0CD8 mov         r12,#0xC0D8<16>
   00402F6C: F2C0 0C40 movt        r12,#0x40
   00402F70: F8DC F000 ldr         pc,[r12]
-  00402F74: F24C 0CD4 mov         r12,#0xC0D4
+  00402F74: F24C 0CD4 mov         r12,#0xC0D4<16>
   00402F78: F2C0 0C40 movt        r12,#0x40
   00402F7C: F8DC F000 ldr         pc,[r12]
-  00402F80: F24C 0CD0 mov         r12,#0xC0D0
+  00402F80: F24C 0CD0 mov         r12,#0xC0D0<16>
   00402F84: F2C0 0C40 movt        r12,#0x40
   00402F88: F8DC F000 ldr         pc,[r12]
-  00402F8C: F24C 0CCC mov         r12,#0xC0CC
+  00402F8C: F24C 0CCC mov         r12,#0xC0CC<16>
   00402F90: F2C0 0C40 movt        r12,#0x40
   00402F94: F8DC F000 ldr         pc,[r12]
-  00402F98: F24C 0CC8 mov         r12,#0xC0C8
+  00402F98: F24C 0CC8 mov         r12,#0xC0C8<16>
   00402F9C: F2C0 0C40 movt        r12,#0x40
   00402FA0: F8DC F000 ldr         pc,[r12]
   00402FA4: E92D 4890 push        {r4,r7,r11,lr}
@@ -1571,7 +1551,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402FAE: 466F      mov         r7,sp
   00402FB0: 2300      movs        r3,#0
   00402FB2: 703B      strb        r3,[r7]
-  00402FB4: F241 0301 mov         r3,#0x1001
+  00402FB4: F241 0301 mov         r3,#0x1001<16>
   00402FB8: 60BB      str         r3,[r7,#8]
   00402FBA: 60F8      str         r0,[r7,#0xC]
   00402FBC: 463B      mov         r3,r7
@@ -1580,7 +1560,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402FC4: 2206      movs        r2,#6
   00402FC6: 2100      movs        r1,#0
   00402FC8: 4806      ldr         r0,00402FE4
-  00402FCA: F24C 042C mov         r4,#0xC02C
+  00402FCA: F24C 042C mov         r4,#0xC02C<16>
   00402FCE: F2C0 0440 movt        r4,#0x40
   00402FD4: 47A0      blx         r4
   00402FD6: 7838      ldrb        r0,[r7]
@@ -1597,7 +1577,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402FF2: 466F      mov         r7,sp
   00402FF4: 2400      movs        r4,#0
   00402FF6: 703C      strb        r4,[r7]
-  00402FF8: F241 0402 mov         r4,#0x1002
+  00402FF8: F241 0402 mov         r4,#0x1002<16>
   00402FFC: 60BC      str         r4,[r7,#8]
   00402FFE: 60F8      str         r0,[r7,#0xC]
   00403000: 6139      str         r1,[r7,#0x10]
@@ -1609,7 +1589,7 @@ namespace Reko.UnitTests.Arch.Arm
   0040300E: 2206      movs        r2,#6
   00403010: 2100      movs        r1,#0
   00403012: 4806      ldr         r0,0040302C
-  00403014: F24C 042C mov         r4,#0xC02C
+  00403014: F24C 042C mov         r4,#0xC02C<16>
   00403018: F2C0 0440 movt        r4,#0x40
   0040301E: 47A0      blx         r4
   00403020: 7838      ldrb        r0,[r7]
@@ -1623,24 +1603,24 @@ namespace Reko.UnitTests.Arch.Arm
   00403034: F10D 0B10 add         r11,sp,#0x10
   00403038: F7FE F800 bl          0040103C
   0040303C: B0D9      sub         sp,sp,#0x164
-  0040303E: F24A 030C mov         r3,#0xA00C
+  0040303E: F24A 030C mov         r3,#0xA00C<16>
   00403042: F2C0 0340 movt        r3,#0x40
   00403046: 460E      mov         r6,r1
   00403048: 4607      mov         r7,r0
   0040304A: 691D      ldr         r5,[r3,#0x10]
-  0040304C: F1B5 3FFF cmp         r5,#0xFFFFFFFF
+  0040304C: F1B5 3FFF cmp         r5,#0xFFFFFFFF<32>
   00403050: D057      beq         00403102
   00403052: B926      cbnz        r6,0040305E
-  00403054: F647 73A8 mov         r3,#0x7FA8
+  00403054: F647 73A8 mov         r3,#0x7FA8<16>
   00403058: F2C0 0340 movt        r3,#0x40
   0040305C: E04C      b           004030F8
-  0040305E: F647 73F4 mov         r3,#0x7FF4
+  0040305E: F647 73F4 mov         r3,#0x7FF4<16>
   00403062: F2C0 0340 movt        r3,#0x40
   00403066: 9205      str         r2,[sp,#0x14]
-  00403068: F248 0290 mov         r2,#0x8090
+  00403068: F248 0290 mov         r2,#0x8090<16>
   0040306C: F2C0 0240 movt        r2,#0x40
   00403070: 9306      str         r3,[sp,#0x18]
-  00403072: F248 0300 movw        r3,#0x8000
+  00403072: F248 0300 movw        r3,#0x8000<16>
   00403076: F2C0 0340 movt        r3,#0x40
   0040307A: F106 0420 add         r4,r6,#0x20
   0040307E: A81C      add         r0,sp,#0x70
@@ -1650,13 +1630,13 @@ namespace Reko.UnitTests.Arch.Arm
   00403086: 9401      str         r4,[sp,#4]
   00403088: 3B24      subs        r3,r3,#0x24
   0040308A: 9303      str         r3,[sp,#0xC]
-  0040308C: F248 032C mov         r3,#0x802C
+  0040308C: F248 032C mov         r3,#0x802C<16>
   00403090: F2C0 0340 movt        r3,#0x40
   00403094: 9302      str         r3,[sp,#8]
-  00403096: F248 0334 mov         r3,#0x8034
+  00403096: F248 0334 mov         r3,#0x8034<16>
   0040309A: F2C0 0340 movt        r3,#0x40
   0040309E: 9300      str         r3,[sp]
-  004030A0: F248 0348 mov         r3,#0x8048
+  004030A0: F248 0348 mov         r3,#0x8048<16>
   004030A4: F2C0 0340 movt        r3,#0x40
   004030A8: F000 FEAA bl          00403E00
   004030AC: 68F3      ldr         r3,[r6,#0xC]
@@ -1670,15 +1650,15 @@ namespace Reko.UnitTests.Arch.Arm
   004030C0: 4604      mov         r4,r0
   004030C2: A81C      add         r0,sp,#0x70
   004030C4: F000 F968 bl          00403398
-  004030C8: F248 03A4 mov         r3,#0x80A4
+  004030C8: F248 03A4 mov         r3,#0x80A4<16>
   004030CC: F2C0 0340 movt        r3,#0x40
-  004030D0: F248 02AC mov         r2,#0x80AC
+  004030D0: F248 02AC mov         r2,#0x80AC<16>
   004030D4: F2C0 0240 movt        r2,#0x40
   004030D8: F1C4 01F4 rsb         r1,r4,#0xF4
   004030DC: 9302      str         r3,[sp,#8]
   004030DE: AB0E      add         r3,sp,#0x38
   004030E0: 9301      str         r3,[sp,#4]
-  004030E2: F248 03A8 mov         r3,#0x80A8
+  004030E2: F248 03A8 mov         r3,#0x80A8<16>
   004030E6: F2C0 0340 movt        r3,#0x40
   004030EA: AC1C      add         r4,sp,#0x70
   004030EC: 4420      add         r0,r0,r4
@@ -1698,19 +1678,19 @@ namespace Reko.UnitTests.Arch.Arm
   004031A0: F10D 0B08 add         r11,sp,#8
   004031A4: 2904      cmp         r1,#4
   004031A6: D814      bhi         004031D2
-  004031A8: F24A 030C mov         r3,#0xA00C
+  004031A8: F24A 030C mov         r3,#0xA00C<16>
   004031AC: F2C0 0340 movt        r3,#0x40
   004031B0: F853 4021 ldr         r4,[r3,r1,lsl #2]
-  004031B4: F647 333C mov         r3,#0x7B3C
+  004031B4: F647 333C mov         r3,#0x7B3C<16>
   004031B8: F2C0 0340 movt        r3,#0x40
-  004031BC: F1B4 3FFF cmp         r4,#0xFFFFFFFF
+  004031BC: F1B4 3FFF cmp         r4,#0xFFFFFFFF<32>
   004031C0: F853 3021 ldr         r3,[r3,r1,lsl #2]
   004031C4: D010      beq         004031E8
   004031C6: 460A      mov         r2,r1
   004031C8: 4621      mov         r1,r4
   004031CA: F000 F8F1 bl          004033B0
   004031CE: E8BD 8818 pop         {r3,r4,r11,pc}
-  004031D2: F647 333C mov         r3,#0x7B3C
+  004031D2: F647 333C mov         r3,#0x7B3C<16>
   004031D6: F2C0 0340 movt        r3,#0x40
   004031DA: 2401      movs        r4,#1
   004031DC: 2105      movs        r1,#5
@@ -1735,12 +1715,12 @@ namespace Reko.UnitTests.Arch.Arm
   00403208: F10D 0B14 add         r11,sp,#0x14
   0040320C: F7FD FF16 bl          0040103C
   00403210: F5AD 6D80 sub         sp,sp,#0x400
-  00403214: F24A 030C mov         r3,#0xA00C
+  00403214: F24A 030C mov         r3,#0xA00C<16>
   00403218: F2C0 0340 movt        r3,#0x40
   0040321C: 460C      mov         r4,r1
   0040321E: 4680      mov         r8,r0
   00403220: 689F      ldr         r7,[r3,#8]
-  00403222: F1B7 3FFF cmp         r7,#0xFFFFFFFF
+  00403222: F1B7 3FFF cmp         r7,#0xFFFFFFFF<32>
   00403226: D037      beq         00403298
   00403228: F991 3000 ldrsb       r3,[r1]
   0040322C: B353      cbz         r3,00403284
@@ -1749,7 +1729,7 @@ namespace Reko.UnitTests.Arch.Arm
   00403234: F100 032D add         r3,r0,#0x2D
   00403238: F5B3 6F80 cmp         r3,#0x400
   0040323C: D822      bhi         00403284
-  0040323E: F647 356C mov         r5,#0x7B6C
+  0040323E: F647 356C mov         r5,#0x7B6C<16>
   00403242: F2C0 0540 movt        r5,#0x40
   00403246: 4668      mov         r0,sp
   00403248: 466E      mov         r6,sp
@@ -1774,7 +1754,7 @@ namespace Reko.UnitTests.Arch.Arm
   0040327C: F802 3B01 strb        r3,[r2],#1
   00403280: D1F9      bne         00403276
   00403282: E003      b           0040328C
-  00403284: F647 7678 mov         r6,#0x7F78
+  00403284: F647 7678 mov         r6,#0x7F78<16>
   00403288: F2C0 0640 movt        r6,#0x40
   0040328C: 4633      mov         r3,r6
   0040328E: 2202      movs        r2,#2
@@ -1804,7 +1784,7 @@ namespace Reko.UnitTests.Arch.Arm
   00403340: 4295      cmp         r5,r2
   00403342: D211      bcs         00403368
   00403344: F81A 4009 ldrb        r4,[r10,r9]
-  00403348: F647 72A0 mov         r2,#0x7FA0
+  00403348: F647 72A0 mov         r2,#0x7FA0<16>
   0040334C: F2C0 0240 movt        r2,#0x40
   00403350: F1C7 0131 rsb         r1,r7,#0x31
   00403354: 4623      mov         r3,r4
@@ -1846,7 +1826,7 @@ namespace Reko.UnitTests.Arch.Arm
   004033D4: 4630      mov         r0,r6
   004033D6: F7FF FA2D bl          00402834
   004033DA: 4607      mov         r7,r0
-  004033DC: F24C 0428 mov         r4,#0xC028
+  004033DC: F24C 0428 mov         r4,#0xC028<16>
   004033E0: F2C0 0440 movt        r4,#0x40
   004033E4: 2300      movs        r3,#0
   004033E6: 9301      str         r3,[sp,#4]
@@ -1854,11 +1834,11 @@ namespace Reko.UnitTests.Arch.Arm
   004033EC: 43DB      mvns        r3,r3
   004033EE: 4642      mov         r2,r8
   004033F0: 2100      movs        r1,#0
-  004033F2: F64F 50E9 mov         r0,#0xFDE9
+  004033F2: F64F 50E9 mov         r0,#0xFDE9<16>
   004033F6: 47A0      blx         r4
   004033F8: F5B0 7F00 cmp         r0,#0x200
   004033FC: D213      bcs         00403426
-  004033FE: F24C 0428 mov         r4,#0xC028
+  004033FE: F24C 0428 mov         r4,#0xC028<16>
   00403402: F2C0 0440 movt        r4,#0x40
   00403406: F60D 2348 add         r3,sp,#0xA48
   0040340A: 9001      str         r0,[sp,#4]
@@ -1866,17 +1846,17 @@ namespace Reko.UnitTests.Arch.Arm
   00403410: F06F 0300 mvn         r3,#0
   00403414: 4642      mov         r2,r8
   00403416: 2100      movs        r1,#0
-  00403418: F64F 50E9 mov         r0,#0xFDE9
+  00403418: F64F 50E9 mov         r0,#0xFDE9<16>
   0040341C: 47A0      blx         r4
   0040341E: B110      cbz         r0,00403426
   00403420: F60D 2448 add         r4,sp,#0xA48
   00403424: E003      b           0040342E
-  00403426: F647 6480 movw        r4,#0x7E80
+  00403426: F647 6480 movw        r4,#0x7E80<16>
   0040342A: F2C0 0440 movt        r4,#0x40
-  0040342E: F241 0002 mov         r0,#0x1002
+  0040342E: F241 0002 mov         r0,#0x1002<16>
   00403432: F7FF FDB7 bl          00402FA4
   00403436: B170      cbz         r0,00403456
-  00403438: F647 3354 mov         r3,#0x7B54
+  00403438: F647 3354 mov         r3,#0x7B54<16>
   0040343C: F2C0 0340 movt        r3,#0x40
   00403440: 4632      mov         r2,r6
   00403442: 4648      mov         r0,r9
@@ -1892,7 +1872,7 @@ namespace Reko.UnitTests.Arch.Arm
   0040345A: 2D00      cmp         r5,#0
   0040345C: D067      beq         0040352E
   0040345E: B13B      cbz         r3,00403470
-  00403460: F24C 0330 mov         r3,#0xC030
+  00403460: F24C 0330 mov         r3,#0xC030<16>
   00403464: F2C0 0340 movt        r3,#0x40
   0040346A: 4798      blx         r3
   0040346C: 2800      cmp         r0,#0
@@ -1906,7 +1886,7 @@ namespace Reko.UnitTests.Arch.Arm
   0040347E: 9201      str         r2,[sp,#4]
   00403480: F000 FB4E bl          00403B20
   00403484: B16D      cbz         r5,004034A2
-  00403486: F647 63F0 mov         r3,#0x7EF0
+  00403486: F647 63F0 mov         r3,#0x7EF0<16>
   0040348A: F2C0 0340 movt        r3,#0x40
   0040348E: 9A04      ldr         r2,[sp,#0x10]
   00403490: 4650      mov         r0,r10
@@ -1917,11 +1897,11 @@ namespace Reko.UnitTests.Arch.Arm
   0040349A: F8CD 9004 str         r9,[sp,#4]
   0040349E: 47A8      blx         r5
   004034A0: E043      b           0040352A
-  004034A2: F24C 0424 mov         r4,#0xC024
+  004034A2: F24C 0424 mov         r4,#0xC024<16>
   004034A6: F2C0 0440 movt        r4,#0x40
   004034AA: 2300      movs        r3,#0
   004034AC: F50D 6285 add         r2,sp,#0x428
-  004034B2: F647 7630 mov         r6,#0x7F30
+  004034B2: F647 7630 mov         r6,#0x7F30<16>
   004034B6: F2C0 0640 movt        r6,#0x40
   004034BA: 9303      str         r3,[sp,#0xC]
   004034BC: 9302      str         r3,[sp,#8]
@@ -1930,16 +1910,16 @@ namespace Reko.UnitTests.Arch.Arm
   004034C4: 43DB      mvns        r3,r3
   004034C6: AA88      add         r2,sp,#0x220
   004034C8: 2100      movs        r1,#0
-  004034CA: F64F 50E9 mov         r0,#0xFDE9
+  004034CA: F64F 50E9 mov         r0,#0xFDE9<16>
   004034CE: F8CD 8004 str         r8,[sp,#4]
   004034D2: 47A0      blx         r4
   004034D4: B108      cbz         r0,004034DA
   004034D6: F50D 6685 add         r6,sp,#0x428
-  004034DA: F24C 0424 mov         r4,#0xC024
+  004034DA: F24C 0424 mov         r4,#0xC024<16>
   004034DE: F2C0 0440 movt        r4,#0x40
   004034E2: 2300      movs        r3,#0
   004034E4: F50D 62E7 add         r2,sp,#0x738
-  004034EA: F647 7544 mov         r5,#0x7F44
+  004034EA: F647 7544 mov         r5,#0x7F44<16>
   004034EE: F2C0 0540 movt        r5,#0x40
   004034F2: 9303      str         r3,[sp,#0xC]
   004034F4: 9302      str         r3,[sp,#8]
@@ -1947,12 +1927,12 @@ namespace Reko.UnitTests.Arch.Arm
   004034F8: 43DB      mvns        r3,r3
   004034FA: AA06      add         r2,sp,#0x18
   004034FC: 2100      movs        r1,#0
-  004034FE: F64F 50E9 mov         r0,#0xFDE9
+  004034FE: F64F 50E9 mov         r0,#0xFDE9<16>
   00403502: F8CD 8004 str         r8,[sp,#4]
   00403506: 47A0      blx         r4
   00403508: B108      cbz         r0,0040350E
   0040350A: F50D 65E7 add         r5,sp,#0x738
-  0040350E: F647 7258 mov         r2,#0x7F58
+  0040350E: F647 7258 mov         r2,#0x7F58<16>
   00403512: F2C0 0240 movt        r2,#0x40
   00403516: 9B05      ldr         r3,[sp,#0x14]
   00403518: 4631      mov         r1,r6
@@ -1974,18 +1954,18 @@ namespace Reko.UnitTests.Arch.Arm
   004035E8: F10D 0B10 add         r11,sp,#0x10
   004035EC: F7FD FD26 bl          0040103C
   004035F0: F2AD 4D04 sub         sp,sp,#0x404
-  004035F4: F24A 030C mov         r3,#0xA00C
+  004035F4: F24A 030C mov         r3,#0xA00C<16>
   004035F8: F2C0 0340 movt        r3,#0x40
   004035FC: 4604      mov         r4,r0
   004035FE: 68DF      ldr         r7,[r3,#0xC]
-  00403600: F1B7 3FFF cmp         r7,#0xFFFFFFFF
+  00403600: F1B7 3FFF cmp         r7,#0xFFFFFFFF<32>
   00403604: D035      beq         00403672
   00403606: B34C      cbz         r4,0040365C
   00403608: F7FF FEC6 bl          00403398
   0040360C: F100 033A add         r3,r0,#0x3A
   00403610: F5B3 6F80 cmp         r3,#0x400
   00403614: D822      bhi         0040365C
-  00403616: F647 359C mov         r5,#0x7B9C
+  00403616: F647 359C mov         r5,#0x7B9C<16>
   0040361A: F2C0 0540 movt        r5,#0x40
   0040361E: 4668      mov         r0,sp
   00403620: 466E      mov         r6,sp
@@ -2010,7 +1990,7 @@ namespace Reko.UnitTests.Arch.Arm
   00403654: F802 3B01 strb        r3,[r2],#1
   00403658: D1F9      bne         0040364E
   0040365A: E003      b           00403664
-  0040365C: F248 06B8 mov         r6,#0x80B8
+  0040365C: F248 06B8 mov         r6,#0x80B8<16>
   00403660: F2C0 0640 movt        r6,#0x40
   00403664: F8DD 041C ldr         r0,[sp,#0x41C]
   00403668: 4633      mov         r3,r6
@@ -2021,29 +2001,29 @@ namespace Reko.UnitTests.Arch.Arm
   00403676: F7FD FCED bl          00401054
   0040367A: E8BD 88F0 pop         {r4-r7,r11,pc}
 
-  004036F8: F24C 0C90 mov         r12,#0xC090
+  004036F8: F24C 0C90 mov         r12,#0xC090<16>
   004036FC: F2C0 0C40 movt        r12,#0x40
   00403700: F8DC F000 ldr         pc,[r12]
-  00403704: F24C 0C94 mov         r12,#0xC094
+  00403704: F24C 0C94 mov         r12,#0xC094<16>
   00403708: F2C0 0C40 movt        r12,#0x40
   0040370C: F8DC F000 ldr         pc,[r12]
-  00403710: F24C 0C98 mov         r12,#0xC098
+  00403710: F24C 0C98 mov         r12,#0xC098<16>
   00403714: F2C0 0C40 movt        r12,#0x40
   00403718: F8DC F000 ldr         pc,[r12]
-  0040371C: F24C 0C9C mov         r12,#0xC09C
+  0040371C: F24C 0C9C mov         r12,#0xC09C<16>
   00403720: F2C0 0C40 movt        r12,#0x40
   00403724: F8DC F000 ldr         pc,[r12]
-  00403728: F24C 0CA0 mov         r12,#0xC0A0
+  00403728: F24C 0CA0 mov         r12,#0xC0A0<16>
   0040372C: F2C0 0C40 movt        r12,#0x40
   00403730: F8DC F000 ldr         pc,[r12]
-  00403734: F24C 1C0C mov         r12,#0xC10C
+  00403734: F24C 1C0C mov         r12,#0xC10C<16>
   00403738: F2C0 0C40 movt        r12,#0x40
   0040373C: F8DC F000 ldr         pc,[r12]
   00403740: E92D 4800 push        {r11,lr}
   00403744: 46EB      mov         r11,sp
   00403746: F7FD FC79 bl          0040103C
   0040374A: F2AD 4D14 sub         sp,sp,#0x414
-  0040374E: F24A 1270 mov         r2,#0xA170
+  0040374E: F24A 1270 mov         r2,#0xA170<16>
   00403752: F2C0 0240 movt        r2,#0x40
   00403756: 7813      ldrb        r3,[r2]
   00403758: B133      cbz         r3,00403768
@@ -2056,13 +2036,13 @@ namespace Reko.UnitTests.Arch.Arm
   0040376C: F000 F86E bl          0040384C
   00403770: 2800      cmp         r0,#0
   00403772: D1F3      bne         0040375C
-  00403774: F24C 0304 mov         r3,#0xC004
+  00403774: F24C 0304 mov         r3,#0xC004<16>
   00403778: F2C0 0340 movt        r3,#0x40
-  0040377C: F248 102C mov         r0,#0x812C
+  0040377C: F248 102C mov         r0,#0x812C<16>
   00403780: F2C0 0040 movt        r0,#0x40
   00403786: 4798      blx         r3
   00403788: B1E0      cbz         r0,004037C4
-  0040378A: F24C 0308 mov         r3,#0xC008
+  0040378A: F24C 0308 mov         r3,#0xC008<16>
   0040378E: F2C0 0340 movt        r3,#0x40
   00403792: F44F 7282 mov         r2,#0x104
   00403796: 4669      mov         r1,sp
@@ -2073,7 +2053,7 @@ namespace Reko.UnitTests.Arch.Arm
   004037A2: F44F 7282 mov         r2,#0x104
   004037A6: F000 F935 bl          00403A14
   004037AA: B158      cbz         r0,004037C4
-  004037AC: F24C 0350 mov         r3,#0xC050
+  004037AC: F24C 0350 mov         r3,#0xC050<16>
   004037B0: F2C0 0340 movt        r3,#0x40
   004037B4: F44F 6210 mov         r2,#0x900
   004037B8: 2100      movs        r1,#0
@@ -2081,9 +2061,9 @@ namespace Reko.UnitTests.Arch.Arm
   004037BE: 4798      blx         r3
   004037C0: 2800      cmp         r0,#0
   004037C2: D1CB      bne         0040375C
-  004037C4: F24C 0350 mov         r3,#0xC050
+  004037C4: F24C 0350 mov         r3,#0xC050<16>
   004037C8: F2C0 0340 movt        r3,#0x40
-  004037CC: F248 2050 mov         r0,#0x8250
+  004037CC: F248 2050 mov         r0,#0x8250<16>
   004037D0: F2C0 0040 movt        r0,#0x40
   004037D4: F44F 6220 mov         r2,#0xA00
   004037DA: 2100      movs        r1,#0
@@ -2096,64 +2076,64 @@ namespace Reko.UnitTests.Arch.Arm
   00403850: F10D 0B10 add         r11,sp,#0x10
   00403854: F7FD FBF2 bl          0040103C
   00403858: F5AD 7D09 sub         sp,sp,#0x224
-  0040385C: F24C 0350 mov         r3,#0xC050
+  0040385C: F24C 0350 mov         r3,#0xC050<16>
   00403860: F2C0 0340 movt        r3,#0x40
-  00403864: F248 1048 mov         r0,#0x8148
+  00403864: F248 1048 mov         r0,#0x8148<16>
   00403868: F2C0 0040 movt        r0,#0x40
   0040386C: F44F 6200 mov         r2,#0x800
   00403872: 2100      movs        r1,#0
   00403874: 4798      blx         r3
   00403876: 4605      mov         r5,r0
   00403878: B9AD      cbnz        r5,004038A6
-  0040387A: F24C 0320 mov         r3,#0xC020
+  0040387A: F24C 0320 mov         r3,#0xC020<16>
   0040387E: F2C0 0340 movt        r3,#0x40
   00403884: 4798      blx         r3
   00403886: 2857      cmp         r0,#0x57
   00403888: D148      bne         0040391C
-  0040388A: F24C 0350 mov         r3,#0xC050
+  0040388A: F24C 0350 mov         r3,#0xC050<16>
   0040388E: F2C0 0340 movt        r3,#0x40
-  00403892: F248 1048 mov         r0,#0x8148
+  00403892: F248 1048 mov         r0,#0x8148<16>
   00403896: F2C0 0040 movt        r0,#0x40
   0040389A: 2200      movs        r2,#0
   0040389E: 2100      movs        r1,#0
   004038A0: 4798      blx         r3
   004038A2: 4605      mov         r5,r0
   004038A4: B3D5      cbz         r5,0040391C
-  004038A6: F24C 0300 movw        r3,#0xC000
+  004038A6: F24C 0300 movw        r3,#0xC000<16>
   004038AA: F2C0 0340 movt        r3,#0x40
-  004038AE: F248 1190 mov         r1,#0x8190
+  004038AE: F248 1190 mov         r1,#0x8190<16>
   004038B2: F2C0 0140 movt        r1,#0x40
   004038B6: 4628      mov         r0,r5
   004038BA: 4798      blx         r3
   004038BC: 4604      mov         r4,r0
   004038BE: B36C      cbz         r4,0040391C
-  004038C0: F24C 0300 movw        r3,#0xC000
+  004038C0: F24C 0300 movw        r3,#0xC000<16>
   004038C4: F2C0 0340 movt        r3,#0x40
-  004038C8: F248 11A0 mov         r1,#0x81A0
+  004038C8: F248 11A0 mov         r1,#0x81A0<16>
   004038CC: F2C0 0140 movt        r1,#0x40
   004038D0: 4628      mov         r0,r5
   004038D4: 4798      blx         r3
   004038D6: 4606      mov         r6,r0
   004038D8: B306      cbz         r6,0040391C
-  004038DA: F24C 0300 movw        r3,#0xC000
+  004038DA: F24C 0300 movw        r3,#0xC000<16>
   004038DE: F2C0 0340 movt        r3,#0x40
-  004038E2: F248 11B4 mov         r1,#0x81B4
+  004038E2: F248 11B4 mov         r1,#0x81B4<16>
   004038E6: F2C0 0140 movt        r1,#0x40
   004038EA: 4628      mov         r0,r5
   004038EE: 4798      blx         r3
   004038F0: 4607      mov         r7,r0
   004038F2: B19F      cbz         r7,0040391C
-  004038F4: F248 11C0 mov         r1,#0x81C0
+  004038F4: F248 11C0 mov         r1,#0x81C0<16>
   004038F8: F2C0 0140 movt        r1,#0x40
   004038FC: AB03      add         r3,sp,#0xC
-  004038FE: F04F 4000 mov         r0,#0x80000000
+  004038FE: F04F 4000 mov         r0,#0x80000000<32>
   00403902: 9300      str         r3,[sp]
   00403904: 2301      movs        r3,#1
   00403906: 2200      movs        r2,#0
   00403908: 1C80      adds        r0,r0,#2
   0040390A: 47A0      blx         r4
   0040390C: B168      cbz         r0,0040392A
-  0040390E: F24C 030C mov         r3,#0xC00C
+  0040390E: F24C 030C mov         r3,#0xC00C<16>
   00403912: F2C0 0340 movt        r3,#0x40
   00403916: 4628      mov         r0,r5
   0040391A: 4798      blx         r3
@@ -2165,7 +2145,7 @@ namespace Reko.UnitTests.Arch.Arm
   0040392E: 9302      str         r3,[sp,#8]
   00403930: AB02      add         r3,sp,#8
   00403932: 9301      str         r3,[sp,#4]
-  00403934: F248 211C mov         r1,#0x821C
+  00403934: F248 211C mov         r1,#0x821C<16>
   00403938: F2C0 0140 movt        r1,#0x40
   0040393C: 9803      ldr         r0,[sp,#0xC]
   0040393E: AB06      add         r3,sp,#0x18
@@ -2176,7 +2156,7 @@ namespace Reko.UnitTests.Arch.Arm
   00403948: 4604      mov         r4,r0
   0040394A: 9803      ldr         r0,[sp,#0xC]
   0040394C: 47B8      blx         r7
-  0040394E: F24C 030C mov         r3,#0xC00C
+  0040394E: F24C 030C mov         r3,#0xC00C<16>
   00403952: F2C0 0340 movt        r3,#0x40
   00403956: 4628      mov         r0,r5
   0040395A: 4798      blx         r3
@@ -2203,7 +2183,7 @@ namespace Reko.UnitTests.Arch.Arm
   0040398C: 235C      movs        r3,#0x5C
   0040398E: 800B      strh        r3,[r1]
   00403990: 1C52      adds        r2,r2,#1
-  00403992: F1C2 33FF rsb         r3,r2,#0xFFFFFFFF
+  00403992: F1C2 33FF rsb         r3,r2,#0xFFFFFFFF<32>
   00403996: 2B12      cmp         r3,#0x12
   00403998: D3C0      bcc         0040391C
   0040399A: F102 0311 add         r3,r2,#0x11
@@ -2211,14 +2191,14 @@ namespace Reko.UnitTests.Arch.Arm
   004039A2: D8BB      bhi         0040391C
   004039A4: AB06      add         r3,sp,#0x18
   004039A6: EB03 0242 add         r2,r3,r2,lsl #1
-  004039AA: F248 1108 mov         r1,#0x8108
+  004039AA: F248 1108 mov         r1,#0x8108<16>
   004039AE: F2C0 0140 movt        r1,#0x40
   004039B2: F102 0022 add         r0,r2,#0x22
   004039B6: F831 3B02 ldrh        r3,[r1],#2
   004039BA: F822 3B02 strh        r3,[r2],#2
   004039BE: 4282      cmp         r2,r0
   004039C0: D1F9      bne         004039B6
-  004039C2: F24C 0350 mov         r3,#0xC050
+  004039C2: F24C 0350 mov         r3,#0xC050<16>
   004039C6: F2C0 0340 movt        r3,#0x40
   004039CA: 2100      movs        r1,#0
   004039CC: F44F 6210 mov         r2,#0x900
@@ -2251,14 +2231,14 @@ namespace Reko.UnitTests.Arch.Arm
   00403A4A: F50D 6DC4 add         sp,sp,#0x620
   00403A4E: F7FD FB01 bl          00401054
   00403A52: E8BD 8870 pop         {r4-r6,r11,pc}
-  00403A56: F248 223C mov         r2,#0x823C
+  00403A56: F248 223C mov         r2,#0x823C<16>
   00403A5A: F2C0 0240 movt        r2,#0x40
   00403A5E: A888      add         r0,sp,#0x220
   00403A60: 2109      movs        r1,#9
   00403A62: F000 FA29 bl          00403EB8
   00403A66: 2800      cmp         r0,#0
   00403A68: D1EE      bne         00403A48
-  00403A6A: F248 2234 mov         r2,#0x8234
+  00403A6A: F248 2234 mov         r2,#0x8234<16>
   00403A6E: F2C0 0240 movt        r2,#0x40
   00403A72: A808      add         r0,sp,#0x20
   00403A74: 2104      movs        r1,#4
@@ -2285,7 +2265,7 @@ namespace Reko.UnitTests.Arch.Arm
   00403B22: E92D 4FF0 push        {r4-r11,lr}
   00403B26: F10D 0B1C add         r11,sp,#0x1C
   00403B2A: B097      sub         sp,sp,#0x5C
-  00403B2C: F24C 0410 mov         r4,#0xC010
+  00403B2C: F24C 0410 mov         r4,#0xC010<16>
   00403B30: F2C0 0440 movt        r4,#0x40
   00403B34: 4605      mov         r5,r0
   00403B36: F04F 0800 mov         r8,#0
@@ -2304,7 +2284,7 @@ namespace Reko.UnitTests.Arch.Arm
   00403B58: B017      add         sp,sp,#0x5C
   00403B5A: E8BD 0FF0 pop         {r4-r11}
   00403B5E: F85D FB14 ldr         pc,[sp],#0x14
-  00403B62: F24C 0308 mov         r3,#0xC008
+  00403B62: F24C 0308 mov         r3,#0xC008<16>
   00403B66: F2C0 0340 movt        r3,#0x40
   00403B6A: 9A25      ldr         r2,[sp,#0x94]
   00403B6C: 9924      ldr         r1,[sp,#0x90]
@@ -2313,7 +2293,7 @@ namespace Reko.UnitTests.Arch.Arm
   00403B74: 2800      cmp         r0,#0
   00403B76: D0ED      beq         00403B54
   00403B78: 9911      ldr         r1,[sp,#0x44]
-  00403B7A: F645 234D mov         r3,#0x5A4D
+  00403B7A: F645 234D mov         r3,#0x5A4D<16>
   00403B7E: 880A      ldrh        r2,[r1]
   00403B80: 429A      cmp         r2,r3
   00403B82: D1E7      bne         00403B54
@@ -2322,7 +2302,7 @@ namespace Reko.UnitTests.Arch.Arm
   00403B88: DDE4      ble         00403B54
   00403B8A: 585A      ldr         r2,[r3,r1]
   00403B8C: 185C      adds        r4,r3,r1
-  00403B8E: F244 5350 mov         r3,#0x4550
+  00403B8E: F244 5350 mov         r3,#0x4550<16>
   00403B92: 429A      cmp         r2,r3
   00403B94: D1DE      bne         00403B54
   00403B96: 8AA3      ldrh        r3,[r4,#0x14]
@@ -2346,9 +2326,9 @@ namespace Reko.UnitTests.Arch.Arm
   00403BBC: D3F4      bcc         00403BA8
   00403BBE: 4285      cmp         r5,r0
   00403BC0: D0C8      beq         00403B54
-  00403BC2: F24A 1671 mov         r6,#0xA171
+  00403BC2: F24A 1671 mov         r6,#0xA171<16>
   00403BC6: F2C0 0640 movt        r6,#0x40
-  00403BCA: F24A 146C mov         r4,#0xA16C
+  00403BCA: F24A 146C mov         r4,#0xA16C<16>
   00403BCE: F2C0 0440 movt        r4,#0x40
   00403BD2: 1C6D      adds        r5,r5,#1
   00403BD4: 7833      ldrb        r3,[r6]
@@ -2362,9 +2342,9 @@ namespace Reko.UnitTests.Arch.Arm
   00403BE8: 2301      movs        r3,#1
   00403BEA: 7033      strb        r3,[r6]
   00403BEC: E000      b           00403BF0
-  00403BF0: F24C 0300 movw        r3,#0xC000
+  00403BF0: F24C 0300 movw        r3,#0xC000<16>
   00403BF4: F2C0 0340 movt        r3,#0x40
-  00403BF8: F248 2164 mov         r1,#0x8264
+  00403BF8: F248 2164 mov         r1,#0x8264<16>
   00403BFC: F2C0 0140 movt        r1,#0x40
   00403C02: 4798      blx         r3
   00403C04: 4604      mov         r4,r0
@@ -2391,7 +2371,7 @@ namespace Reko.UnitTests.Arch.Arm
   00403C36: 4298      cmp         r0,r3
   00403C38: F040 80C8 bne         00403DCC
   00403C3C: 9C08      ldr         r4,[sp,#0x20]
-  00403C3E: F248 2278 mov         r2,#0x8278
+  00403C3E: F248 2278 mov         r2,#0x8278<16>
   00403C42: F2C0 0240 movt        r2,#0x40
   00403C46: AB0A      add         r3,sp,#0x28
   00403C48: 4620      mov         r0,r4
@@ -2465,16 +2445,16 @@ namespace Reko.UnitTests.Arch.Arm
   00403CF4: 9A06      ldr         r2,[sp,#0x18]
   00403CF6: 2A00      cmp         r2,#0
   00403CF8: D059      beq         00403DAE
-  00403CFA: F06F 4360 mvn         r3,#0xE0000000
+  00403CFA: F06F 4360 mvn         r3,#0xE0000000<32>
   00403CFE: 429A      cmp         r2,r3
   00403D00: D255      bcs         00403DAE
-  00403D02: F24C 0314 mov         r3,#0xC014
+  00403D02: F24C 0314 mov         r3,#0xC014<16>
   00403D06: F2C0 0340 movt        r3,#0x40
   00403D0C: 4798      blx         r3
   00403D0E: 9B06      ldr         r3,[sp,#0x18]
   00403D10: 2100      movs        r1,#0
   00403D12: 00DA      lsls        r2,r3,#3
-  00403D14: F24C 031C mov         r3,#0xC01C
+  00403D14: F24C 031C mov         r3,#0xC01C<16>
   00403D18: F2C0 0340 movt        r3,#0x40
   00403D1E: 4798      blx         r3
   00403D20: 4680      mov         r8,r0
@@ -2513,7 +2493,7 @@ namespace Reko.UnitTests.Arch.Arm
   00403D6C: F853 3C04 ldr         r3,[r3,#-4]
   00403D70: 9A0C      ldr         r2,[sp,#0x30]
   00403D72: 9C07      ldr         r4,[sp,#0x1C]
-  00403D74: F023 437F bic         r3,r3,#0xFF000000
+  00403D74: F023 437F bic         r3,r3,#0xFF000000<32>
   00403D78: 6013      str         r3,[r2]
   00403D7A: 4620      mov         r0,r4
   00403D7E: 9A0D      ldr         r2,[sp,#0x34]
@@ -2526,10 +2506,10 @@ namespace Reko.UnitTests.Arch.Arm
   00403D8C: 47A0      blx         r4
   00403D8E: B100      cbz         r0,00403D92
   00403D90: 2601      movs        r6,#1
-  00403D92: F24C 0314 mov         r3,#0xC014
+  00403D92: F24C 0314 mov         r3,#0xC014<16>
   00403D96: F2C0 0340 movt        r3,#0x40
   00403D9C: 4798      blx         r3
-  00403D9E: F24C 0318 mov         r3,#0xC018
+  00403D9E: F24C 0318 mov         r3,#0xC018<16>
   00403DA2: F2C0 0340 movt        r3,#0x40
   00403DA6: 4642      mov         r2,r8
   00403DA8: 2100      movs        r1,#0
@@ -2568,7 +2548,7 @@ namespace Reko.UnitTests.Arch.Arm
   00403DFA: 0000      movs        r0,r0
   00403DFC: 0000      movs        r0,r0
   00403DFE: 0000      movs        r0,r0
-  00403E00: F24C 0CA8 mov         r12,#0xC0A8
+  00403E00: F24C 0CA8 mov         r12,#0xC0A8<16>
   00403E04: F2C0 0C40 movt        r12,#0x40
   00403E08: F8DC F000 ldr         pc,[r12]
   00403E0C: B40F      push        {r0-r3}
@@ -2615,16 +2595,16 @@ namespace Reko.UnitTests.Arch.Arm
   00403E8C: F85D BB04 pop         {r11}
   00403E90: F85D FB14 ldr         pc,[sp],#0x14
 
-  00403EAC: F24C 0CAC mov         r12,#0xC0AC
+  00403EAC: F24C 0CAC mov         r12,#0xC0AC<16>
   00403EB0: F2C0 0C40 movt        r12,#0x40
   00403EB4: F8DC F000 ldr         pc,[r12]
-  00403EB8: F24C 0CB0 mov         r12,#0xC0B0
+  00403EB8: F24C 0CB0 mov         r12,#0xC0B0<16>
   00403EBC: F2C0 0C40 movt        r12,#0x40
   00403EC0: F8DC F000 ldr         pc,[r12]
-  00403EC4: F24C 0CB4 mov         r12,#0xC0B4
+  00403EC4: F24C 0CB4 mov         r12,#0xC0B4<16>
   00403EC8: F2C0 0C40 movt        r12,#0x40
   00403ECC: F8DC F000 ldr         pc,[r12]
-  00403ED0: F24C 0CB8 mov         r12,#0xC0B8
+  00403ED0: F24C 0CB8 mov         r12,#0xC0B8<16>
   00403ED4: F2C0 0C40 movt        r12,#0x40
   00403ED8: F8DC F000 ldr         pc,[r12]
   00403EDC: B403      push        {r0,r1}
@@ -2648,67 +2628,67 @@ namespace Reko.UnitTests.Arch.Arm
   00403F22: 46EB      mov         r11,sp
   00403F24: 9802      ldr         r0,[sp,#8]
   00403F26: DEFB      __fastfail
-  00403F28: F24C 0C4C mov         r12,#0xC04C
+  00403F28: F24C 0C4C mov         r12,#0xC04C<16>
   00403F2C: F2C0 0C40 movt        r12,#0x40
   00403F30: F8DC F000 ldr         pc,[r12]
-  00403F34: F24C 0C48 mov         r12,#0xC048
+  00403F34: F24C 0C48 mov         r12,#0xC048<16>
   00403F38: F2C0 0C40 movt        r12,#0x40
   00403F3C: F8DC F000 ldr         pc,[r12]
-  00403F40: F24C 0C44 mov         r12,#0xC044
+  00403F40: F24C 0C44 mov         r12,#0xC044<16>
   00403F44: F2C0 0C40 movt        r12,#0x40
   00403F48: F8DC F000 ldr         pc,[r12]
-  00403F4C: F24C 0C40 mov         r12,#0xC040
+  00403F4C: F24C 0C40 mov         r12,#0xC040<16>
   00403F50: F2C0 0C40 movt        r12,#0x40
   00403F54: F8DC F000 ldr         pc,[r12]
-  00403F58: F24C 0C3C mov         r12,#0xC03C
+  00403F58: F24C 0C3C mov         r12,#0xC03C<16>
   00403F5C: F2C0 0C40 movt        r12,#0x40
   00403F60: F8DC F000 ldr         pc,[r12]
-  00403F64: F24C 0C38 mov         r12,#0xC038
+  00403F64: F24C 0C38 mov         r12,#0xC038<16>
   00403F68: F2C0 0C40 movt        r12,#0x40
   00403F6C: F8DC F000 ldr         pc,[r12]
-  00403F70: F24C 0C34 mov         r12,#0xC034
+  00403F70: F24C 0C34 mov         r12,#0xC034<16>
   00403F74: F2C0 0C40 movt        r12,#0x40
   00403F78: F8DC F000 ldr         pc,[r12]
-  00403F7C: F24C 0C30 mov         r12,#0xC030
+  00403F7C: F24C 0C30 mov         r12,#0xC030<16>
   00403F80: F2C0 0C40 movt        r12,#0x40
   00403F84: F8DC F000 ldr         pc,[r12]
-  00403F88: F24C 0C2C mov         r12,#0xC02C
+  00403F88: F24C 0C2C mov         r12,#0xC02C<16>
   00403F8C: F2C0 0C40 movt        r12,#0x40
   00403F90: F8DC F000 ldr         pc,[r12]
-  00403F94: F24C 0C28 mov         r12,#0xC028
+  00403F94: F24C 0C28 mov         r12,#0xC028<16>
   00403F98: F2C0 0C40 movt        r12,#0x40
   00403F9C: F8DC F000 ldr         pc,[r12]
-  00403FA0: F24C 0C24 mov         r12,#0xC024
+  00403FA0: F24C 0C24 mov         r12,#0xC024<16>
   00403FA4: F2C0 0C40 movt        r12,#0x40
   00403FA8: F8DC F000 ldr         pc,[r12]
-  00403FAC: F24C 0C20 mov         r12,#0xC020
+  00403FAC: F24C 0C20 mov         r12,#0xC020<16>
   00403FB0: F2C0 0C40 movt        r12,#0x40
   00403FB4: F8DC F000 ldr         pc,[r12]
-  00403FB8: F24C 0C1C mov         r12,#0xC01C
+  00403FB8: F24C 0C1C mov         r12,#0xC01C<16>
   00403FBC: F2C0 0C40 movt        r12,#0x40
   00403FC0: F8DC F000 ldr         pc,[r12]
-  00403FC4: F24C 0C18 mov         r12,#0xC018
+  00403FC4: F24C 0C18 mov         r12,#0xC018<16>
   00403FC8: F2C0 0C40 movt        r12,#0x40
   00403FCC: F8DC F000 ldr         pc,[r12]
-  00403FD0: F24C 0C14 mov         r12,#0xC014
+  00403FD0: F24C 0C14 mov         r12,#0xC014<16>
   00403FD4: F2C0 0C40 movt        r12,#0x40
   00403FD8: F8DC F000 ldr         pc,[r12]
-  00403FDC: F24C 0C10 mov         r12,#0xC010
+  00403FDC: F24C 0C10 mov         r12,#0xC010<16>
   00403FE0: F2C0 0C40 movt        r12,#0x40
   00403FE4: F8DC F000 ldr         pc,[r12]
-  00403FE8: F24C 0C0C mov         r12,#0xC00C
+  00403FE8: F24C 0C0C mov         r12,#0xC00C<16>
   00403FEC: F2C0 0C40 movt        r12,#0x40
   00403FF0: F8DC F000 ldr         pc,[r12]
-  00403FF4: F24C 0C08 mov         r12,#0xC008
+  00403FF4: F24C 0C08 mov         r12,#0xC008<16>
   00403FF8: F2C0 0C40 movt        r12,#0x40
   00403FFC: F8DC F000 ldr         pc,[r12]
-  00404000: F24C 0C04 mov         r12,#0xC004
+  00404000: F24C 0C04 mov         r12,#0xC004<16>
   00404004: F2C0 0C40 movt        r12,#0x40
   00404008: F8DC F000 ldr         pc,[r12]
-  0040400C: F24C 0C00 movw        r12,#0xC000
+  0040400C: F24C 0C00 movw        r12,#0xC000<16>
   00404010: F2C0 0C40 movt        r12,#0x40
   00404014: F8DC F000 ldr         pc,[r12]
-  00404018: F24C 0C50 mov         r12,#0xC050
+  00404018: F24C 0C50 mov         r12,#0xC050<16>
   0040401C: F2C0 0C40 movt        r12,#0x40
   00404020: F8DC F000 ldr         pc,[r12]
 
@@ -2776,18 +2756,18 @@ namespace Reko.UnitTests.Arch.Arm
   00401006: 0000      movs        r0,r0
   00401008: 0000      movs        r0,r0
   0040100A: 0000      movs        r0,r0
-  0040100C: F242 1C21 mov         r12,#0x2121
+  0040100C: F242 1C21 mov         r12,#0x2121<16>
   00401010: F2C0 0C40 movt        r12,#0x40
   00401014: 4760      bx          r12
 
   00401024: B081      sub         sp,sp,#4
-  00401026: F24A 0C20 mov         r12,#0xA020
+  00401026: F24A 0C20 mov         r12,#0xA020<16>
   0040102A: F2C0 0C40 movt        r12,#0x40
   0040102E: F8DC C000 ldr         r12,[r12]
   00401032: EBAD 0C0C sub         r12,sp,r12
   00401036: F8CD C000 str         r12,[sp]
   0040103A: 4770      bx          lr
-  0040103C: F24A 0C20 mov         r12,#0xA020
+  0040103C: F24A 0C20 mov         r12,#0xA020<16>
   00401040: F2C0 0C40 movt        r12,#0x40
   00401044: 9B00      ldr         r3,[sp]
   00401046: F8DC C000 ldr         r12,[r12]
@@ -2836,7 +2816,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402122: E92D 4830 push        {r4,r5,r11,lr}
   00402126: F10D 0B08 add         r11,sp,#8
   0040212A: B082      sub         sp,sp,#8
-  0040212C: F04F 30CC mov         r0,#0xCCCCCCCC
+  0040212C: F04F 30CC mov         r0,#0xCCCCCCCC<32>
   00402130: 9000      str         r0,[sp]
   00402132: 9001      str         r0,[sp,#4]
   00402134: 4806      ldr         r0,00402150
@@ -2857,7 +2837,7 @@ namespace Reko.UnitTests.Arch.Arm
   0040216C: F8DC F000 ldr         pc,[r12]
   00402170: E92D 480C push        {r2,r3,r11,lr}
   00402174: F10D 0B08 add         r11,sp,#8
-  00402178: F24A 1230 mov         r2,#0xA130
+  00402178: F24A 1230 mov         r2,#0xA130<16>
   0040217C: F2C0 0240 movt        r2,#0x40
   00402180: 7813      ldrb        r3,[r2]
   00402182: B95B      cbnz        r3,0040219C
@@ -2919,7 +2899,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402260: 4B0B      ldr         r3,00402290
   00402264: 4798      blx         r3
   00402266: 4B09      ldr         r3,0040228C
-  0040226A: F1B3 3FFF cmp         r3,#0xFFFFFFFF
+  0040226A: F1B3 3FFF cmp         r3,#0xFFFFFFFF<32>
   0040226E: D104      bne         0040227A
   00402270: F06F 0000 mvn         r0,#0
   00402274: 4B04      ldr         r3,00402288
@@ -3250,7 +3230,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402682: 9302      str         r3,[sp,#8]
   00402684: 9B02      ldr         r3,[sp,#8]
   00402686: 881A      ldrh        r2,[r3]
-  00402688: F645 234D mov         r3,#0x5A4D
+  00402688: F645 234D mov         r3,#0x5A4D<16>
   0040268C: 429A      cmp         r2,r3
   0040268E: D002      beq         00402696
   00402690: 2300      movs        r3,#0
@@ -3262,7 +3242,7 @@ namespace Reko.UnitTests.Arch.Arm
   0040269E: 4413      add         r3,r3,r2
   004026A0: 9301      str         r3,[sp,#4]
   004026A2: 9B01      ldr         r3,[sp,#4]
-  004026A6: F244 5350 mov         r3,#0x4550
+  004026A6: F244 5350 mov         r3,#0x4550<16>
   004026AA: 429A      cmp         r2,r3
   004026AC: D002      beq         004026B4
   004026AE: 2300      movs        r3,#0
@@ -3340,19 +3320,19 @@ namespace Reko.UnitTests.Arch.Arm
   0040274E: 0000      movs        r0,r0
   00402750: E92D 4800 push        {r11,lr}
   00402754: 46EB      mov         r11,sp
-  00402756: F24A 1354 mov         r3,#0xA154
+  00402756: F24A 1354 mov         r3,#0xA154<16>
   0040275A: F2C0 0340 movt        r3,#0x40
   00402760: E8BD 8800 pop         {r11,pc}
   00402764: E92D 4800 push        {r11,lr}
   00402768: 46EB      mov         r11,sp
-  0040276A: F24A 1358 mov         r3,#0xA158
+  0040276A: F24A 1358 mov         r3,#0xA158<16>
   0040276E: F2C0 0340 movt        r3,#0x40
   00402774: E8BD 8800 pop         {r11,pc}
   00402778: E92D 4800 push        {r11,lr}
   0040277C: 46EB      mov         r11,sp
   0040277E: 2804      cmp         r0,#4
   00402780: D807      bhi         00402792
-  00402782: F647 1318 mov         r3,#0x7918
+  00402782: F647 1318 mov         r3,#0x7918<16>
   00402786: F2C0 0340 movt        r3,#0x40
   0040278A: F853 0020 ldr         r0,[r3,r0,lsl #2]
   0040278E: E8BD 8800 pop         {r11,pc}
@@ -3368,7 +3348,7 @@ namespace Reko.UnitTests.Arch.Arm
   004027A8: E8BD 8800 pop         {r11,pc}
   004027AC: E92D 4800 push        {r11,lr}
   004027B0: 46EB      mov         r11,sp
-  004027B2: F24A 1254 mov         r2,#0xA154
+  004027B2: F24A 1254 mov         r2,#0xA154<16>
   004027B6: F2C0 0240 movt        r2,#0x40
   004027BA: 4603      mov         r3,r0
   004027BE: 6013      str         r3,[r2]
@@ -3377,7 +3357,7 @@ namespace Reko.UnitTests.Arch.Arm
   004027C4: E8BD 8800 pop         {r11,pc}
   004027C8: E92D 4800 push        {r11,lr}
   004027CC: 46EB      mov         r11,sp
-  004027CE: F24A 1254 mov         r2,#0xA154
+  004027CE: F24A 1254 mov         r2,#0xA154<16>
   004027D2: F2C0 0240 movt        r2,#0x40
   004027D6: 4603      mov         r3,r0
   004027D8: 6850      ldr         r0,[r2,#4]
@@ -3390,14 +3370,14 @@ namespace Reko.UnitTests.Arch.Arm
   004027EA: 4602      mov         r2,r0
   004027EC: 2A04      cmp         r2,#4
   004027EE: D809      bhi         00402804
-  004027F0: F24A 030C mov         r3,#0xA00C
+  004027F0: F24A 030C mov         r3,#0xA00C<16>
   004027F4: F2C0 0340 movt        r3,#0x40
   004027F8: F853 0020 ldr         r0,[r3,r0,lsl #2]
   004027FC: F843 1022 str         r1,[r3,r2,lsl #2]
   00402800: E8BD 8800 pop         {r11,pc}
   00402804: F06F 0000 mvn         r0,#0
   00402808: E8BD 8800 pop         {r11,pc}
-  0040280C: F24C 1C00 movw        r12,#0xC100
+  0040280C: F24C 1C00 movw        r12,#0xC100<16>
   00402810: F2C0 0C40 movt        r12,#0x40
   00402814: F8DC F000 ldr         pc,[r12]
   00402818: B403      push        {r0,r1}
@@ -3490,10 +3470,10 @@ namespace Reko.UnitTests.Arch.Arm
   004028EA: 0000      movs        r0,r0
   004028EC: 0000      movs        r0,r0
   004028EE: 0000      movs        r0,r0
-  004028F0: F24C 0CFC mov         r12,#0xC0FC
+  004028F0: F24C 0CFC mov         r12,#0xC0FC<16>
   004028F4: F2C0 0C40 movt        r12,#0x40
   004028F8: F8DC F000 ldr         pc,[r12]
-  004028FC: F24C 0CF8 mov         r12,#0xC0F8
+  004028FC: F24C 0CF8 mov         r12,#0xC0F8<16>
   00402900: F2C0 0C40 movt        r12,#0x40
   00402904: F8DC F000 ldr         pc,[r12]
   00402908: E92D 4800 push        {r11,lr}
@@ -3504,16 +3484,16 @@ namespace Reko.UnitTests.Arch.Arm
   00402914: 9800      ldr         r0,[sp]
   00402916: B002      add         sp,sp,#8
   00402918: E8BD 8800 pop         {r11,pc}
-  0040291C: F24C 0CF4 mov         r12,#0xC0F4
+  0040291C: F24C 0CF4 mov         r12,#0xC0F4<16>
   00402920: F2C0 0C40 movt        r12,#0x40
   00402924: F8DC F000 ldr         pc,[r12]
-  00402928: F24C 0CF0 mov         r12,#0xC0F0
+  00402928: F24C 0CF0 mov         r12,#0xC0F0<16>
   0040292C: F2C0 0C40 movt        r12,#0x40
   00402930: F8DC F000 ldr         pc,[r12]
-  00402934: F24C 0CEC mov         r12,#0xC0EC
+  00402934: F24C 0CEC mov         r12,#0xC0EC<16>
   00402938: F2C0 0C40 movt        r12,#0x40
   0040293C: F8DC F000 ldr         pc,[r12]
-  00402940: F24C 0CE8 mov         r12,#0xC0E8
+  00402940: F24C 0CE8 mov         r12,#0xC0E8<16>
   00402944: F2C0 0C40 movt        r12,#0x40
   00402948: F8DC F000 ldr         pc,[r12]
   0040294C: B403      push        {r0,r1}
@@ -3609,7 +3589,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402A1A: E016      b           00402A4A
   00402A1C: 68BB      ldr         r3,[r7,#8]
   00402A1E: 3324      adds        r3,r3,#0x24
-  00402A22: F013 4F00 tst         r3,#0x80000000
+  00402A22: F013 4F00 tst         r3,#0x80000000<32>
   00402A26: D102      bne         00402A2E
   00402A28: 2301      movs        r3,#1
   00402A2A: 60FB      str         r3,[r7,#0xC]
@@ -3666,7 +3646,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402A98: 9301      str         r3,[sp,#4]
   00402A9A: 9B01      ldr         r3,[sp,#4]
   00402A9C: 881A      ldrh        r2,[r3]
-  00402A9E: F645 234D mov         r3,#0x5A4D
+  00402A9E: F645 234D mov         r3,#0x5A4D<16>
   00402AA2: 429A      cmp         r2,r3
   00402AA4: D002      beq         00402AAC
   00402AA6: 2300      movs        r3,#0
@@ -3678,7 +3658,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402AB4: 4413      add         r3,r3,r2
   00402AB6: 9302      str         r3,[sp,#8]
   00402AB8: 9B02      ldr         r3,[sp,#8]
-  00402ABC: F244 5350 mov         r3,#0x4550
+  00402ABC: F244 5350 mov         r3,#0x4550<16>
   00402AC0: 429A      cmp         r2,r3
   00402AC2: D002      beq         00402ACA
   00402AC4: 2300      movs        r3,#0
@@ -3702,13 +3682,13 @@ namespace Reko.UnitTests.Arch.Arm
   00402AEA: F85D BB04 pop         {r11}
   00402AEE: F85D FB0C ldr         pc,[sp],#0xC
   00402AF2: 0000      movs        r0,r0
-  00402AF4: F24C 0CE4 mov         r12,#0xC0E4
+  00402AF4: F24C 0CE4 mov         r12,#0xC0E4<16>
   00402AF8: F2C0 0C40 movt        r12,#0x40
   00402AFC: F8DC F000 ldr         pc,[r12]
-  00402B00: F24C 0CE0 mov         r12,#0xC0E0
+  00402B00: F24C 0CE0 mov         r12,#0xC0E0<16>
   00402B04: F2C0 0C40 movt        r12,#0x40
   00402B08: F8DC F000 ldr         pc,[r12]
-  00402B0C: F24C 0CDC mov         r12,#0xC0DC
+  00402B0C: F24C 0CDC mov         r12,#0xC0DC<16>
   00402B10: F2C0 0C40 movt        r12,#0x40
   00402B14: F8DC F000 ldr         pc,[r12]
   00402B18: E92D 4800 push        {r11,lr}
@@ -3920,7 +3900,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402CEC: 6138      str         r0,[r7,#0x10]
   00402CEE: 693B      ldr         r3,[r7,#0x10]
   00402CF0: 603B      str         r3,[r7]
-  00402CF4: F1B3 3FFF cmp         r3,#0xFFFFFFFF
+  00402CF4: F1B3 3FFF cmp         r3,#0xFFFFFFFF<32>
   00402CF8: D107      bne         00402D0A
   00402CFA: 6C38      ldr         r0,[r7,#0x40]
   00402CFC: 4B24      ldr         r3,00402D90
@@ -4056,9 +4036,9 @@ namespace Reko.UnitTests.Arch.Arm
   00402E26: 0000      movs        r0,r0
   00402E28: E92D 4830 push        {r4,r5,r11,lr}
   00402E2C: F10D 0B08 add         r11,sp,#8
-  00402E30: F248 739C mov         r3,#0x879C
+  00402E30: F248 739C mov         r3,#0x879C<16>
   00402E34: F2C0 0340 movt        r3,#0x40
-  00402E38: F648 15A4 mov         r5,#0x89A4
+  00402E38: F648 15A4 mov         r5,#0x89A4<16>
   00402E3C: F2C0 0540 movt        r5,#0x40
   00402E40: 1D1C      adds        r4,r3,#4
   00402E42: 1D1B      adds        r3,r3,#4
@@ -4072,9 +4052,9 @@ namespace Reko.UnitTests.Arch.Arm
   00402E54: E8BD 8830 pop         {r4,r5,r11,pc}
   00402E58: E92D 4830 push        {r4,r5,r11,lr}
   00402E5C: F10D 0B08 add         r11,sp,#8
-  00402E60: F648 23A8 mov         r3,#0x8AA8
+  00402E60: F648 23A8 mov         r3,#0x8AA8<16>
   00402E64: F2C0 0340 movt        r3,#0x40
-  00402E68: F648 45B0 mov         r5,#0x8CB0
+  00402E68: F648 45B0 mov         r5,#0x8CB0<16>
   00402E6C: F2C0 0540 movt        r5,#0x40
   00402E70: 1D1C      adds        r4,r3,#4
   00402E72: 1D1B      adds        r3,r3,#4
@@ -4086,19 +4066,19 @@ namespace Reko.UnitTests.Arch.Arm
   00402E80: 42AC      cmp         r4,r5
   00402E82: D3F9      bcc         00402E78
   00402E84: E8BD 8830 pop         {r4,r5,r11,pc}
-  00402E88: F24C 0CD8 mov         r12,#0xC0D8
+  00402E88: F24C 0CD8 mov         r12,#0xC0D8<16>
   00402E8C: F2C0 0C40 movt        r12,#0x40
   00402E90: F8DC F000 ldr         pc,[r12]
-  00402E94: F24C 0CD4 mov         r12,#0xC0D4
+  00402E94: F24C 0CD4 mov         r12,#0xC0D4<16>
   00402E98: F2C0 0C40 movt        r12,#0x40
   00402E9C: F8DC F000 ldr         pc,[r12]
-  00402EA0: F24C 0CD0 mov         r12,#0xC0D0
+  00402EA0: F24C 0CD0 mov         r12,#0xC0D0<16>
   00402EA4: F2C0 0C40 movt        r12,#0x40
   00402EA8: F8DC F000 ldr         pc,[r12]
-  00402EAC: F24C 0CCC mov         r12,#0xC0CC
+  00402EAC: F24C 0CCC mov         r12,#0xC0CC<16>
   00402EB0: F2C0 0C40 movt        r12,#0x40
   00402EB4: F8DC F000 ldr         pc,[r12]
-  00402EB8: F24C 0CC8 mov         r12,#0xC0C8
+  00402EB8: F24C 0CC8 mov         r12,#0xC0C8<16>
   00402EBC: F2C0 0C40 movt        r12,#0x40
   00402EC0: F8DC F000 ldr         pc,[r12]
   00402EC4: E92D 4890 push        {r4,r7,r11,lr}
@@ -4107,7 +4087,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402ECE: 466F      mov         r7,sp
   00402ED0: 2300      movs        r3,#0
   00402ED2: 703B      strb        r3,[r7]
-  00402ED4: F241 0301 mov         r3,#0x1001
+  00402ED4: F241 0301 mov         r3,#0x1001<16>
   00402ED8: 60BB      str         r3,[r7,#8]
   00402EDA: 60F8      str         r0,[r7,#0xC]
   00402EDC: 463B      mov         r3,r7
@@ -4116,7 +4096,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402EE4: 2206      movs        r2,#6
   00402EE6: 2100      movs        r1,#0
   00402EE8: 4806      ldr         r0,00402F04
-  00402EEA: F24C 042C mov         r4,#0xC02C
+  00402EEA: F24C 042C mov         r4,#0xC02C<16>
   00402EEE: F2C0 0440 movt        r4,#0x40
   00402EF4: 47A0      blx         r4
   00402EF6: 7838      ldrb        r0,[r7]
@@ -4133,7 +4113,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402F12: 466F      mov         r7,sp
   00402F14: 2400      movs        r4,#0
   00402F16: 703C      strb        r4,[r7]
-  00402F18: F241 0402 mov         r4,#0x1002
+  00402F18: F241 0402 mov         r4,#0x1002<16>
   00402F1C: 60BC      str         r4,[r7,#8]
   00402F1E: 60F8      str         r0,[r7,#0xC]
   00402F20: 6139      str         r1,[r7,#0x10]
@@ -4145,7 +4125,7 @@ namespace Reko.UnitTests.Arch.Arm
   00402F2E: 2206      movs        r2,#6
   00402F30: 2100      movs        r1,#0
   00402F32: 4806      ldr         r0,00402F4C
-  00402F34: F24C 042C mov         r4,#0xC02C
+  00402F34: F24C 042C mov         r4,#0xC02C<16>
   00402F38: F2C0 0440 movt        r4,#0x40
   00402F3E: 47A0      blx         r4
   00402F40: 7838      ldrb        r0,[r7]
@@ -4159,24 +4139,24 @@ namespace Reko.UnitTests.Arch.Arm
   00402F54: F10D 0B10 add         r11,sp,#0x10
   00402F58: F7FE F864 bl          00401024
   00402F5C: B0D9      sub         sp,sp,#0x164
-  00402F5E: F24A 030C mov         r3,#0xA00C
+  00402F5E: F24A 030C mov         r3,#0xA00C<16>
   00402F62: F2C0 0340 movt        r3,#0x40
   00402F66: 460E      mov         r6,r1
   00402F68: 4607      mov         r7,r0
   00402F6A: 691D      ldr         r5,[r3,#0x10]
-  00402F6C: F1B5 3FFF cmp         r5,#0xFFFFFFFF
+  00402F6C: F1B5 3FFF cmp         r5,#0xFFFFFFFF<32>
   00402F70: D057      beq         00403022
   00402F72: B926      cbnz        r6,00402F7E
-  00402F74: F647 73B0 mov         r3,#0x7FB0
+  00402F74: F647 73B0 mov         r3,#0x7FB0<16>
   00402F78: F2C0 0340 movt        r3,#0x40
   00402F7C: E04C      b           00403018
-  00402F7E: F647 73FC mov         r3,#0x7FFC
+  00402F7E: F647 73FC mov         r3,#0x7FFC<16>
   00402F82: F2C0 0340 movt        r3,#0x40
   00402F86: 9205      str         r2,[sp,#0x14]
-  00402F88: F248 0298 mov         r2,#0x8098
+  00402F88: F248 0298 mov         r2,#0x8098<16>
   00402F8C: F2C0 0240 movt        r2,#0x40
   00402F90: 9306      str         r3,[sp,#0x18]
-  00402F92: F248 0308 mov         r3,#0x8008
+  00402F92: F248 0308 mov         r3,#0x8008<16>
   00402F96: F2C0 0340 movt        r3,#0x40
   00402F9A: F106 0420 add         r4,r6,#0x20
   00402F9E: A81C      add         r0,sp,#0x70
@@ -4186,13 +4166,13 @@ namespace Reko.UnitTests.Arch.Arm
   00402FA6: 9401      str         r4,[sp,#4]
   00402FA8: 3B24      subs        r3,r3,#0x24
   00402FAA: 9303      str         r3,[sp,#0xC]
-  00402FAC: F248 0334 mov         r3,#0x8034
+  00402FAC: F248 0334 mov         r3,#0x8034<16>
   00402FB0: F2C0 0340 movt        r3,#0x40
   00402FB4: 9302      str         r3,[sp,#8]
-  00402FB6: F248 033C mov         r3,#0x803C
+  00402FB6: F248 033C mov         r3,#0x803C<16>
   00402FBA: F2C0 0340 movt        r3,#0x40
   00402FBE: 9300      str         r3,[sp]
-  00402FC0: F248 0350 mov         r3,#0x8050
+  00402FC0: F248 0350 mov         r3,#0x8050<16>
   00402FC4: F2C0 0340 movt        r3,#0x40
   00402FC8: F000 FEAA bl          00403D20
   00402FCC: 68F3      ldr         r3,[r6,#0xC]
@@ -4206,15 +4186,15 @@ namespace Reko.UnitTests.Arch.Arm
   00402FE0: 4604      mov         r4,r0
   00402FE2: A81C      add         r0,sp,#0x70
   00402FE4: F000 F968 bl          004032B8
-  00402FE8: F248 03AC mov         r3,#0x80AC
+  00402FE8: F248 03AC mov         r3,#0x80AC<16>
   00402FEC: F2C0 0340 movt        r3,#0x40
-  00402FF0: F248 02B4 mov         r2,#0x80B4
+  00402FF0: F248 02B4 mov         r2,#0x80B4<16>
   00402FF4: F2C0 0240 movt        r2,#0x40
   00402FF8: F1C4 01F4 rsb         r1,r4,#0xF4
   00402FFC: 9302      str         r3,[sp,#8]
   00402FFE: AB0E      add         r3,sp,#0x38
   00403000: 9301      str         r3,[sp,#4]
-  00403002: F248 03B0 mov         r3,#0x80B0
+  00403002: F248 03B0 mov         r3,#0x80B0<16>
   00403006: F2C0 0340 movt        r3,#0x40
   0040300A: AC1C      add         r4,sp,#0x70
   0040300C: 4420      add         r0,r0,r4
@@ -4305,19 +4285,19 @@ namespace Reko.UnitTests.Arch.Arm
   004030C0: F10D 0B08 add         r11,sp,#8
   004030C4: 2904      cmp         r1,#4
   004030C6: D814      bhi         004030F2
-  004030C8: F24A 030C mov         r3,#0xA00C
+  004030C8: F24A 030C mov         r3,#0xA00C<16>
   004030CC: F2C0 0340 movt        r3,#0x40
   004030D0: F853 4021 ldr         r4,[r3,r1,lsl #2]
-  004030D4: F647 3344 mov         r3,#0x7B44
+  004030D4: F647 3344 mov         r3,#0x7B44<16>
   004030D8: F2C0 0340 movt        r3,#0x40
-  004030DC: F1B4 3FFF cmp         r4,#0xFFFFFFFF
+  004030DC: F1B4 3FFF cmp         r4,#0xFFFFFFFF<32>
   004030E0: F853 3021 ldr         r3,[r3,r1,lsl #2]
   004030E4: D010      beq         00403108
   004030E6: 460A      mov         r2,r1
   004030E8: 4621      mov         r1,r4
   004030EA: F000 F8F1 bl          004032D0
   004030EE: E8BD 8818 pop         {r3,r4,r11,pc}
-  004030F2: F647 3344 mov         r3,#0x7B44
+  004030F2: F647 3344 mov         r3,#0x7B44<16>
   004030F6: F2C0 0340 movt        r3,#0x40
   004030FA: 2401      movs        r4,#1
   004030FC: 2105      movs        r1,#5
@@ -4332,12 +4312,12 @@ namespace Reko.UnitTests.Arch.Arm
   00403128: F10D 0B14 add         r11,sp,#0x14
   0040312C: F7FD FF7A bl          00401024
   00403130: F5AD 6D80 sub         sp,sp,#0x400
-  00403134: F24A 030C mov         r3,#0xA00C
+  00403134: F24A 030C mov         r3,#0xA00C<16>
   00403138: F2C0 0340 movt        r3,#0x40
   0040313C: 460C      mov         r4,r1
   0040313E: 4680      mov         r8,r0
   00403140: 689F      ldr         r7,[r3,#8]
-  00403142: F1B7 3FFF cmp         r7,#0xFFFFFFFF
+  00403142: F1B7 3FFF cmp         r7,#0xFFFFFFFF<32>
   00403146: D037      beq         004031B8
   00403148: F991 3000 ldrsb       r3,[r1]
   0040314C: B353      cbz         r3,004031A4
@@ -4346,7 +4326,7 @@ namespace Reko.UnitTests.Arch.Arm
   00403154: F100 032D add         r3,r0,#0x2D
   00403158: F5B3 6F80 cmp         r3,#0x400
   0040315C: D822      bhi         004031A4
-  0040315E: F647 3574 mov         r5,#0x7B74
+  0040315E: F647 3574 mov         r5,#0x7B74<16>
   00403162: F2C0 0540 movt        r5,#0x40
   00403166: 4668      mov         r0,sp
   00403168: 466E      mov         r6,sp
@@ -4371,7 +4351,7 @@ namespace Reko.UnitTests.Arch.Arm
   0040319C: F802 3B01 strb        r3,[r2],#1
   004031A0: D1F9      bne         00403196
   004031A2: E003      b           004031AC
-  004031A4: F647 7680 movw        r6,#0x7F80
+  004031A4: F647 7680 movw        r6,#0x7F80<16>
   004031A8: F2C0 0640 movt        r6,#0x40
   004031AC: 4633      mov         r3,r6
   004031AE: 2202      movs        r2,#2
@@ -4401,7 +4381,7 @@ namespace Reko.UnitTests.Arch.Arm
   00403260: 4295      cmp         r5,r2
   00403262: D211      bcs         00403288
   00403264: F81A 4009 ldrb        r4,[r10,r9]
-  00403268: F647 72A8 mov         r2,#0x7FA8
+  00403268: F647 72A8 mov         r2,#0x7FA8<16>
   0040326C: F2C0 0240 movt        r2,#0x40
   00403270: F1C7 0131 rsb         r1,r7,#0x31
   00403274: 4623      mov         r3,r4
@@ -4455,7 +4435,7 @@ namespace Reko.UnitTests.Arch.Arm
   004032F4: 4630      mov         r0,r6
   004032F6: F7FF FA2B bl          00402750
   004032FA: 4607      mov         r7,r0
-  004032FC: F24C 0428 mov         r4,#0xC028
+  004032FC: F24C 0428 mov         r4,#0xC028<16>
   00403300: F2C0 0440 movt        r4,#0x40
   00403304: 2300      movs        r3,#0
   00403306: 9301      str         r3,[sp,#4]
@@ -4463,11 +4443,11 @@ namespace Reko.UnitTests.Arch.Arm
   0040330C: 43DB      mvns        r3,r3
   0040330E: 4642      mov         r2,r8
   00403310: 2100      movs        r1,#0
-  00403312: F64F 50E9 mov         r0,#0xFDE9
+  00403312: F64F 50E9 mov         r0,#0xFDE9<16>
   00403316: 47A0      blx         r4
   00403318: F5B0 7F00 cmp         r0,#0x200
   0040331C: D213      bcs         00403346
-  0040331E: F24C 0428 mov         r4,#0xC028
+  0040331E: F24C 0428 mov         r4,#0xC028<16>
   00403322: F2C0 0440 movt        r4,#0x40
   00403326: F60D 2348 add         r3,sp,#0xA48
   0040332A: 9001      str         r0,[sp,#4]
@@ -4475,17 +4455,17 @@ namespace Reko.UnitTests.Arch.Arm
   00403330: F06F 0300 mvn         r3,#0
   00403334: 4642      mov         r2,r8
   00403336: 2100      movs        r1,#0
-  00403338: F64F 50E9 mov         r0,#0xFDE9
+  00403338: F64F 50E9 mov         r0,#0xFDE9<16>
   0040333C: 47A0      blx         r4
   0040333E: B110      cbz         r0,00403346
   00403340: F60D 2448 add         r4,sp,#0xA48
   00403344: E003      b           0040334E
-  00403346: F647 6488 mov         r4,#0x7E88
+  00403346: F647 6488 mov         r4,#0x7E88<16>
   0040334A: F2C0 0440 movt        r4,#0x40
-  0040334E: F241 0002 mov         r0,#0x1002
+  0040334E: F241 0002 mov         r0,#0x1002<16>
   00403352: F7FF FDB7 bl          00402EC4
   00403356: B170      cbz         r0,00403376
-  00403358: F647 335C mov         r3,#0x7B5C
+  00403358: F647 335C mov         r3,#0x7B5C<16>
   0040335C: F2C0 0340 movt        r3,#0x40
   00403360: 4632      mov         r2,r6
   00403362: 4648      mov         r0,r9
@@ -4501,7 +4481,7 @@ namespace Reko.UnitTests.Arch.Arm
   0040337A: 2D00      cmp         r5,#0
   0040337C: D067      beq         0040344E
   0040337E: B13B      cbz         r3,00403390
-  00403380: F24C 0330 mov         r3,#0xC030
+  00403380: F24C 0330 mov         r3,#0xC030<16>
   00403384: F2C0 0340 movt        r3,#0x40
   0040338A: 4798      blx         r3
   0040338C: 2800      cmp         r0,#0
@@ -4515,7 +4495,7 @@ namespace Reko.UnitTests.Arch.Arm
   0040339E: 9201      str         r2,[sp,#4]
   004033A0: F000 FB4E bl          00403A40
   004033A4: B16D      cbz         r5,004033C2
-  004033A6: F647 63F8 mov         r3,#0x7EF8
+  004033A6: F647 63F8 mov         r3,#0x7EF8<16>
   004033AA: F2C0 0340 movt        r3,#0x40
   004033AE: 9A04      ldr         r2,[sp,#0x10]
   004033B0: 4650      mov         r0,r10
@@ -4526,11 +4506,11 @@ namespace Reko.UnitTests.Arch.Arm
   004033BA: F8CD 9004 str         r9,[sp,#4]
   004033BE: 47A8      blx         r5
   004033C0: E043      b           0040344A
-  004033C2: F24C 0424 mov         r4,#0xC024
+  004033C2: F24C 0424 mov         r4,#0xC024<16>
   004033C6: F2C0 0440 movt        r4,#0x40
   004033CA: 2300      movs        r3,#0
   004033CC: F50D 6285 add         r2,sp,#0x428
-  004033D2: F647 7638 mov         r6,#0x7F38
+  004033D2: F647 7638 mov         r6,#0x7F38<16>
   004033D6: F2C0 0640 movt        r6,#0x40
   004033DA: 9303      str         r3,[sp,#0xC]
   004033DC: 9302      str         r3,[sp,#8]
@@ -4539,16 +4519,16 @@ namespace Reko.UnitTests.Arch.Arm
   004033E4: 43DB      mvns        r3,r3
   004033E6: AA88      add         r2,sp,#0x220
   004033E8: 2100      movs        r1,#0
-  004033EA: F64F 50E9 mov         r0,#0xFDE9
+  004033EA: F64F 50E9 mov         r0,#0xFDE9<16>
   004033EE: F8CD 8004 str         r8,[sp,#4]
   004033F2: 47A0      blx         r4
   004033F4: B108      cbz         r0,004033FA
   004033F6: F50D 6685 add         r6,sp,#0x428
-  004033FA: F24C 0424 mov         r4,#0xC024
+  004033FA: F24C 0424 mov         r4,#0xC024<16>
   004033FE: F2C0 0440 movt        r4,#0x40
   00403402: 2300      movs        r3,#0
   00403404: F50D 62E7 add         r2,sp,#0x738
-  0040340A: F647 754C mov         r5,#0x7F4C
+  0040340A: F647 754C mov         r5,#0x7F4C<16>
   0040340E: F2C0 0540 movt        r5,#0x40
   00403412: 9303      str         r3,[sp,#0xC]
   00403414: 9302      str         r3,[sp,#8]
@@ -4556,12 +4536,12 @@ namespace Reko.UnitTests.Arch.Arm
   00403418: 43DB      mvns        r3,r3
   0040341A: AA06      add         r2,sp,#0x18
   0040341C: 2100      movs        r1,#0
-  0040341E: F64F 50E9 mov         r0,#0xFDE9
+  0040341E: F64F 50E9 mov         r0,#0xFDE9<16>
   00403422: F8CD 8004 str         r8,[sp,#4]
   00403426: 47A0      blx         r4
   00403428: B108      cbz         r0,0040342E
   0040342A: F50D 65E7 add         r5,sp,#0x738
-  0040342E: F647 7260 mov         r2,#0x7F60
+  0040342E: F647 7260 mov         r2,#0x7F60<16>
   00403432: F2C0 0240 movt        r2,#0x40
   00403436: 9B05      ldr         r3,[sp,#0x14]
   00403438: 4631      mov         r1,r6
@@ -4584,18 +4564,18 @@ namespace Reko.UnitTests.Arch.Arm
   00403508: F10D 0B10 add         r11,sp,#0x10
   0040350C: F7FD FD8A bl          00401024
   00403510: F2AD 4D04 sub         sp,sp,#0x404
-  00403514: F24A 030C mov         r3,#0xA00C
+  00403514: F24A 030C mov         r3,#0xA00C<16>
   00403518: F2C0 0340 movt        r3,#0x40
   0040351C: 4604      mov         r4,r0
   0040351E: 68DF      ldr         r7,[r3,#0xC]
-  00403520: F1B7 3FFF cmp         r7,#0xFFFFFFFF
+  00403520: F1B7 3FFF cmp         r7,#0xFFFFFFFF<32>
   00403524: D035      beq         00403592
   00403526: B34C      cbz         r4,0040357C
   00403528: F7FF FEC6 bl          004032B8
   0040352C: F100 033A add         r3,r0,#0x3A
   00403530: F5B3 6F80 cmp         r3,#0x400
   00403534: D822      bhi         0040357C
-  00403536: F647 35A4 mov         r5,#0x7BA4
+  00403536: F647 35A4 mov         r5,#0x7BA4<16>
   0040353A: F2C0 0540 movt        r5,#0x40
   0040353E: 4668      mov         r0,sp
   00403540: 466E      mov         r6,sp
@@ -4620,7 +4600,7 @@ namespace Reko.UnitTests.Arch.Arm
   00403574: F802 3B01 strb        r3,[r2],#1
   00403578: D1F9      bne         0040356E
   0040357A: E003      b           00403584
-  0040357C: F248 06C0 mov         r6,#0x80C0
+  0040357C: F248 06C0 mov         r6,#0x80C0<16>
   00403580: F2C0 0640 movt        r6,#0x40
   00403584: F8DD 041C ldr         r0,[sp,#0x41C]
   00403588: 4633      mov         r3,r6
@@ -4631,29 +4611,29 @@ namespace Reko.UnitTests.Arch.Arm
   00403596: F7FD FD51 bl          0040103C
   0040359A: E8BD 88F0 pop         {r4-r7,r11,pc}
 
-  00403618: F24C 0CB8 mov         r12,#0xC0B8
+  00403618: F24C 0CB8 mov         r12,#0xC0B8<16>
   0040361C: F2C0 0C40 movt        r12,#0x40
   00403620: F8DC F000 ldr         pc,[r12]
-  00403624: F24C 0CA0 mov         r12,#0xC0A0
+  00403624: F24C 0CA0 mov         r12,#0xC0A0<16>
   00403628: F2C0 0C40 movt        r12,#0x40
   0040362C: F8DC F000 ldr         pc,[r12]
-  00403630: F24C 0C90 mov         r12,#0xC090
+  00403630: F24C 0C90 mov         r12,#0xC090<16>
   00403634: F2C0 0C40 movt        r12,#0x40
   00403638: F8DC F000 ldr         pc,[r12]
-  0040363C: F24C 0C94 mov         r12,#0xC094
+  0040363C: F24C 0C94 mov         r12,#0xC094<16>
   00403640: F2C0 0C40 movt        r12,#0x40
   00403644: F8DC F000 ldr         pc,[r12]
-  00403648: F24C 0C98 mov         r12,#0xC098
+  00403648: F24C 0C98 mov         r12,#0xC098<16>
   0040364C: F2C0 0C40 movt        r12,#0x40
   00403650: F8DC F000 ldr         pc,[r12]
-  00403654: F24C 0C9C mov         r12,#0xC09C
+  00403654: F24C 0C9C mov         r12,#0xC09C<16>
   00403658: F2C0 0C40 movt        r12,#0x40
   0040365C: F8DC F000 ldr         pc,[r12]
   00403660: E92D 4800 push        {r11,lr}
   00403664: 46EB      mov         r11,sp
   00403666: F7FD FCDD bl          00401024
   0040366A: F2AD 4D14 sub         sp,sp,#0x414
-  0040366E: F24A 1270 mov         r2,#0xA170
+  0040366E: F24A 1270 mov         r2,#0xA170<16>
   00403672: F2C0 0240 movt        r2,#0x40
   00403676: 7813      ldrb        r3,[r2]
   00403678: B133      cbz         r3,00403688
@@ -4666,13 +4646,13 @@ namespace Reko.UnitTests.Arch.Arm
   0040368C: F000 F86E bl          0040376C
   00403690: 2800      cmp         r0,#0
   00403692: D1F3      bne         0040367C
-  00403694: F24C 0304 mov         r3,#0xC004
+  00403694: F24C 0304 mov         r3,#0xC004<16>
   00403698: F2C0 0340 movt        r3,#0x40
-  0040369C: F248 1034 mov         r0,#0x8134
+  0040369C: F248 1034 mov         r0,#0x8134<16>
   004036A0: F2C0 0040 movt        r0,#0x40
   004036A6: 4798      blx         r3
   004036A8: B1E0      cbz         r0,004036E4
-  004036AA: F24C 0308 mov         r3,#0xC008
+  004036AA: F24C 0308 mov         r3,#0xC008<16>
   004036AE: F2C0 0340 movt        r3,#0x40
   004036B2: F44F 7282 mov         r2,#0x104
   004036B6: 4669      mov         r1,sp
@@ -4683,7 +4663,7 @@ namespace Reko.UnitTests.Arch.Arm
   004036C2: F44F 7282 mov         r2,#0x104
   004036C6: F000 F935 bl          00403934
   004036CA: B158      cbz         r0,004036E4
-  004036CC: F24C 0350 mov         r3,#0xC050
+  004036CC: F24C 0350 mov         r3,#0xC050<16>
   004036D0: F2C0 0340 movt        r3,#0x40
   004036D4: F44F 6210 mov         r2,#0x900
   004036D8: 2100      movs        r1,#0
@@ -4691,9 +4671,9 @@ namespace Reko.UnitTests.Arch.Arm
   004036DE: 4798      blx         r3
   004036E0: 2800      cmp         r0,#0
   004036E2: D1CB      bne         0040367C
-  004036E4: F24C 0350 mov         r3,#0xC050
+  004036E4: F24C 0350 mov         r3,#0xC050<16>
   004036E8: F2C0 0340 movt        r3,#0x40
-  004036EC: F248 2058 mov         r0,#0x8258
+  004036EC: F248 2058 mov         r0,#0x8258<16>
   004036F0: F2C0 0040 movt        r0,#0x40
   004036F4: F44F 6220 mov         r2,#0xA00
   004036FA: 2100      movs        r1,#0
@@ -4754,64 +4734,64 @@ namespace Reko.UnitTests.Arch.Arm
   00403770: F10D 0B10 add         r11,sp,#0x10
   00403774: F7FD FC56 bl          00401024
   00403778: F5AD 7D09 sub         sp,sp,#0x224
-  0040377C: F24C 0350 mov         r3,#0xC050
+  0040377C: F24C 0350 mov         r3,#0xC050<16>
   00403780: F2C0 0340 movt        r3,#0x40
-  00403784: F248 1050 mov         r0,#0x8150
+  00403784: F248 1050 mov         r0,#0x8150<16>
   00403788: F2C0 0040 movt        r0,#0x40
   0040378C: F44F 6200 mov         r2,#0x800
   00403792: 2100      movs        r1,#0
   00403794: 4798      blx         r3
   00403796: 4605      mov         r5,r0
   00403798: B9AD      cbnz        r5,004037C6
-  0040379A: F24C 0320 mov         r3,#0xC020
+  0040379A: F24C 0320 mov         r3,#0xC020<16>
   0040379E: F2C0 0340 movt        r3,#0x40
   004037A4: 4798      blx         r3
   004037A6: 2857      cmp         r0,#0x57
   004037A8: D148      bne         0040383C
-  004037AA: F24C 0350 mov         r3,#0xC050
+  004037AA: F24C 0350 mov         r3,#0xC050<16>
   004037AE: F2C0 0340 movt        r3,#0x40
-  004037B2: F248 1050 mov         r0,#0x8150
+  004037B2: F248 1050 mov         r0,#0x8150<16>
   004037B6: F2C0 0040 movt        r0,#0x40
   004037BA: 2200      movs        r2,#0
   004037BE: 2100      movs        r1,#0
   004037C0: 4798      blx         r3
   004037C2: 4605      mov         r5,r0
   004037C4: B3D5      cbz         r5,0040383C
-  004037C6: F24C 0300 movw        r3,#0xC000
+  004037C6: F24C 0300 movw        r3,#0xC000<16>
   004037CA: F2C0 0340 movt        r3,#0x40
-  004037CE: F248 1198 mov         r1,#0x8198
+  004037CE: F248 1198 mov         r1,#0x8198<16>
   004037D2: F2C0 0140 movt        r1,#0x40
   004037D6: 4628      mov         r0,r5
   004037DA: 4798      blx         r3
   004037DC: 4604      mov         r4,r0
   004037DE: B36C      cbz         r4,0040383C
-  004037E0: F24C 0300 movw        r3,#0xC000
+  004037E0: F24C 0300 movw        r3,#0xC000<16>
   004037E4: F2C0 0340 movt        r3,#0x40
-  004037E8: F248 11A8 mov         r1,#0x81A8
+  004037E8: F248 11A8 mov         r1,#0x81A8<16>
   004037EC: F2C0 0140 movt        r1,#0x40
   004037F0: 4628      mov         r0,r5
   004037F4: 4798      blx         r3
   004037F6: 4606      mov         r6,r0
   004037F8: B306      cbz         r6,0040383C
-  004037FA: F24C 0300 movw        r3,#0xC000
+  004037FA: F24C 0300 movw        r3,#0xC000<16>
   004037FE: F2C0 0340 movt        r3,#0x40
-  00403802: F248 11BC mov         r1,#0x81BC
+  00403802: F248 11BC mov         r1,#0x81BC<16>
   00403806: F2C0 0140 movt        r1,#0x40
   0040380A: 4628      mov         r0,r5
   0040380E: 4798      blx         r3
   00403810: 4607      mov         r7,r0
   00403812: B19F      cbz         r7,0040383C
-  00403814: F248 11C8 mov         r1,#0x81C8
+  00403814: F248 11C8 mov         r1,#0x81C8<16>
   00403818: F2C0 0140 movt        r1,#0x40
   0040381C: AB03      add         r3,sp,#0xC
-  0040381E: F04F 4000 mov         r0,#0x80000000
+  0040381E: F04F 4000 mov         r0,#0x80000000<32>
   00403822: 9300      str         r3,[sp]
   00403824: 2301      movs        r3,#1
   00403826: 2200      movs        r2,#0
   00403828: 1C80      adds        r0,r0,#2
   0040382A: 47A0      blx         r4
   0040382C: B168      cbz         r0,0040384A
-  0040382E: F24C 030C mov         r3,#0xC00C
+  0040382E: F24C 030C mov         r3,#0xC00C<16>
   00403832: F2C0 0340 movt        r3,#0x40
   00403836: 4628      mov         r0,r5
   0040383A: 4798      blx         r3
@@ -4823,7 +4803,7 @@ namespace Reko.UnitTests.Arch.Arm
   0040384E: 9302      str         r3,[sp,#8]
   00403850: AB02      add         r3,sp,#8
   00403852: 9301      str         r3,[sp,#4]
-  00403854: F248 2124 mov         r1,#0x8224
+  00403854: F248 2124 mov         r1,#0x8224<16>
   00403858: F2C0 0140 movt        r1,#0x40
   0040385C: 9803      ldr         r0,[sp,#0xC]
   0040385E: AB06      add         r3,sp,#0x18
@@ -4834,7 +4814,7 @@ namespace Reko.UnitTests.Arch.Arm
   00403868: 4604      mov         r4,r0
   0040386A: 9803      ldr         r0,[sp,#0xC]
   0040386C: 47B8      blx         r7
-  0040386E: F24C 030C mov         r3,#0xC00C
+  0040386E: F24C 030C mov         r3,#0xC00C<16>
   00403872: F2C0 0340 movt        r3,#0x40
   00403876: 4628      mov         r0,r5
   0040387A: 4798      blx         r3
@@ -4861,7 +4841,7 @@ namespace Reko.UnitTests.Arch.Arm
   004038AC: 235C      movs        r3,#0x5C
   004038AE: 800B      strh        r3,[r1]
   004038B0: 1C52      adds        r2,r2,#1
-  004038B2: F1C2 33FF rsb         r3,r2,#0xFFFFFFFF
+  004038B2: F1C2 33FF rsb         r3,r2,#0xFFFFFFFF<32>
   004038B6: 2B12      cmp         r3,#0x12
   004038B8: D3C0      bcc         0040383C
   004038BA: F102 0311 add         r3,r2,#0x11
@@ -4869,14 +4849,14 @@ namespace Reko.UnitTests.Arch.Arm
   004038C2: D8BB      bhi         0040383C
   004038C4: AB06      add         r3,sp,#0x18
   004038C6: EB03 0242 add         r2,r3,r2,lsl #1
-  004038CA: F248 1110 mov         r1,#0x8110
+  004038CA: F248 1110 mov         r1,#0x8110<16>
   004038CE: F2C0 0140 movt        r1,#0x40
   004038D2: F102 0022 add         r0,r2,#0x22
   004038D6: F831 3B02 ldrh        r3,[r1],#2
   004038DA: F822 3B02 strh        r3,[r2],#2
   004038DE: 4282      cmp         r2,r0
   004038E0: D1F9      bne         004038D6
-  004038E2: F24C 0350 mov         r3,#0xC050
+  004038E2: F24C 0350 mov         r3,#0xC050<16>
   004038E6: F2C0 0340 movt        r3,#0x40
   004038EA: 2100      movs        r1,#0
   004038EC: F44F 6210 mov         r2,#0x900
@@ -4933,14 +4913,14 @@ namespace Reko.UnitTests.Arch.Arm
   0040396A: F50D 6DC4 add         sp,sp,#0x620
   0040396E: F7FD FB65 bl          0040103C
   00403972: E8BD 8870 pop         {r4-r6,r11,pc}
-  00403976: F248 2244 mov         r2,#0x8244
+  00403976: F248 2244 mov         r2,#0x8244<16>
   0040397A: F2C0 0240 movt        r2,#0x40
   0040397E: A888      add         r0,sp,#0x220
   00403980: 2109      movs        r1,#9
   00403982: F000 FA29 bl          00403DD8
   00403986: 2800      cmp         r0,#0
   00403988: D1EE      bne         00403968
-  0040398A: F248 223C mov         r2,#0x823C
+  0040398A: F248 223C mov         r2,#0x823C<16>
   0040398E: F2C0 0240 movt        r2,#0x40
   00403992: A808      add         r0,sp,#0x20
   00403994: 2104      movs        r1,#4
@@ -4967,7 +4947,7 @@ namespace Reko.UnitTests.Arch.Arm
   00403A42: E92D 4FF0 push        {r4-r11,lr}
   00403A46: F10D 0B1C add         r11,sp,#0x1C
   00403A4A: B097      sub         sp,sp,#0x5C
-  00403A4C: F24C 0410 mov         r4,#0xC010
+  00403A4C: F24C 0410 mov         r4,#0xC010<16>
   00403A50: F2C0 0440 movt        r4,#0x40
   00403A54: 4605      mov         r5,r0
   00403A56: F04F 0800 mov         r8,#0
@@ -4986,7 +4966,7 @@ namespace Reko.UnitTests.Arch.Arm
   00403A78: B017      add         sp,sp,#0x5C
   00403A7A: E8BD 0FF0 pop         {r4-r11}
   00403A7E: F85D FB14 ldr         pc,[sp],#0x14
-  00403A82: F24C 0308 mov         r3,#0xC008
+  00403A82: F24C 0308 mov         r3,#0xC008<16>
   00403A86: F2C0 0340 movt        r3,#0x40
   00403A8A: 9A25      ldr         r2,[sp,#0x94]
   00403A8C: 9924      ldr         r1,[sp,#0x90]
@@ -4995,7 +4975,7 @@ namespace Reko.UnitTests.Arch.Arm
   00403A94: 2800      cmp         r0,#0
   00403A96: D0ED      beq         00403A74
   00403A98: 9911      ldr         r1,[sp,#0x44]
-  00403A9A: F645 234D mov         r3,#0x5A4D
+  00403A9A: F645 234D mov         r3,#0x5A4D<16>
   00403A9E: 880A      ldrh        r2,[r1]
   00403AA0: 429A      cmp         r2,r3
   00403AA2: D1E7      bne         00403A74
@@ -5004,7 +4984,7 @@ namespace Reko.UnitTests.Arch.Arm
   00403AA8: DDE4      ble         00403A74
   00403AAA: 585A      ldr         r2,[r3,r1]
   00403AAC: 185C      adds        r4,r3,r1
-  00403AAE: F244 5350 mov         r3,#0x4550
+  00403AAE: F244 5350 mov         r3,#0x4550<16>
   00403AB2: 429A      cmp         r2,r3
   00403AB4: D1DE      bne         00403A74
   00403AB6: 8AA3      ldrh        r3,[r4,#0x14]
@@ -5028,9 +5008,9 @@ namespace Reko.UnitTests.Arch.Arm
   00403ADC: D3F4      bcc         00403AC8
   00403ADE: 4285      cmp         r5,r0
   00403AE0: D0C8      beq         00403A74
-  00403AE2: F24A 1671 mov         r6,#0xA171
+  00403AE2: F24A 1671 mov         r6,#0xA171<16>
   00403AE6: F2C0 0640 movt        r6,#0x40
-  00403AEA: F24A 146C mov         r4,#0xA16C
+  00403AEA: F24A 146C mov         r4,#0xA16C<16>
   00403AEE: F2C0 0440 movt        r4,#0x40
   00403AF2: 1C6D      adds        r5,r5,#1
   00403AF4: 7833      ldrb        r3,[r6]
@@ -5044,9 +5024,9 @@ namespace Reko.UnitTests.Arch.Arm
   00403B08: 2301      movs        r3,#1
   00403B0A: 7033      strb        r3,[r6]
   00403B0C: E000      b           00403B10
-  00403B10: F24C 0300 movw        r3,#0xC000
+  00403B10: F24C 0300 movw        r3,#0xC000<16>
   00403B14: F2C0 0340 movt        r3,#0x40
-  00403B18: F248 216C mov         r1,#0x826C
+  00403B18: F248 216C mov         r1,#0x826C<16>
   00403B1C: F2C0 0140 movt        r1,#0x40
   00403B22: 4798      blx         r3
   00403B24: 4604      mov         r4,r0
@@ -5073,7 +5053,7 @@ namespace Reko.UnitTests.Arch.Arm
   00403B56: 4298      cmp         r0,r3
   00403B58: F040 80C8 bne         00403CEC
   00403B5C: 9C08      ldr         r4,[sp,#0x20]
-  00403B5E: F248 2280 mov         r2,#0x8280
+  00403B5E: F248 2280 mov         r2,#0x8280<16>
   00403B62: F2C0 0240 movt        r2,#0x40
   00403B66: AB0A      add         r3,sp,#0x28
   00403B68: 4620      mov         r0,r4
@@ -5147,16 +5127,16 @@ namespace Reko.UnitTests.Arch.Arm
   00403C14: 9A06      ldr         r2,[sp,#0x18]
   00403C16: 2A00      cmp         r2,#0
   00403C18: D059      beq         00403CCE
-  00403C1A: F06F 4360 mvn         r3,#0xE0000000
+  00403C1A: F06F 4360 mvn         r3,#0xE0000000<32>
   00403C1E: 429A      cmp         r2,r3
   00403C20: D255      bcs         00403CCE
-  00403C22: F24C 0314 mov         r3,#0xC014
+  00403C22: F24C 0314 mov         r3,#0xC014<16>
   00403C26: F2C0 0340 movt        r3,#0x40
   00403C2C: 4798      blx         r3
   00403C2E: 9B06      ldr         r3,[sp,#0x18]
   00403C30: 2100      movs        r1,#0
   00403C32: 00DA      lsls        r2,r3,#3
-  00403C34: F24C 031C mov         r3,#0xC01C
+  00403C34: F24C 031C mov         r3,#0xC01C<16>
   00403C38: F2C0 0340 movt        r3,#0x40
   00403C3E: 4798      blx         r3
   00403C40: 4680      mov         r8,r0
@@ -5195,7 +5175,7 @@ namespace Reko.UnitTests.Arch.Arm
   00403C8C: F853 3C04 ldr         r3,[r3,#-4]
   00403C90: 9A0C      ldr         r2,[sp,#0x30]
   00403C92: 9C07      ldr         r4,[sp,#0x1C]
-  00403C94: F023 437F bic         r3,r3,#0xFF000000
+  00403C94: F023 437F bic         r3,r3,#0xFF000000<32>
   00403C98: 6013      str         r3,[r2]
   00403C9A: 4620      mov         r0,r4
   00403C9E: 9A0D      ldr         r2,[sp,#0x34]
@@ -5208,10 +5188,10 @@ namespace Reko.UnitTests.Arch.Arm
   00403CAC: 47A0      blx         r4
   00403CAE: B100      cbz         r0,00403CB2
   00403CB0: 2601      movs        r6,#1
-  00403CB2: F24C 0314 mov         r3,#0xC014
+  00403CB2: F24C 0314 mov         r3,#0xC014<16>
   00403CB6: F2C0 0340 movt        r3,#0x40
   00403CBC: 4798      blx         r3
-  00403CBE: F24C 0318 mov         r3,#0xC018
+  00403CBE: F24C 0318 mov         r3,#0xC018<16>
   00403CC2: F2C0 0340 movt        r3,#0x40
   00403CC6: 4642      mov         r2,r8
   00403CC8: 2100      movs        r1,#0
@@ -5239,7 +5219,7 @@ namespace Reko.UnitTests.Arch.Arm
   00403D04: 9141      str         r1,[sp,#0x104]
   00403D06: 0132      lsls        r2,r6,#4
 
-  00403D20: F24C 0CA4 mov         r12,#0xC0A4
+  00403D20: F24C 0CA4 mov         r12,#0xC0A4<16>
   00403D24: F2C0 0C40 movt        r12,#0x40
   00403D28: F8DC F000 ldr         pc,[r12]
   00403D2C: B40F      push        {r0-r3}
@@ -5286,16 +5266,16 @@ namespace Reko.UnitTests.Arch.Arm
   00403DAC: F85D BB04 pop         {r11}
   00403DB0: F85D FB14 ldr         pc,[sp],#0x14
 
-  00403DCC: F24C 0CA8 mov         r12,#0xC0A8
+  00403DCC: F24C 0CA8 mov         r12,#0xC0A8<16>
   00403DD0: F2C0 0C40 movt        r12,#0x40
   00403DD4: F8DC F000 ldr         pc,[r12]
-  00403DD8: F24C 0CAC mov         r12,#0xC0AC
+  00403DD8: F24C 0CAC mov         r12,#0xC0AC<16>
   00403DDC: F2C0 0C40 movt        r12,#0x40
   00403DE0: F8DC F000 ldr         pc,[r12]
-  00403DE4: F24C 0CB0 mov         r12,#0xC0B0
+  00403DE4: F24C 0CB0 mov         r12,#0xC0B0<16>
   00403DE8: F2C0 0C40 movt        r12,#0x40
   00403DEC: F8DC F000 ldr         pc,[r12]
-  00403DF0: F24C 0CB4 mov         r12,#0xC0B4
+  00403DF0: F24C 0CB4 mov         r12,#0xC0B4<16>
   00403DF4: F2C0 0C40 movt        r12,#0x40
   00403DF8: F8DC F000 ldr         pc,[r12]
   00403DFC: B403      push        {r0,r1}
@@ -5319,67 +5299,67 @@ namespace Reko.UnitTests.Arch.Arm
   00403E42: 46EB      mov         r11,sp
   00403E44: 9802      ldr         r0,[sp,#8]
   00403E46: DEFB      __fastfail
-  00403E48: F24C 0C4C mov         r12,#0xC04C
+  00403E48: F24C 0C4C mov         r12,#0xC04C<16>
   00403E4C: F2C0 0C40 movt        r12,#0x40
   00403E50: F8DC F000 ldr         pc,[r12]
-  00403E54: F24C 0C48 mov         r12,#0xC048
+  00403E54: F24C 0C48 mov         r12,#0xC048<16>
   00403E58: F2C0 0C40 movt        r12,#0x40
   00403E5C: F8DC F000 ldr         pc,[r12]
-  00403E60: F24C 0C44 mov         r12,#0xC044
+  00403E60: F24C 0C44 mov         r12,#0xC044<16>
   00403E64: F2C0 0C40 movt        r12,#0x40
   00403E68: F8DC F000 ldr         pc,[r12]
-  00403E6C: F24C 0C40 mov         r12,#0xC040
+  00403E6C: F24C 0C40 mov         r12,#0xC040<16>
   00403E70: F2C0 0C40 movt        r12,#0x40
   00403E74: F8DC F000 ldr         pc,[r12]
-  00403E78: F24C 0C3C mov         r12,#0xC03C
+  00403E78: F24C 0C3C mov         r12,#0xC03C<16>
   00403E7C: F2C0 0C40 movt        r12,#0x40
   00403E80: F8DC F000 ldr         pc,[r12]
-  00403E84: F24C 0C38 mov         r12,#0xC038
+  00403E84: F24C 0C38 mov         r12,#0xC038<16>
   00403E88: F2C0 0C40 movt        r12,#0x40
   00403E8C: F8DC F000 ldr         pc,[r12]
-  00403E90: F24C 0C34 mov         r12,#0xC034
+  00403E90: F24C 0C34 mov         r12,#0xC034<16>
   00403E94: F2C0 0C40 movt        r12,#0x40
   00403E98: F8DC F000 ldr         pc,[r12]
-  00403E9C: F24C 0C30 mov         r12,#0xC030
+  00403E9C: F24C 0C30 mov         r12,#0xC030<16>
   00403EA0: F2C0 0C40 movt        r12,#0x40
   00403EA4: F8DC F000 ldr         pc,[r12]
-  00403EA8: F24C 0C2C mov         r12,#0xC02C
+  00403EA8: F24C 0C2C mov         r12,#0xC02C<16>
   00403EAC: F2C0 0C40 movt        r12,#0x40
   00403EB0: F8DC F000 ldr         pc,[r12]
-  00403EB4: F24C 0C28 mov         r12,#0xC028
+  00403EB4: F24C 0C28 mov         r12,#0xC028<16>
   00403EB8: F2C0 0C40 movt        r12,#0x40
   00403EBC: F8DC F000 ldr         pc,[r12]
-  00403EC0: F24C 0C24 mov         r12,#0xC024
+  00403EC0: F24C 0C24 mov         r12,#0xC024<16>
   00403EC4: F2C0 0C40 movt        r12,#0x40
   00403EC8: F8DC F000 ldr         pc,[r12]
-  00403ECC: F24C 0C20 mov         r12,#0xC020
+  00403ECC: F24C 0C20 mov         r12,#0xC020<16>
   00403ED0: F2C0 0C40 movt        r12,#0x40
   00403ED4: F8DC F000 ldr         pc,[r12]
-  00403ED8: F24C 0C1C mov         r12,#0xC01C
+  00403ED8: F24C 0C1C mov         r12,#0xC01C<16>
   00403EDC: F2C0 0C40 movt        r12,#0x40
   00403EE0: F8DC F000 ldr         pc,[r12]
-  00403EE4: F24C 0C18 mov         r12,#0xC018
+  00403EE4: F24C 0C18 mov         r12,#0xC018<16>
   00403EE8: F2C0 0C40 movt        r12,#0x40
   00403EEC: F8DC F000 ldr         pc,[r12]
-  00403EF0: F24C 0C14 mov         r12,#0xC014
+  00403EF0: F24C 0C14 mov         r12,#0xC014<16>
   00403EF4: F2C0 0C40 movt        r12,#0x40
   00403EF8: F8DC F000 ldr         pc,[r12]
-  00403EFC: F24C 0C10 mov         r12,#0xC010
+  00403EFC: F24C 0C10 mov         r12,#0xC010<16>
   00403F00: F2C0 0C40 movt        r12,#0x40
   00403F04: F8DC F000 ldr         pc,[r12]
-  00403F08: F24C 0C0C mov         r12,#0xC00C
+  00403F08: F24C 0C0C mov         r12,#0xC00C<16>
   00403F0C: F2C0 0C40 movt        r12,#0x40
   00403F10: F8DC F000 ldr         pc,[r12]
-  00403F14: F24C 0C08 mov         r12,#0xC008
+  00403F14: F24C 0C08 mov         r12,#0xC008<16>
   00403F18: F2C0 0C40 movt        r12,#0x40
   00403F1C: F8DC F000 ldr         pc,[r12]
-  00403F20: F24C 0C04 mov         r12,#0xC004
+  00403F20: F24C 0C04 mov         r12,#0xC004<16>
   00403F24: F2C0 0C40 movt        r12,#0x40
   00403F28: F8DC F000 ldr         pc,[r12]
-  00403F2C: F24C 0C00 movw        r12,#0xC000
+  00403F2C: F24C 0C00 movw        r12,#0xC000<16>
   00403F30: F2C0 0C40 movt        r12,#0x40
   00403F34: F8DC F000 ldr         pc,[r12]
-  00403F38: F24C 0C50 mov         r12,#0xC050
+  00403F38: F24C 0C50 mov         r12,#0xC050<16>
   00403F3C: F2C0 0C40 movt        r12,#0x40
   00403F40: F8DC F000 ldr         pc,[r12]
   
@@ -5495,29 +5475,29 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_push()
         {
-            BuildTest(0xE92D, 0x4800); // "push.w\t{fp,lr}"
+            Given_UInt16s(0xE92D, 0x4800); // "push.w\t{fp,lr}"
             AssertCode(
                 "0|L--|00100000(4): 3 instructions",
-                "1|L--|sp = sp - 8",
+                "1|L--|sp = sp - 8<i32>",
                 "2|L--|Mem0[sp:word32] = fp",
-                "3|L--|Mem0[sp + 4:word32] = lr");
+                "3|L--|Mem0[sp + 4<i32>:word32] = lr");
         }
 
         [Test]
         public void ThumbRw_pop()
         {
-            BuildTest(0xE8BD, 0x8800); // pop.w\t{fp,pc}
+            Given_UInt16s(0xE8BD, 0x8800); // pop.w\t{fp,pc}
             AssertCode(
                 "0|T--|00100000(4): 3 instructions",
                 "1|L--|fp = Mem0[sp:word32]",
-                "2|L--|sp = sp + 8",
+                "2|L--|sp = sp + 8<i32>",
                 "3|T--|return (0,0)");
         }
 
         [Test]
         public void ThumbRw_mov()
         {
-            BuildTest(0x46EB); // mov\tfp,sp
+            Given_UInt16s(0x46EB); // mov\tfp,sp
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
                 "1|L--|fp = sp");
@@ -5526,16 +5506,16 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_sub_sp()
         {
-            BuildTest(0xB082); // sub\tsp,#8
+            Given_UInt16s(0xB082); // sub\tsp,#8
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
-                "1|L--|sp = sp - 8");
+                "1|L--|sp = sp - 8<i32>");
         }
 
         [Test]
         public void ThumbRw_bl()
         {
-            BuildTest(0xF000, 0xFA06); // bl\t$00100410
+            Given_UInt16s(0xF000, 0xFA06); // bl\t$00100410
             AssertCode(
                 "0|T--|00100000(4): 1 instructions",
                 "1|T--|call 00100410 (0)");
@@ -5544,7 +5524,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_str()
         {
-            BuildTest(0x9000); // str\tr0,[sp]
+            Given_UInt16s(0x9000); // str\tr0,[sp]
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
                 "1|L--|Mem0[sp:word32] = r0");
@@ -5553,7 +5533,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_ldr()
         {
-            BuildTest(0x9B00); // ldr\tr3,[sp]
+            Given_UInt16s(0x9B00); // ldr\tr3,[sp]
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
                 "1|L--|r3 = Mem0[sp:word32]");
@@ -5562,52 +5542,52 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_ldr_displacement()
         {
-            BuildTest(0x9801); // ldr\tr0,[sp,#4]
+            Given_UInt16s(0x9801); // ldr\tr0,[sp,#4]
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
-                "1|L--|r0 = Mem0[sp + 4:word32]");
+                "1|L--|r0 = Mem0[sp + 4<i32>:word32]");
         }
 
         [Test]
         public void ThumbRw_add()
         {
-            BuildTest(0xB002); // add\tsp,#8
+            Given_UInt16s(0xB002); // add\tsp,#8
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
-                "1|L--|sp = sp + 8");
+                "1|L--|sp = sp + 8<i32>");
         }
 
         [Test]
         public void ThumbRw_addw()
         {
-            BuildTest(0xF60D, 0x2348);  // add         r3,sp,#0xA48
+            Given_UInt16s(0xF60D, 0x2348);  // add         r3,sp,#0xA48
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r3 = sp + 0x00000A48");
+                "1|L--|r3 = sp + 0xA48<32>");
         }
 
         [Test]
         public void ThumbRw_movw()
         {
-            BuildTest(0xF24C, 0x1C00); // movw        r12,#0xC100
+            Given_UInt16s(0xF24C, 0x1C00); // movw        r12,#0xC100<16>
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|ip = 0x0000C100");
+                "1|L--|ip = 0xC100<32>");
         }
 
         [Test]
         public void ThumbRw_movt()
         {
-            BuildTest(0xF2C0, 0x0C40);  // movt        r12,#0x40
+            Given_UInt16s(0xF2C0, 0x0C40);  // movt        r12,#0x40
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|ip = DPB(ip, 0x0040, 16)");
+                "1|L--|ip = DPB(ip, 0x40<16>, 16)");
         }
 
         [Test]
         public void ThumbRw_bx()
         {
-            BuildTest(0x4760);  // bx          r12
+            Given_UInt16s(0x4760);  // bx          r12
             AssertCode(
                 "0|T--|00100000(2): 1 instructions",
                 "1|T--|goto ip");
@@ -5616,7 +5596,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_cmp()
         {
-            BuildTest(0x4563);  // cmp         r3,r12
+            Given_UInt16s(0x4563);  // cmp         r3,r12
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
                 "1|L--|NZCV = cond(r3 - ip)");
@@ -5625,7 +5605,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_clz()
         {
-            RewriteCode("B2FA82F2");	// clz r2, r2
+            Given_HexString("B2FA82F2");	// clz r2, r2
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r2 = __clz(r2)");
@@ -5634,7 +5614,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_cmn()
         {
-            RewriteCode("EA42");	// cmn r2, r5
+            Given_HexString("EA42");	// cmn r2, r5
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
                 "1|L--|NZCV = cond(r2 + r5)");
@@ -5643,7 +5623,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_bne()
         {
-            BuildTest(0xD101);  // bne         00401056
+            Given_UInt16s(0xD101);  // bne         00401056
             AssertCode(
                 "0|T--|00100000(2): 1 instructions",
                 "1|T--|if (Test(NE,Z)) branch 00100006");
@@ -5652,16 +5632,16 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_bic()
         {
-            BuildTest(0xF02C, 0x0C07);  // bic         r12,r12,#7
+            Given_UInt16s(0xF02C, 0x0C07);  // bic         r12,r12,#7
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|ip = ip & ~0x00000007");
+                "1|L--|ip = ip & ~7<32>");
         }
         
         [Test]
         public void ThumbRw_adr()
         {
-            BuildTest(0xA020);  // adr         r0,0040111C
+            Given_UInt16s(0xA020);  // adr         r0,0040111C
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
                 "1|L--|r0 = 00100080");
@@ -5670,17 +5650,17 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_lsls()
         {
-            BuildTest(0x0040);  // lsls        r0,#1
+            Given_UInt16s(0x0040);  // lsls        r0,#1
             AssertCode(
                 "0|L--|00100000(2): 2 instructions",
-                "1|L--|r0 = r0 << 1",
+                "1|L--|r0 = r0 << 1<i32>",
                 "2|L--|NZC = cond(r0)");
         }
 
         [Test]
         public void ThumbRw_lsls_long()
         {
-            RewriteCode("12FA00F0");    // lsl r0,r2,r0
+            Given_HexString("12FA00F0");    // lsl r0,r2,r0
             AssertCode(
                 "0|L--|00100000(4): 2 instructions",
                 "1|L--|r0 = r2 << r0",
@@ -5692,16 +5672,16 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_trap()
         {
-            BuildTest(0xDEFE);  // __debugbreak
+            Given_UInt16s(0xDEFE);  // __debugbreak
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
-                "1|L--|__syscall(0x000000FE)");
+                "1|L--|__syscall(0xFE<32>)");
         }
 
         [Test]
         public void ThumbRw_blx()
         {
-            BuildTest(0x4798);  // blx         r3
+            Given_UInt16s(0x4798);  // blx         r3
             AssertCode(
                 "0|T--|00100000(2): 1 instructions",
                 "1|T--|call r3 (0)");
@@ -5710,35 +5690,35 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_stm()
         {
-            BuildTest(0xC108);  // stm         r1!,{r3}
+            Given_UInt16s(0xC108);  // stm         r1!,{r3}
             AssertCode(
                 "0|L--|00100000(2): 2 instructions",
                 "1|L--|Mem0[r1:word32] = r3",
-                "2|L--|r1 = r1 + 4");
+                "2|L--|r1 = r1 + 4<i32>");
         }
 
         [Test]
         public void ThumbRw_ldrb()
         {
-            BuildTest(0x7858);  // ldrb        r0,[r3,#1]
+            Given_UInt16s(0x7858);  // ldrb        r0,[r3,#1]
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
-                "1|L--|r0 = (word32) Mem0[r3 + 1:byte]");
+                "1|L--|r0 = (word32) Mem0[r3 + 1<i32>:byte]");
         }
 
         [Test]
         public void ThumbRw_cbnz()
         {
-            BuildTest(0xB95B);  // cbnz        r3,0040219C)
+            Given_UInt16s(0xB95B);  // cbnz        r3,0040219C)
             AssertCode(
                 "0|T--|00100000(2): 1 instructions",
-                "1|T--|if (r3 != 0x00000000) branch 0010001A");
+                "1|T--|if (r3 != 0<32>) branch 0010001A");
         }
 
         [Test]
         public void ThumbRw_strb()
         {
-            BuildTest(0x7013);  // strb        r3,[r2]
+            Given_UInt16s(0x7013);  // strb        r3,[r2]
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
                 "1|L--|Mem0[r2:byte] = (byte) r3");
@@ -5747,17 +5727,17 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_mvn()
         {
-            BuildTest(0xF06F, 0x0000);  // mvn         r0,#0
+            Given_UInt16s(0xF06F, 0x0000);  // mvn         r0,#0
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r0 = ~0x00000000");
+                "1|L--|r0 = ~0<32>");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_dmbc()
         {
-            BuildTest(0xF3BF, 0x8F5B);  // dmb         ish
+            Given_UInt16s(0xF3BF, 0x8F5B);  // dmb         ish
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|mrc(p15, 0x00, r3, c13, c0, 0x02);");
@@ -5766,7 +5746,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_ands()
         {
-            BuildTest(0x4000);  // ands        r0,r0,r0
+            Given_UInt16s(0x4000);  // ands        r0,r0,r0
             AssertCode(
                 "0|L--|00100000(2): 2 instructions",
                 "1|L--|r0 = r0 & r0",
@@ -5776,16 +5756,16 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_tstw()
         {
-            BuildTest(0xF013, 0x4F00);  // tst         r3,#0x80000000
+            Given_UInt16s(0xF013, 0x4F00);  // tst         r3,#0x80000000<32>
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|NZC = cond(r3 & 0x80000000)");
+                "1|L--|NZC = cond(r3 & 0x80000000<32>)");
         }
         
         [Test]
         public void ThumbRw_eors()
         {
-            BuildTest(0x4053);  // eors        r3,r3,r2
+            Given_UInt16s(0x4053);  // eors        r3,r3,r2
             AssertCode(
                 "0|L--|00100000(2): 2 instructions",
                 "1|L--|r3 = r3 ^ r2",
@@ -5795,54 +5775,54 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_cbz()
         {
-            BuildTest(0xB103);  // cbz         r3,00402E50
+            Given_UInt16s(0xB103);  // cbz         r3,00402E50
             AssertCode(
                 "0|T--|00100000(2): 1 instructions",
-                "1|T--|if (r3 == 0x00000000) branch 00100004");
+                "1|T--|if (r3 == 0<32>) branch 00100004");
         }
 
         [Test]
         public void ThumbRw_asrs()
         {
-            BuildTest(0x1388);  // asrs        r0,r1,#0xE
+            Given_UInt16s(0x1388);  // asrs        r0,r1,#0xE
             AssertCode(
                 "0|L--|00100000(2): 2 instructions",
-                "1|L--|r0 = r1 >> 14",
+                "1|L--|r0 = r1 >> 14<i32>",
                 "2|L--|NZC = cond(r0)");
         }
 
         [Test]
         public void ThumbRw_rsb()
         {
-            BuildTest(0xF1C4, 0x01F4);   // rsb         r1,r4,#0xF4
+            Given_UInt16s(0xF1C4, 0x01F4);   // rsb         r1,r4,#0xF4
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r1 = 0x000000F4 - r4");
+                "1|L--|r1 = 0xF4<32> - r4");
         }
 
 
         [Test]
         public void ThumbRw_subw()
         {
-            BuildTest(0xF6AD, 0x6D48);  // sub         sp,sp,#0xE48
+            Given_UInt16s(0xF6AD, 0x6D48);  // sub         sp,sp,#0xE48
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|sp = sp - 0x00000E48");
+                "1|L--|sp = sp - 0xE48<32>");
         }
 
         [Test]
         public void ThumbRw_svc()
         {
-            RewriteCode("4EDF");	// svc #0x4e
+            Given_HexString("4EDF");	// svc #0x4e
             AssertCode(
                 "0|T--|00100000(2): 1 instructions",
-                "1|L--|__syscall(0x0000004E)");
+                "1|L--|__syscall(0x4E<32>)");
         }
 
         [Test]
         public void ThumbRw_strh()
         {
-            BuildTest(0x800B);  // strh        r3,[r1]
+            Given_UInt16s(0x800B);  // strh        r3,[r1]
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
                 "1|L--|Mem0[r1:word16] = (uint16) r3");
@@ -5851,7 +5831,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_uxtb()
         {
-            RewriteCode("E8B2");	// uxtb r0, r5
+            Given_HexString("E8B2");	// uxtb r0, r5
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
                 "1|L--|r0 = (uint32) (byte) r5");
@@ -5860,7 +5840,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_uxth()
         {
-            BuildTest(0xB2A9);  // uxth        r1,r5
+            Given_UInt16s(0xB2A9);  // uxth        r1,r5
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
                 "1|L--|r1 = (uint32) (uint16) r5");
@@ -5869,15 +5849,15 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw__fastfail()
         {
-            BuildTest(0xDEFB);  // __fastfail
+            Given_UInt16s(0xDEFB);  // __fastfail
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
-                "1|L--|__syscall(0x000000FB)");
+                "1|L--|__syscall(0xFB<32>)");
         }
 
         public void ThumbRw_ldrb_preIndex()
         {
-            BuildTest(0xF812, 0x3F01);  // ldrb        r3,[r2,#1]!
+            Given_UInt16s(0xF812, 0x3F01);  // ldrb        r3,[r2,#1]!
             AssertCode(
                 "0|L--|00100000(4): 2 instructions",
                 "1|L--|r2 = r2 + 1",
@@ -5887,27 +5867,27 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_ldr_postIndex()
         {
-            BuildTest(0xF85D, 0xFB0C);  // ldr         pc,[sp],#0xC
+            Given_UInt16s(0xF85D, 0xFB0C);  // ldr         pc,[sp],#0xC
             AssertCode(
                 "0|T--|00100000(4): 3 instructions",
                 "1|L--|v4 = Mem0[sp:word32]",
-                "2|L--|sp = sp + 12",
+                "2|L--|sp = sp + 12<i32>",
                 "3|T--|goto v4");
         }
 
         [Test]
         public void ThumbRw_ldrd()
         {
-            RewriteCode("DDE90C23");	// ldrd r2, r3, [sp, #0x30]
+            Given_HexString("DDE90C23");	// ldrd r2, r3, [sp, #0x30]
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r3_r2 = Mem0[sp + 48:word64]");
+                "1|L--|r3_r2 = Mem0[sp + 48<i32>:word64]");
         }
 
         [Test]
         public void ThumbRw_ldrsb()
         {
-            BuildTest(0xF991, 0x3000);  // ldrsb       r3,[r1]
+            Given_UInt16s(0xF991, 0x3000);  // ldrsb       r3,[r1]
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r3 = (word32) Mem0[r1:int8]");
@@ -5917,36 +5897,36 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_ldrsh()
         {
-            RewriteCode("B6F94946");	// ldrsh.w r4, [r6, #0x649]
+            Given_HexString("B6F94946");	// ldrsh.w r4, [r6, #0x649]
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r4 = (word32) Mem0[r6 + 1609:int16]");
+                "1|L--|r4 = (word32) Mem0[r6 + 1609<i32>:int16]");
         }
 
         [Test]
         public void ThumbRw_strb_preIndex()
         {
-            BuildTest(0xF801, 0x0F01);  // strb.w r0, [r1, #1]!
+            Given_UInt16s(0xF801, 0x0F01);  // strb.w r0, [r1, #1]!
             AssertCode(
                 "0|L--|00100000(4): 2 instructions",
-                "1|L--|r1 = r1 + 1",
+                "1|L--|r1 = r1 + 1<i32>",
                 "2|L--|Mem0[r1:byte] = (byte) r0");
         }
 
         [Test]
         public void ThumbRw_strb_postIndex()
         {
-            BuildTest(0xF802, 0x3B01);  // strb        r3,[r2],#1
+            Given_UInt16s(0xF802, 0x3B01);  // strb        r3,[r2],#1
             AssertCode(
                 "0|L--|00100000(4): 2 instructions",
                 "1|L--|Mem0[r2:byte] = (byte) r3",
-                "2|L--|r2 = r2 + 1");
+                "2|L--|r2 = r2 + 1<i32>");
         }
 
         [Test]
         public void ThumbRw_ldr_pc()
         {
-            BuildTest(0xF8DC, 0xF000);  // ldr         pc,[r12]
+            Given_UInt16s(0xF8DC, 0xF000);  // ldr         pc,[r12]
             AssertCode(
                 "0|T--|00100000(4): 1 instructions",
                 "1|T--|goto Mem0[ip:word32]");
@@ -5955,7 +5935,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_it_mi()
         {
-            BuildTest(
+            Given_UInt16s(
                 0xBF48,    // it    mi
                 0x4632);   // mov   r2,r6
             AssertCode(
@@ -5969,7 +5949,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_itt_mi()
         {
-            BuildTest(
+            Given_UInt16s(
                 0xBF44,     // itt  mi
                 0x4632,     // mov  r2,r6
                 0x4633);    // mov  r3,r6
@@ -5987,7 +5967,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_ite_eq()
         {
-            BuildTest(
+            Given_UInt16s(
                 0xBF0C,     // ite  eq
                 0x4632,     // mov  r2,r6
                 0x4633);    // mov  r3,r6
@@ -6005,36 +5985,35 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_mcr()
         {
-            RewriteCode("01EE100F");	// mcr p15, #0, r0, c1, c0, #0
+            Given_HexString("01EE100F");	// mcr p15, #0, r0, c1, c0, #0
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|__mcr(p15, 0x00000000, r0, c1, c0, 0x00000000)");
+                "1|L--|__mcr(p15, 0<32>, r0, cr1, cr0, 0<32>)");
         }
 
         [Test]
         public void ThumbRw_mrc()
         {
-            BuildTest(0xEE1D, 0x3F50);  // mrc         p15,#0,r3,c13,c0,#2
+            Given_UInt16s(0xEE1D, 0x3F50);  // mrc         p15,#0,r3,c13,c0,#2
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r3 = __mrc(p15, 0x00000000, c13, c0, 0x00000002)");
+                "1|L--|r3 = __mrc(p15, 0<32>, cr13, cr0, 2<32>)");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_vnmls()
         {
-            RewriteCode("11EE0B0A");	// vnmls.f32 s0, s2, s22
+            Given_HexString("11EE0B0A");	// vnmls.f32 s0, s2, s22
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|s0 = __vmls_f32(s2, s22)");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vrhadd()
         {
-            RewriteCode("10FF2FE1");	// vrhadd.u16 d14, d0, d31
+            Given_HexString("10FF2FE1");	// vrhadd.u16 d14, d0, d31
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -6043,7 +6022,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_ror()
         {
-            RewriteCode("E041");	// rors r0, r4
+            Given_HexString("E041");	// rors r0, r4
             AssertCode(
                 "0|L--|00100000(2): 2 instructions",
                 "1|L--|r0 = __ror(r0, r4)",
@@ -6051,19 +6030,27 @@ namespace Reko.UnitTests.Arch.Arm
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
-        public void ThumbRw_revsh()
+        public void ThumbRw_rev()
         {
-            RewriteCode("FFBA");	// revsh r7, r7
+            Given_HexString("FFBA");	// revsh r7, r7
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|r7 = __rev(r7)");
+        }
+
+        [Test]
+        public void ThumbRw_rev_2()
+        {
+            Given_HexString("19BA");	// rev r1, r3
+            AssertCode(
+                "0|L--|00100000(2): 1 instructions",
+                "1|L--|r1 = __rev(r3)");
         }
 
         [Test]
         public void ThumbRw_umull()
         {
-            RewriteCode("A2FB0030");	// umull r3, r0, r2, r0
+            Given_HexString("A2FB0030");	// umull r3, r0, r2, r0
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r0_r3 = r0 *u r2");
@@ -6072,7 +6059,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_mul()
         {
-            RewriteCode("03FB00F3");	// mul r3, r3, r0
+            Given_HexString("03FB00F3");	// mul r3, r3, r0
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r3 = r3 * r0");
@@ -6081,7 +6068,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_nop()
         {
-            RewriteCode("00BF");	// nop 
+            Given_HexString("00BF");	// nop 
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
                 "1|L--|nop");
@@ -6091,7 +6078,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore("Appears to be an incorrect decoding by Capstone")]
         public void ThumbRw_ldc()
         {
-            RewriteCode("3AED2046");	// ldc p6, c4, [sl, #-0x80]!
+            Given_HexString("3AED2046");	// ldc p6, c4, [sl, #-0x80]!
             AssertCode(
                 "0|L--|00100000(4): 3 instructions",
                 "1|L--|r10 = r10 + -128",
@@ -6103,27 +6090,27 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore("Does ARM T32 contain this?")]
         public void ThumbRw_cdp()
         {
-	        RewriteCode("11EE4000");    // cdp p0, #1, c0, c1, c0, #2
+	        Given_HexString("11EE4000");    // cdp p0, #1, c0, c1, c0, #2
 	        AssertCode(
 		        "0|L--|00100000(4): 1 instructions",
-		        "1|L--|__cdp(p0, 0x00000001, 0x00, 0x01, 0x00, 0x00000002)");
+		        "1|L--|__cdp(p0, 0x00000001<32>, 0x00, 0x01, 0x00, 0x00000002<32>)");
         }
 
         [Test]
         [Ignore("Does ARM T32 contain this?")]
         public void ThumbRw_cdp2()
         {
-            RewriteCode("7BFE0DF0");    // cdp2 p0, #7, c15, c11, c13, #0
+            Given_HexString("7BFE0DF0");    // cdp2 p0, #7, c15, c11, c13, #0
 	        AssertCode(
 		        "0|L--|00100000(4): 1 instructions",
-		        "1|L--|__cdp2(p0, 0x00000007, 0x0F, 0x0B, 0x0D, 0x00000000)");
+		        "1|L--|__cdp2(p0, 0x00000007<32>, 0x0F, 0x0B, 0x0D, 0<32>)");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_stc2l()
         {
-            RewriteCode("44FD0128");	// stc2l p8, c2, [r4, #-4]
+            Given_HexString("44FD0128");	// stc2l p8, c2, [r4, #-4]
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -6133,7 +6120,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_ldc2()
         {
-            RewriteCode("31FC0128");	// ldc2 p8, c2, [r1], #-4
+            Given_HexString("31FC0128");	// ldc2 p8, c2, [r1], #-4
             AssertCode(
                 "0|L--|00100000(4): 3 instructions",
                 "1|L--|r1 = r1",
@@ -6145,7 +6132,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_ldcl()
         {
-            RewriteCode("D8EC3846");	// ldcl p6, c4, [r8], {0x38}
+            Given_HexString("D8EC3846");	// ldcl p6, c4, [r8], {0x38}
             AssertCode(
                 "0|L--|00100000(4): 2 instructions",
                 "1|L--|v3 = Mem0[r8:word32]",
@@ -6155,16 +6142,16 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_adc()
         {
-            RewriteCode("49F1FF37");	// adc r7, sb, #-1
+            Given_HexString("49F1FF37");	// adc r7, sb, #-1
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r7 = r9 + 0xFFFFFFFF + C");
+                "1|L--|r7 = r9 + 0xFFFFFFFF<32> + C");
         }
 
         [Test]
         public void ThumbRw_strd()
         {
-            RewriteCode("CDE90067");	// strd r6, r7, [sp]
+            Given_HexString("CDE90067");	// strd r6, r7, [sp]
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|Mem0[sp:word64] = r7_r6");
@@ -6173,10 +6160,10 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_sbc()
         {
-            RewriteCode("7CEB3646");	// sbcs.w r6, ip, r16, ror #16
+            Given_HexString("7CEB3646");	// sbcs.w r6, ip, r16, ror #16
             AssertCode(
                 "0|L--|00100000(4): 2 instructions",
-                "1|L--|r6 = ip - __ror(r6, 0x00000010) - C",
+                "1|L--|r6 = ip - __ror(r6, 0x10<u32>) - C",
                 "2|L--|NZCV = cond(r6)");
         }
 
@@ -6184,46 +6171,44 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vtbl()
         {
-            RewriteCode("BBFF0CAB");	// vtbl.8 d10, {d11, d12, d13, d14}, d12
+            Given_HexString("BBFF0CAB");	// vtbl.8 d10, {d11, d12, d13, d14}, d12
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_vsubw()
         {
-            RewriteCode("88FF0023");	// vsubw.u8 q1, q4, d0
+            Given_HexString("88FF0023");	// vsubw.u8 q1, q4, d0
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|q1 = __vsubw_u8(q4, d0)");
         }
-
 
         [Test]
         public void ThumbRw_smmla()
         {
-            RewriteCode("57FB0021");	// smmla r1, r7, r0, r2
+            Given_HexString("57FB0021");	// smmla r1, r7, r0, r2
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r1 = (int32) (r7 *s r0 >> 32) + r2");
+                "1|L--|r1 = (int32) (r7 *s r0 >> 32<i32>) + r2");
         }
 
         [Test]
         public void ThumbRw_smmls()
         {
-            RewriteCode("62FB0646");	// smmls r6, r2, r6, r4
+            Given_HexString("62FB0646");	// smmls r6, r2, r6, r4
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r6 = (int32) (r2 *s r6 >> 32) - r4");
+                "1|L--|r6 = (int32) (r2 *s r6 >> 32<i32>) - r4");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vld1()
         {
-            RewriteCode("A8F93148");	// vld1.32 {d4[0]}, [r8:0x20], r1
+            Given_HexString("A8F93148");	// vld1.32 {d4[0]}, [r8:0x20], r1
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -6234,7 +6219,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vst3_16()
         {
-            RewriteCode("C3F90446");	// vst3.16 {d20[0], d21[0], d22[0]}, [r3], r4
+            Given_HexString("C3F90446");	// vst3.16 {d20[0], d21[0], d22[0]}, [r3], r4
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -6244,7 +6229,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vst3_8()
         {
-            RewriteCode("04F910B5");	// mls r5, r4, r0, r9
+            Given_HexString("04F910B5");	// mls r5, r4, r0, r9
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r5 = f9 - r4 * r0");
@@ -6254,7 +6239,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_mcr2()
         {
-            RewriteCode("62FE3B46");	// mcr2 p6, #3, r4, c2, c11, #1
+            Given_HexString("62FE3B46");	// mcr2 p6, #3, r4, c2, c11, #1
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -6264,7 +6249,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_pld()
         {
-            RewriteCode("91F8D4F8");	// pld [r1, #0x8d4]
+            Given_HexString("91F8D4F8");	// pld [r1, #0x8d4]
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -6274,7 +6259,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_ldc2l()
         {
-            RewriteCode("F4FD04F0");	// ldc2l p0, c15, [r4, #0x10]!
+            Given_HexString("F4FD04F0");	// ldc2l p0, c15, [r4, #0x10]!
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -6284,7 +6269,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_stc2()
         {
-            RewriteCode("AFFD1199");	// stc2 p9, c9, [pc, #0x44]!
+            Given_HexString("AFFD1199");	// stc2 p9, c9, [pc, #0x44]!
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -6293,7 +6278,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_sxtb()
         {
-            RewriteCode("59B2");	// sxtb r1, r3
+            Given_HexString("59B2");	// sxtb r1, r3
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
                 "1|L--|r1 = (int32) (int8) r3");
@@ -6303,7 +6288,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_sxth()
         {
-            RewriteCode("08B2");	// sxth r0, r1
+            Given_HexString("08B2");	// sxth r0, r1
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
                 "1|L--|r0 = (int32) (int16) r1");
@@ -6312,17 +6297,17 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_ssat()
         {
-            RewriteCode("03F31343");	// ssat r3, #0x14, r3, lsl #0x10
+            Given_HexString("03F31343");	// ssat r3, #0x14, r3, lsl #0x10
             AssertCode(
                 "0|L--|00100000(4): 2 instructions",
-                "1|L--|r3 = __ssat(0x00000014, r3 << 16)",
+                "1|L--|r3 = __ssat(0x14<32>, r3 << 16<i32>)",
                 "2|L--|Q = cond(r3)");
         }
 
         [Test]
         public void ThumbRw_mla()
         {
-            RewriteCode("00FB0210");	// mla r0, r0, r2, r1
+            Given_HexString("00FB0210");	// mla r0, r0, r2, r1
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r0 = r1 + r0 * r2");
@@ -6331,7 +6316,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_bkpt()
         {
-            RewriteCode("22BE");	// bkpt #0x22
+            Given_HexString("22BE");	// bkpt #0x22
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
                 "1|L--|__breakpoint()");
@@ -6340,45 +6325,53 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_vshr_imm()
         {
-            RewriteCode("F3FF14F0");
+            Given_HexString("F3FF14F0");
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|d31 = __vshr_i32(d4, 19)");
+                "1|L--|d31 = __vshr_i32(d4, 19<i32>)");
         }
 
         [Test]
         public void ThumbRw_vqadd()
         {
-            RewriteCode("0CFF14F0");	// vqadd.u8 d15, d12, d4
+            Given_HexString("0CFF14F0");	// vqadd.u8 d15, d12, d4
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|d15 = __vqadd_u8(d12, d4)");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
-        public void ThumbRw_smladx()
+        public void ThumbRw_vqadd_2()
         {
-            RewriteCode("20FB1FB0");	// smladx r0, r0, pc, fp
+            Given_HexString("7FFF3700");
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|d16 = __vqadd_u64(d15, d23)");
+        }
+
+        [Test]
+        public void ThumbRw_smladx()
+        {
+            Given_HexString("20FB1EB0");	// smladx r0, r0, pc, fp
+            AssertCode(
+                "0|L--|00100000(4): 1 instructions",
+                "1|L--|r0 = r0 + ((int16) r0 *s (lr >> 16<i32>) + (r0 >> 16<i32>) *s (int16) lr)");
         }
 
 
         [Test]
         public void ThumbRw_vstr()
         {
-            RewriteCode("44ED204A");	// vstr s9, [r4, #-0x80]
+            Given_HexString("44ED204A");	// vstr s9, [r4, #-0x80]
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|Mem0[r4 - 128:word32] = s9");
+                "1|L--|Mem0[r4 - 128<i32>:word32] = s9");
         }
 
         [Test]
         public void ThumbRw_vsub()
         {
-            RewriteCode("52FF2068");	// vsub.i16 d22, d2, d16
+            Given_HexString("52FF2068");	// vsub.i16 d22, d2, d16
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|d22 = __vsub_i16(d2, d16)");
@@ -6387,16 +6380,16 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_vldr()
         {
-            RewriteCode("5AED114B");	// vldr d20, [sl, #-0x44]
+            Given_HexString("5AED114B");	// vldr d20, [sl, #-0x44]
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|d20 = Mem0[r10 - 68:word64]");
+                "1|L--|d20 = Mem0[r10 - 68<i32>:word64]");
         }
 
         [Test]
         public void ThumbRw_uadd8()
         {
-            RewriteCode("84FA42F0");	// uadd8 r0, r4, r2
+            Given_HexString("84FA42F0");	// uadd8 r0, r4, r2
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r0 = __uadd_i8(r4, r2)");
@@ -6406,7 +6399,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vld3()
         {
-            RewriteCode("66F98245");	// vld3.32 {d20, d22, d24}, [r6], r2
+            Given_HexString("66F98245");	// vld3.32 {d20, d22, d24}, [r6], r2
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -6415,7 +6408,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_dsb()
         {
-            RewriteCode("BFF34F8F");	// dsb sy
+            Given_HexString("BFF34F8F");	// dsb sy
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|__dsb_sy()");
@@ -6424,7 +6417,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_sbfx()
         {
-            RewriteCode("48F70400");	// sbfx r0, r8, #0, #5
+            Given_HexString("48F70400");	// sbfx r0, r8, #0, #5
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r0 = (int32) SLICE(r8, ui5, 0)");
@@ -6433,7 +6426,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_ubfx()
         {
-            RewriteCode("C2F30745");	// ubfx r5, r2, #0x10, #8
+            Given_HexString("C2F30745");	// ubfx r5, r2, #0x10, #8
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r5 = (uint32) SLICE(r2, ui8, 16)");
@@ -6442,25 +6435,25 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_uxtab()
         {
-            RewriteCode("5BFA94F8");	// uxtab r8, fp, r4, ror #8
+            Given_HexString("5BFA94F8");	// uxtab r8, fp, r4, ror #8
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r8 = fp + (byte) (r4 >>u 8)");
+                "1|L--|r8 = fp + (byte) (r4 >>u 8<i32>)");
         }
 
         [Test]
         public void ThumbRw_uxtah()
         {
-            RewriteCode("11FAFEF7");	// uxtah r7, r1, lr, ror #24
+            Given_HexString("11FAFEF7");	// uxtah r7, r1, lr, ror #24
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r7 = r1 + (uint16) (lr >>u 24)");
+                "1|L--|r7 = r1 + (uint16) (lr >>u 24<i32>)");
         }
 
         [Test]
         public void ThumbRw_smulbb()
         {
-            RewriteCode("15FB02F6");	// smulbb r6, r5, r2
+            Given_HexString("15FB02F6");	// smulbb r6, r5, r2
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r6 = (int16) r5 *s (int16) r2");
@@ -6469,29 +6462,29 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_tbb()
         {
-            RewriteCode("DFE802F0");	// tbb [pc, r2]
+            Given_HexString("DFE802F0");	// tbb [pc, r2]
             AssertCode(
                 "0|T--|00100000(4): 1 instructions",
-                "1|T--|goto 0x00100000 + Mem0[0x00100004 + r2:byte] * 0x02");
+                "1|T--|goto 0x00100004<p32> + Mem0[0x00100004<p32> + r2:byte] * 2<8>");   //$LIT 2<32>? sext?
         }
 
 
         [Test]
         public void ThumbRw_tbh()
         {
-            RewriteCode("DFE813F0");	// tbh [pc, r3, lsl #1]
+            Given_HexString("DFE813F0");	// tbh [pc, r3, lsl #1]
             AssertCode(
                 "0|T--|00100000(4): 1 instructions",
-                "1|T--|goto 0x00100000 + Mem0[0x00100004 + r3 * 0x00000002:word16] * 0x0002");
+                "1|T--|goto 0x00100004<p32> + Mem0[0x00100004<p32> + r3 * 2<32>:word16] * 2<16>");//$LIST 2<32>? sext?
         }
 
         [Test]
         public void ThumbRw_usat()
         {
-            RewriteCode("83F35B09");	// usat sb, #0x1b, r3, lsl #1
+            Given_HexString("83F35B09");	// usat sb, #0x1b, r3, lsl #1
             AssertCode(
                 "0|L--|00100000(4): 2 instructions",
-                "1|L--|r9 = __usat(0x0000001C, r3 << 1)",
+                "1|L--|r9 = __usat(0x1C<32>, r3 << 1<i32>)",
                 "2|L--|Q = cond(r9)");
         }
 
@@ -6499,7 +6492,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vld4()
         {
-            RewriteCode("ACF9BAE7");	// vld4.16 {d14[2], d16[2], d18[2], d20[2]}, [ip:0x40], sl
+            Given_HexString("ACF9BAE7");	// vld4.16 {d14[2], d16[2], d18[2], d20[2]}, [ip:0x40], sl
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -6509,46 +6502,44 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vrsubhn()
         {
-            RewriteCode("94FF2046");	// vrsubhn.i32 d4, q2, q8
+            Given_HexString("94FF2046");	// vrsubhn.i32 d4, q2, q8
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_vselge()
         {
-            RewriteCode("6FFEA26A");	// vselge.f32 s13, s31, s5
+            Given_HexString("6FFEA26A");	// vselge.f32 s13, s31, s5
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|s13 = __vselge_f32(s31, s5)");
         }
 
         [Test]
         public void ThumbRw_vcge()
         {
-            RewriteCode("44FF051E");	// vcge.f32 d17, d4, d5
+            Given_HexString("44FF051E");	// vcge.f32 d17, d4, d5
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|d17 = __vcge_f32(d4, d5)");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_vselgt()
         {
-            RewriteCode("38FEA26A");	// vselgt.f32 s12, s17, s5
+            Given_HexString("38FEA26A");	// vselgt.f32 s12, s17, s5
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|s12 = __vselgt_f32(s17, s5)");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vst4()
         {
-            RewriteCode("44F94FF0");	// vst4.16 {d31, d0, d1, d2}, [r4]
+            Given_HexString("44F94FF0");	// vst4.16 {d31, d0, d1, d2}, [r4]
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -6559,7 +6550,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_stcl()
         {
-            RewriteCode("E8ED2368");	// stcl p8, c6, [r8, #0x8c]!
+            Given_HexString("E8ED2368");	// stcl p8, c6, [r8, #0x8c]!
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -6568,26 +6559,26 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_stc()
         {
-            RewriteCode("88ED3D5E");	// stc p14, c5, [r8, #0xf4]
+            Given_HexString("88ED3D5E");	// stc p14, c5, [r8, #0xf4]
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|__stc(p14, c5, Mem0[r8 + 244:word32])");
+                "1|L--|__stc(p14, cr5, Mem0[r8 + 244<i32>:word32])");
         }
 
         [Test]
         public void ThumbRw_smlawb()
         {
-            RewriteCode("32FB0020");	// smlawb r0, r2, r0, r2
+            Given_HexString("32FB0020");	// smlawb r0, r2, r0, r2
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r0 = (r2 *s (int16) r0 >> 16) + r2");
+                "1|L--|r0 = (r2 *s (int16) r0 >> 16<i32>) + r2");
         }
 
 
         [Test]
         public void ThumbRw_smlabb()
         {
-            RewriteCode("13FB0746");	// smlabb r6, r3, r7, r4
+            Given_HexString("13FB0746");	// smlabb r6, r3, r7, r4
             AssertCode(
                 "0|L--|00100000(4): 2 instructions",
                 "1|L--|r6 = (int16) r3 *s (int16) r7 + r4");
@@ -6596,27 +6587,27 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_smlatt()
         {
-            RewriteCode("12FB3A46");	// smlatt r6, r2, sl, r4
+            Given_HexString("12FB3A46");	// smlatt r6, r2, sl, r4
             AssertCode(
                 "0|L--|00100000(4): 2 instructions",
-                "1|L--|r6 = (int16) (r2 >> 16) *s (int16) (r10 >> 16) + r4",
+                "1|L--|r6 = (int16) (r2 >> 16<i32>) *s (int16) (r10 >> 16<i32>) + r4",
                 "2|L--|Q = cond(r6)");
         }
 
         [Test]
         public void ThumbRw_vmov_imm()
         {
-            RewriteCode("83FF13F0");	// vmov.i32 d15, #0xb3
+            Given_HexString("83FF13F0");	// vmov.i32 d15, #0xb3
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|d15 = 0x000000B3000000B3");
+                "1|L--|d15 = 0xB3000000B3<64>");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vst1()
         {
-            RewriteCode("84F90020");	// vst1.8 {d2[0]}, [r4], r0
+            Given_HexString("84F90020");	// vst1.8 {d2[0]}, [r4], r0
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -6626,28 +6617,27 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_mcrr2()
         {
-            RewriteCode("4FFC3AF0");	// mcrr2 p0, #3, pc, pc, c10
+            Given_HexString("4FFC3AF0");	// mcrr2 p0, #3, pc, pc, c10
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
         }
 
         [Test]
-        [Ignore(Categories.Capstone)]
         public void ThumbRw_umaal()
         {
-            RewriteCode("E0FB63F0");	// umaal pc, r0, r0, r3
+            Given_HexString("E0FB6320");	// umaal r2, r0, r0, r3
             AssertCode(
                 "0|L--|00100000(4): 3 instructions",
                 "1|L--|v2 = r0 *u r3",
                 "2|L--|v2 = v2 + (uint64) r0",
-                "3|L--|r0_pc = v2 + (uint64) pc");
+                "3|L--|r0_r2 = v2 + (uint64) r2");
         }
 
         [Test]
         public void ThumbRw_umlal()
         {
-            RewriteCode("E3FB03E7");	// umlal lr, r7, r3, r3
+            Given_HexString("E3FB03E7");	// umlal lr, r7, r3, r3
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r7_lr = r3 *u r3 + r7_lr");
@@ -6656,46 +6646,34 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_vmlal()
         {
-            RewriteCode("C8FF0128");	// vmlal.u8 q9, d8, d1
+            Given_HexString("C8FF0128");	// vmlal.u8 q9, d8, d1
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|q9 = __vmlal_i8(d8, d1)");
+                "1|L--|q9 = __vmlal_u8(d8, d1)");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_vmlsl()
         {
-            RewriteCode("EAFFE346");	// vmlsl.u32 q10, d26, d3[1]
+            Given_HexString("EAFFE346");	// vmlsl.u32 q10, d26, d3[1]
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|q10 = __vmlsl_u32(d26, d3[1<i32>])");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
-        public void ThumbRw_hint()
-        {
-            RewriteCode("70BF");	// hint #7
-            AssertCode(
-                "0|L--|00100000(2): 1 instructions",
-                "1|L--|__hint(0x07)");
-        }
-
-        [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_vmvn_imm()
         {
-            RewriteCode("82FF3146");	// vmvn.i32 d4, #0xa1000000
+            Given_HexString("82FF3146");	// vmvn.i32 d4, #0xa1000000<32>
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|d4 = __vmvn_imm_i32(0xA1000000A1000000<64>)");
         }
 
         [Test]
         public void ThumbRw_vceq_i32()
         {
-            RewriteCode("21FF1048");	// vceq.i32 d4, d1, d0
+            Given_HexString("21FF1048");	// vceq.i32 d4, d1, d0
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|d4 = __vceq_i32(d1, d0)");
@@ -6704,25 +6682,25 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_vqshl()
         {
-            RewriteCode("80EFFEE7");	// vqshl.s64 q7, q15, #64
+            Given_HexString("81EFFEE7");	// vqshl.s64 q7, q15, #1
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|q7 = __vqshl_i64(q15, 64)");
+                "1|L--|q7 = __vqshl_i64(q15, 1<i32>)");
         }
 
         [Test]
         public void ThumbRw_smulbt()
         {
-            RewriteCode("17FB16F0");	// smulbt r0, r7, r6
+            Given_HexString("17FB16F0");	// smulbt r0, r7, r6
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r0 = (int16) r7 *s (int16) (r6 >> 16)");
+                "1|L--|r0 = (int16) r7 *s (int16) (r6 >> 16<i32>)");
         }
 
         [Test]
         public void ThumbRw_smull()
         {
-            RewriteCode("8AFB0028");	// smull r2, r8, r10, r0
+            Given_HexString("8AFB0028");	// smull r2, r8, r10, r0
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r8_r2 = r0 *s r10");
@@ -6731,17 +6709,17 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_smlsd()
         {
-            RewriteCode("41FB0446");	// smlsd r6, r1, r4, r4
+            Given_HexString("41FB0446");	// smlsd r6, r1, r4, r4
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r6 = r6 + ((int16) r1 *s (int16) r4 - (r1 >> 16) *s (r4 >> 16))");
+                "1|L--|r6 = r6 + ((int16) r1 *s (int16) r4 - (r1 >> 16<i32>) *s (r4 >> 16<i32>))");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_mrc2()
         {
-            RewriteCode("3CFE714D");	// mrc2 p13, #1, r4, c12, c1, #3
+            Given_HexString("3CFE714D");	// mrc2 p13, #1, r4, c12, c1, #3
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -6751,7 +6729,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_mrrc2()
         {
-            RewriteCode("54FC1348");	// mrrc2 p8, #1, r4, r4, c3
+            Given_HexString("54FC1348");	// mrrc2 p8, #1, r4, r4, c3
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -6760,7 +6738,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_vmin()
         {
-            RewriteCode("62FF3846");	// vmin.u32 d20, d2, d24
+            Given_HexString("62FF3846");	// vmin.u32 d20, d2, d24
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|d20 = __vmin_u32(d2, d24)");
@@ -6769,20 +6747,20 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_ldm()
         {
-            RewriteCode("1ECC");	// ldm r4, {r1, r2, r3, r4}
+            Given_HexString("1ECC");	// ldm r4, {r1, r2, r3, r4}
             AssertCode(
                 "0|L--|00100000(2): 4 instructions",
                 "1|L--|r1 = Mem0[r4:word32]",
-                "2|L--|r2 = Mem0[r4 + 4:word32]",
-                "3|L--|r3 = Mem0[r4 + 8:word32]",
-                "4|L--|r4 = Mem0[r4 + 12:word32]");
+                "2|L--|r2 = Mem0[r4 + 4<i32>:word32]",
+                "3|L--|r3 = Mem0[r4 + 8<i32>:word32]",
+                "4|L--|r4 = Mem0[r4 + 12<i32>:word32]");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_ldmdb()
         {
-            RewriteCode("36E97D4B");	// ldmdb r6!, {r0, r2, r3, r4, r5, r6, r8, sb, fp, lr}
+            Given_HexString("36E97D4B");	// ldmdb r6!, {r0, r2, r3, r4, r5, r6, r8, sb, fp, lr}
             AssertCode(
                 "0|L--|00100000(4): 11 instructions",
                 "1|L--|r0 = Mem0[r6 - 4:word32]",
@@ -6802,7 +6780,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vrev64()
         {
-            RewriteCode("B0FF0300");	// vrev64.8 d0, d3
+            Given_HexString("B0FF0300");	// vrev64.8 d0, d3
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -6812,7 +6790,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vst2()
         {
-            RewriteCode("46F94748");	// vst2.16 {d20, d21}, [r6], r7
+            Given_HexString("46F94748");	// vst2.16 {d20, d21}, [r6], r7
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -6821,17 +6799,17 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_smlad()
         {
-            RewriteCode("2AFB049A");	// smlad sl, sl, r4, sb
+            Given_HexString("2AFB049A");	// smlad sl, sl, r4, sb
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r10 = r10 + ((int16) r10 *s (int16) r4 + (r10 >> 16) *s (r4 >> 16))");
+                "1|L--|r10 = r10 + ((int16) r10 *s (int16) r4 + (r10 >> 16<i32>) *s (r4 >> 16<i32>))");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_uhsub16()
         {
-            RewriteCode("DCFA6FF0");	// uhsub16 r0, ip, pc
+            Given_HexString("DCFA6FF0");	// uhsub16 r0, ip, pc
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -6841,7 +6819,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_sxtab16()
         {
-            RewriteCode("2BFADBF8");	// sxtab16 r8, fp, fp, ror #8
+            Given_HexString("2BFADBF8");	// sxtab16 r8, fp, fp, ror #8
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r8 = __sxtab16(fp, __ror(fp, 8))");
@@ -6850,7 +6828,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_shsub8()
         {
-            RewriteCode("C7FA26F4");	// shsub8 r4, r7, r6
+            Given_HexString("C7FA26F4");	// shsub8 r4, r7, r6
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r4 = __shsub_s8(r7, r6)");
@@ -6859,7 +6837,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_orrs()
         {
-            RewriteCode("0443");	// orrs r4, r0
+            Given_HexString("0443");	// orrs r4, r0
             AssertCode(
                 "0|L--|00100000(2): 2 instructions",
                 "1|L--|r4 = r4 | r0",
@@ -6869,17 +6847,17 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_orn()
         {
-            RewriteCode("64F40300");	// orn r0, r4, #0x830000
+            Given_HexString("64F40300");	// orn r0, r4, #0x830000
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r0 = r4 | ~0x00830000");
+                "1|L--|r0 = r4 | ~0x830000<32>");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vswp()
         {
-            RewriteCode("B2FF0300");	// vswp d0, d3
+            Given_HexString("B2FF0300");	// vswp d0, d3
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -6889,27 +6867,27 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vqrshrun()
         {
-            RewriteCode("E2FF7E48");	// vqrshrun.s64 d20, q15, #0x1e
+            Given_HexString("E2FF7E48");	// vqrshrun.s64 d20, q15, #0x1e
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_ssat16()
         {
-            RewriteCode("22F30300");	// ssat16 r0, #4, r2
+            Given_HexString("22F30300");	// ssat16 r0, #3, r2
             AssertCode(
-                "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "0|L--|00100000(4): 2 instructions",
+                "1|L--|r0 = __ssat16(3<32>, r2)",
+                "2|L--|Q = cond(r0)");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_fstmiax()
         {
-            RewriteCode("88EC179B");	// fstmiax r8, {d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19}
+            Given_HexString("88EC179B");	// fstmiax r8, {d9, d10, d11, d12, d13, d14, d15, d16, d17, d18, d19}
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -6919,7 +6897,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_smmlsr()
         {
-            RewriteCode("6BFB1E4B");	// smmlsr fp, fp, lr, r4
+            Given_HexString("6BFB1E4B");	// smmlsr fp, fp, lr, r4
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -6928,7 +6906,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_vcvt()
         {
-            RewriteCode("FBFF2046");	// vcvt.f32.s32 d20, d16
+            Given_HexString("FBFF2046");	// vcvt.f32.s32 d20, d16
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|d20 = (real32) d16");
@@ -6938,27 +6916,26 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_mcrr()
         {
-            RewriteCode("40EC0600");	// mcrr p0, #0, r0, r0, c6
+            Given_HexString("40EC0600");	// mcrr p0, #0, r0, r0, c6
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_vsubl()
         {
-            RewriteCode("E1FFA042");	// vsubl.u32 q10, d17, d16
+            Given_HexString("E1FFA042");	// vsubl.u32 q10, d17, d16
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|q10 = __vsubl_u32(d17, d16)");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vqshrn()
         {
-            RewriteCode("B8FF1249");	// vqshrn.u64 d4, q1, #8
+            Given_HexString("B8FF1249");	// vqshrn.u64 d4, q1, #8
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -6967,7 +6944,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_vhadd()
         {
-            RewriteCode("41FF02B0");	// vhadd.u8 d27, d1, d2
+            Given_HexString("41FF02B0");	// vhadd.u8 d27, d1, d2
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|d27 = __vhadd_u8(d1, d2)");
@@ -6976,7 +6953,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_vhsub()
         {
-            RewriteCode("4AFF8642");	// vhsub.u8 d20, d26, d6
+            Given_HexString("4AFF8642");	// vhsub.u8 d20, d26, d6
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|d20 = __vhsub_u8(d26, d6)");
@@ -6986,76 +6963,74 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vext()
         {
-            RewriteCode("F4EF0300");	// vext.32 d16, d4, d3, #0
+            Given_HexString("F4EF0300");	// vext.32 d16, d4, d3, #0
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_vaba()
         {
-            RewriteCode("1EFF9BE7");	// vaba.u16 d14, d30, d11
+            Given_HexString("1EFF9BE7");	// vaba.u16 d14, d30, d11
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|d14 = __vaba_u16(d30, d11)");
         }
 
         [Test]
         public void ThumbRw_vorr_imm()
         {
-            RewriteCode("C4FF104B");	// vorr.i16 d20, #0xc000
+            Given_HexString("C4FF104B");	// vorr.i16 d20, #0xc000<16>
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|d20 = d20 | 0xC000C000C000C000");
+                "1|L--|d20 = d20 | 0xC000C000C000C000<64>");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_smulwb()
         {
-            RewriteCode("32FB0FF0");	// smulwb r0, r2, pc
+            Given_HexString("32FB0FF0");	// smulwb r0, r2, pc
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_usada8()
         {
-            RewriteCode("77FB0030");	// usada8 r0, r7, r0, r3
+            Given_HexString("77FB0030");	// usada8 r0, r7, r0, r3
             AssertCode(
-                "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "0|L--|00100000(4): 3 instructions",
+                "1|L--|v5 = r7",
+                "2|L--|v6 = r0",
+                "3|L--|r0 = __usada8(v5, v6)");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_vselvs()
         {
-            RewriteCode("1AFE224B");	// vselvs.f64 d4, d10, d18
+            Given_HexString("1AFE224B");	// vselvs.f64 d4, d10, d18
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|d4 = __vselvs_f64(d10, d18)");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_vseleq()
         {
-            RewriteCode("0FFE204B");	// vseleq.f64 d4, d15, d16
+            Given_HexString("0FFE204B");	// vseleq.f64 d4, d15, d16
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|d4 = __vseleq_f64(d15, d16)");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vld2()
         {
-            RewriteCode("AAF909F5");	// vld2.16 {d15[0], d16[0]}, [sl], sb
+            Given_HexString("AAF909F5");	// vld2.16 {d15[0], d16[0]}, [sl], sb
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -7064,26 +7039,26 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_vshl()
         {
-            RewriteCode("FCEF3335");	// vshl.i32 d19, d19, #0x1c
+            Given_HexString("FCEF3335");	// vshl.i32 d19, d19, #0x1c
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|d19 = __vshl_i32(d19, 28)");
+                "1|L--|d19 = __vshl_i32(d19, 28<i32>)");
         }
 
         [Test]
         public void ThumbRw_vsra()
         {
-            RewriteCode("D9FF10F1");	// vsra.u16 d31, d0, #9
+            Given_HexString("D9FF10F1");	// vsra.u16 d31, d0, #9
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|d31 = __vsra_i16(d0, 9)");
+                "1|L--|d31 = __vsra_i16(d0, 9<i32>)");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vqrdmulh()
         {
-            RewriteCode("1DFF099B");	// vqrdmulh.s16 d9, d13, d9
+            Given_HexString("1DFF099B");	// vqrdmulh.s16 d9, d13, d9
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -7093,26 +7068,25 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vqshlu()
         {
-            RewriteCode("BCFF3846");	// vqshlu.s32 d4, d24, #0x1c
+            Given_HexString("BCFF3846");	// vqshlu.s32 d4, d24, #0x1c
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_vbit()
         {
-            RewriteCode("69FFB8F1");	// vbit d31, d25, d24
+            Given_HexString("69FFB8F1");	// vbit d31, d25, d24
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|d31 = __vbit(d25, d24)");
         }
 
         [Test]
         public void ThumbRw_smlal()
         {
-            RewriteCode("CCFB0BB0");	// smlal fp, r0, ip, fp
+            Given_HexString("CCFB0BB0");	// smlal fp, r0, ip, fp
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|fp_r0 = ip *s fp + fp_r0");
@@ -7122,41 +7096,45 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vtbx()
         {
-            RewriteCode("BDFFC5F8");	// vtbx.8 d15, {d29}, d5
+            Given_HexString("BDFFC5F8");	// vtbx.8 d15, {d29}, d5
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
         }
 
-
-
-
-
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_vabd()
         {
-            RewriteCode("28FFC6E7");	// vabd.u32 q7, q12, q3
+            Given_HexString("28FFC6E7");	// vabd.u32 q7, q12, q3
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|q7 = __vabd_u32(q12, q3)");
+        }
+
+        [Test]
+        public void ThumbRw_vmull()
+        {
+            Given_HexString("E3FF2B8C");	// vmull.u32 q12, d3, d27
+            AssertCode(
+                "0|L--|00100000(4): 1 instructions",
+                "1|L--|q12 = __vmull_u32(d3, d27)");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
-        public void ThumbRw_vmull()
+        public void ThumbRw_vmull_polynomial()
         {
-            RewriteCode("E3FF2B8C");	// vmull.u32 q12, d3, d27
+            Given_HexString("E3FF2B8E");	// vmull.p64 q12, d3, d27
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|q12 = __vmull_p64(d3, d27)");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vqshrun()
         {
-            RewriteCode("D8FF3E48");	// vqshrun.s32 d20, q15, #8
+            Given_HexString("D8FF3E48");	// vqshrun.s32 d20, q15, #8
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -7166,7 +7144,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_vmax()
         {
-            RewriteCode("29FF2046");	// vmax.u32 d4, d9, d16
+            Given_HexString("29FF2046");	// vmax.u32 d4, d9, d16
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|d4 = __vmax_u32(d9, d16)");
@@ -7176,7 +7154,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vmaxnm()
         {
-            RewriteCode("CBFE029B");	// vmaxnm.f64 d25, d11, d2
+            Given_HexString("CBFE029B");	// vmaxnm.f64 d25, d11, d2
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -7185,7 +7163,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_smusd()
         {
-            RewriteCode("48FB00F1");	// smusd r1, r8, r0
+            Given_HexString("48FB00F1");	// smusd r1, r8, r0
             AssertCode(
                 "0|L--|00100000(4): 3 instructions",
                 "1|L--|v5 = SLICE(r8, int16, 0) *s SLICE(r0, int16, 0)",
@@ -7196,7 +7174,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_sxtab()
         {
-            RewriteCode("42FA83F1");	// sxtab r1, r2, r3
+            Given_HexString("42FA83F1");	// sxtab r1, r2, r3
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r1 = r2 + (int8) r3");
@@ -7205,26 +7183,17 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_sxtah()
         {
-            RewriteCode("00FAFEFF");	// sxtah pc, r0, lr, ror #24
+            Given_HexString("00FAFEFF");	// sxtah pc, r0, lr, ror #24
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|pc = r0 + (int16) (lr >>u 24)");
-        }
-
-        [Test]
-        public void ThumbRw_rev()
-        {
-            RewriteCode("19BA");	// rev r1, r3
-            AssertCode(
-                "0|L--|00100000(2): 1 instructions",
-                "1|L--|r1 = __rev(r3)");
+                "1|L--|pc = r0 + (int16) (lr >>u 24<i32>)");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_rev16()
         {
-            RewriteCode("70BA");	// rev16 r0, r6
+            Given_HexString("70BA");	// rev16 r0, r6
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
                 "1|L--|@@@");
@@ -7233,20 +7202,20 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_stmdb()
         {
-            RewriteCode("06E90F00");	// stmdb r6, {r0, r1, r2, r3}
+            Given_HexString("06E90F00");	// stmdb r6, {r0, r1, r2, r3}
             AssertCode(
                 "0|L--|00100000(4): 4 instructions",
-                "1|L--|Mem0[r6 + -16:word32] = r0",
-                "2|L--|Mem0[r6 + -12:word32] = r1",
-                "3|L--|Mem0[r6 + -8:word32] = r2",
-                "4|L--|Mem0[r6 + -4:word32] = r3");
+                "1|L--|Mem0[r6 + -16<i32>:word32] = r0",
+                "2|L--|Mem0[r6 + -12<i32>:word32] = r1",
+                "3|L--|Mem0[r6 + -8<i32>:word32] = r2",
+                "4|L--|Mem0[r6 + -4<i32>:word32] = r3");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_pli()
         {
-            RewriteCode("9DF9BAF1");	// pli [sp, #0x1ba]
+            Given_HexString("9DF9BAF1");	// pli [sp, #0x1ba]
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -7255,36 +7224,35 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_smlatb()
         {
-            RewriteCode("17FB2046");	// smlatb r6, r7, r0, r4
+            Given_HexString("17FB2046");	// smlatb r6, r7, r0, r4
             AssertCode(
                 "0|L--|00100000(4): 2 instructions",
-                "1|L--|r6 = (int16) (r7 >> 16) *s (int16) r0 + r4",
+                "1|L--|r6 = (int16) (r7 >> 16<i32>) *s (int16) r0 + r4",
                 "2|L--|Q = cond(r6)");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_vsri()
         {
-            RewriteCode("ECFF3104");	// vsri.32 d16, d17, #0x14
+            Given_HexString("ECFF3104");	// vsri.32 d16, d17, #0x14
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|d16 = __vsri_i32(d17, 20<i32>)");
         }
 
         [Test]
         public void ThumbRw_bfc()
         {
-            RewriteCode("6FF30001");	// bfc r1, #0, #1
+            Given_HexString("6FF30001");	// bfc r1, #0, #1
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r1 = r1 & 0xFFFFFFFE");
+                "1|L--|r1 = r1 & 0xFFFFFFFE<u32>");
         }
 
         [Test]
         public void ThumbRw_bfi()
         {
-            RewriteCode("63F31F43");	// bfi r3, r3, #0x10, #0x10
+            Given_HexString("63F31F43");	// bfi r3, r3, #0x10, #0x10
             AssertCode(
                 "0|L--|00100000(4): 2 instructions",
                 "1|L--|v3 = SLICE(r3, ui16, 0)",
@@ -7295,7 +7263,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vqrshl()
         {
-            RewriteCode("18FFB945");	// vqrshl.u16 d4, d25, d24
+            Given_HexString("18FFB945");	// vqrshl.u16 d4, d25, d24
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -7304,7 +7272,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_sdiv()
         {
-            RewriteCode("95FBF3F7");	// sdiv r7, r5, r3
+            Given_HexString("95FBF3F7");	// sdiv r7, r5, r3
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r7 = r5 / r3");
@@ -7313,59 +7281,56 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_smlaltb()
         {
-            RewriteCode("C9FBA0E6");	// smlaltb lr, r6, sb, r0
+            Given_HexString("C9FBA0E6");	// smlaltb lr, r6, sb, r0
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|lr_r6 = (int16) (r9 >> 16) *s (int16) r0 + lr_r6");
+                "1|L--|lr_r6 = (int16) (r9 >> 16<i32>) *s (int16) r0 + lr_r6");
         }
 
         [Test]
         public void ThumbRw_smlaltt()
         {
-            RewriteCode("C3FBB168");	// smlaltt r6, r8, r3, r1
+            Given_HexString("C3FBB168");	// smlaltt r6, r8, r3, r1
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r6_r8 = (int16) (r3 >> 16) *s (int16) (r1 >> 16) + r6_r8");
+                "1|L--|r6_r8 = (int16) (r3 >> 16<i32>) *s (int16) (r1 >> 16<i32>) + r6_r8");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vabdl()
         {
-            RewriteCode("DDFFA7E7");	// vabdl.u16 q15, d29, d23
+            Given_HexString("DDFFA7E7");	// vabdl.u16 q15, d29, d23
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_pkhbt()
         {
-            RewriteCode("C6EA002E");	// pkhbt lr, r6, r0, lsl #8
+            Given_HexString("C6EA002E");	// pkhbt lr, r6, r0, lsl #8
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|lr = __pkhbt(r6, r0 << 8<u32>)");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_vrshr()
         {
-            RewriteCode("A1FFB442");	// vrshr.u64 d4, d20, #0x1f
+            Given_HexString("A1FFB442");	// vrshr.u64 d4, d20, #0x1f
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|d4 = __vrshr_u64(d20, 31<i32>)");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_smlawt()
         {
-            RewriteCode("34FB1020");	// smlawt r0, r4, r0, r2
+            Given_HexString("34FB1020");	// smlawt r0, r4, r0, r2
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|r0 = (r4 *s (int16) (r0 >> 16<i32>) >> 16<i32>) + r2");
         }
 
  
@@ -7373,7 +7338,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_vmul()
         {
-            RewriteCode("46FF114D");	// vmul.f32 d20, d6, d1
+            Given_HexString("46FF114D");	// vmul.f32 d20, d6, d1
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|d20 = __vmul_f32(d6, d1)");
@@ -7382,7 +7347,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_smlalbb()
         {
-            RewriteCode("C4FB8A4C");	// smlalbb r4, ip, r4, sl
+            Given_HexString("C4FB8A4C");	// smlalbb r4, ip, r4, sl
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r4_ip = (int16) r4 *s (int16) r10 + r4_ip");
@@ -7392,7 +7357,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vminnm()
         {
-            RewriteCode("86FE4A4B");	// vminnm.f64 d4, d6, d10
+            Given_HexString("86FE4A4B");	// vminnm.f64 d4, d6, d10
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -7402,7 +7367,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vpadal()
         {
-            RewriteCode("F0FF0546");	// vpadal.s8 d20, d5
+            Given_HexString("F0FF0546");	// vpadal.s8 d20, d5
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -7411,7 +7376,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_vcgt_f32()
         {
-            RewriteCode("26FFA18E");	// vcgt.f32 d8, d22, d17
+            Given_HexString("26FFA18E");	// vcgt.f32 d8, d22, d17
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|d8 = __vcgt_f32(d22, d17)");
@@ -7420,7 +7385,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_vpmax()
         {
-            RewriteCode("56FF289A");	// vpmax.u16 d25, d6, d24
+            Given_HexString("56FF289A");	// vpmax.u16 d25, d6, d24
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|d25 = __vpmax_u16(d6, d24)");
@@ -7429,47 +7394,45 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_vpmin()
         {
-            RewriteCode("2BFF00BF");	// vpmin.f32 d11, d11, d0
+            Given_HexString("2BFF00BF");	// vpmin.f32 d11, d11, d0
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|d11 = __vpmin_f32(d11, d0)");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_vsli()
         {
-            RewriteCode("BDFFB4F5");	// vsli.64 d15, d20, #0x3d
+            Given_HexString("BDFFB4F5");	// vsli.64 d15, d20, #0x3d
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|d15 = __vsli_i64(d20, 61<i32>)");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_pldw()
         {
-            RewriteCode("B9F800F0");	// pldw [sb]
+            Given_HexString("B9F800F0");	// pldw [sb]
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_pkhtb()
         {
-            RewriteCode("C0EA2046");	// pkhtb r6, r0, r0, asr #0x10
+            Given_HexString("C0EA2046");	// pkhtb r6, r0, r0, asr #0x10
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|r6 = __pkhtb(r0, r0 >> 0x10<u32>)");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_uxtab16()
         {
-            RewriteCode("33FAFFF7");	// uxtab16 r7, r3, pc, ror #24
+            Given_HexString("33FAFFF7");	// uxtab16 r7, r3, pc, ror #24
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -7479,7 +7442,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_vabs()
         {
-            RewriteCode("B9FF2043");	// vabs.s32 d4, d16
+            Given_HexString("B9FF2043");	// vabs.s32 d4, d16
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|d4 = __vabs_i32(d16)");
@@ -7488,7 +7451,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_vadd()
         {
-            RewriteCode("4EEF01A8");	// vadd.i8 d26, d14, d1
+            Given_HexString("4EEF01A8");	// vadd.i8 d26, d14, d1
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|d26 = __vadd_i8(d14, d1)");
@@ -7498,49 +7461,44 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vaddl()
         {
-            RewriteCode("E5FF0020");	// vaddl.u32 q9, d5, d0
+            Given_HexString("E5FF0020");	// vaddl.u32 q9, d5, d0
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|q9 = __vadd_l(d5, d0)");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_vaddw()
         {
-            RewriteCode("E2FF0021");	// vaddw.u32 q9, q1, d0
+            Given_HexString("E2FF0021");	// vaddw.u32 q9, q1, d0
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|q9 = __vaddw_u32(q1, d0)");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_vbic()
         {
-            RewriteCode("C1FF7DE5");	// vbic.i32 q15, #0x9d0000
+            Given_HexString("C1FF7DE5");	// vbic.i32 q15, #0x9d0000
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|q15 = @@@");
+                "1|L--|q15 = __vbic_i32(q15, 0x9D0000009D0000<64>)");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_vrsra()
         {
-            RewriteCode("BFFF18B3");	// vrsra.u32 d11, d8, #1
+            Given_HexString("BFFF18B3");	// vrsra.u32 d11, d8, #1
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|d11 = __vrsra_u32(d8, 1<i32>)");
         }
-
-
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vqrshrn()
         {
-            RewriteCode("BBFF58B9");	// vqrshrn.u64 d11, q4, #5
+            Given_HexString("BBFF58B9");	// vqrshrn.u64 d11, q4, #5
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -7550,26 +7508,25 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_qadd8()
         {
-            RewriteCode("8AFA1AF0");	// qadd8 r0, sl, sl
+            Given_HexString("8AFA1AF0");	// qadd8 r0, sl, sl
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r0 = __qadd_s8(r10, r10)");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_qsax()
         {
-            RewriteCode("E0FA19F0");	// qsax r0, r0, sb
+            Given_HexString("E0FA19F0");	// qsax r0, r0, sb
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|r0 = __qsax(r0, r9)");
         }
 
         [Test]
         public void ThumbRw_qsub16()
         {
-            RewriteCode("D5FA18F4");	// qsub16 r4, r5, r8
+            Given_HexString("D5FA18F4");	// qsub16 r4, r5, r8
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r4 = __qsub_s16(r5, r8)");
@@ -7578,35 +7535,34 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_sadd8()
         {
-            RewriteCode("8AFA00F0");	// sadd8 r0, r10, r0
+            Given_HexString("8AFA00F0");	// sadd8 r0, r10, r0
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r0 = __sadd_s8(r10, r0)");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_sasx()
         {
-            RewriteCode("AEFA0EF0");	// sasx r0, lr, lr
+            Given_HexString("AEFA0EF0");	// sasx r0, lr, lr
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|r0 = __sasx(lr, lr)");
         }
 
         [Test]
         public void ThumbRw_vrshl()
         {
-            RewriteCode("03FF0DE5");	// vrshl.u8 d14, d13, d3
+            Given_HexString("03FF0DE5");	// vrshl.u8 d14, d13, d3
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|d14 = __vrshl_u8(d3, d13)");
+                "1|L--|d14 = __vrshl_u8(d13, d3)");
         }
 
         [Test]
         public void ThumbRw_usax()
         {
-            RewriteCode("EEFA40F6");	// usax r6, lr, r0
+            Given_HexString("EEFA40F6");	// usax r6, lr, r0
             AssertCode(
                 "0|L--|00100000(4): 3 instructions",
                 "1|L--|v2 = SLICE(lr, ui16, 0) + SLICE(r0, ui16, 16)",
@@ -7617,7 +7573,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_vpadd()
         {
-            RewriteCode("04FF002D");	// vpadd.f32 d2, d4, d0
+            Given_HexString("04FF002D");	// vpadd.f32 d2, d4, d0
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|d2 = __vpadd_f32(d4, d0)");
@@ -7627,7 +7583,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_uqadd16()
         {
-            RewriteCode("92FA55F8");	// uqadd16 r8, r2, r5
+            Given_HexString("92FA55F8");	// uqadd16 r8, r2, r5
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -7637,50 +7593,48 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vrev16()
         {
-            RewriteCode("F0FF08B1");	// vrev16.8 d27, d8
+            Given_HexString("F0FF08B1");	// vrev16.8 d27, d8
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_vshll()
         {
-            RewriteCode("FAFF1E4A");	// vshll.u32 q10, d14, #0x1a
+            Given_HexString("FAFF1E4A");	// vshll.u32 q10, d14, #0x1a
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|q10 = __vshll_u32(d14, 26<i32>)");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vqdmulh()
         {
-            RewriteCode("5AEF029B");	// vqdmulh.s16 d25, d10, d2
+            Given_HexString("5AEF029B");	// vqdmulh.s16 d25, d10, d2
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_usat16()
         {
-            RewriteCode("ACF30200");	// usat16 r0, #2, ip
+            Given_HexString("ACF30200");	// usat16 r0, #2, ip
             AssertCode(
-                "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "0|L--|00100000(4): 2 instructions",
+                "1|L--|r0 = __usat16(2<32>, ip)",
+                "2|L--|Q = cond(r0)");
         }
 
         [Test]
-
         public void ThumbRw_smlabt()
         {
-            RewriteCode("1EFB1A68");	// smlabt r8, lr, sl, r6
+            Given_HexString("1EFB1A68");	// smlabt r8, lr, sl, r6
             AssertCode(
                 "0|L--|00100000(4): 2 instructions",
-                "1|L--|r8 = (int16) lr *s (int16) (r10 >> 16) + r6");
+                "1|L--|r8 = (int16) lr *s (int16) (r10 >> 16<i32>) + r6");
         }
 
         [Test]
@@ -7688,7 +7642,7 @@ namespace Reko.UnitTests.Arch.Arm
 
         public void ThumbRw_vsubhn()
         {
-            RewriteCode("ECEF2046");	// vsubhn.i64 d20, q6, q8
+            Given_HexString("ECEF2046");	// vsubhn.i64 d20, q6, q8
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -7697,7 +7651,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_uasx()
         {
-            RewriteCode("A4FA42F0");	// uasx r0, r4, r2
+            Given_HexString("A4FA42F0");	// uasx r0, r4, r2
             AssertCode(
                 "0|L--|00100000(4): 3 instructions",
                 "1|L--|v2 = SLICE(r4, ui16, 0) - SLICE(r2, ui16, 16)",
@@ -7706,20 +7660,19 @@ namespace Reko.UnitTests.Arch.Arm
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_vbif()
         {
-            RewriteCode("3FFFBBF1");	// vbif d15, d31, d27
+            Given_HexString("3FFFBBF1");	// vbif d15, d31, d27
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|d15 = __vbif(d31, d27)");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vbsl()
         {
-            RewriteCode("14FFBBF1");	// vbsl d15, d20, d27
+            Given_HexString("14FFBBF1");	// vbsl d15, d20, d27
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -7728,44 +7681,43 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_strht()
         {
-            RewriteCode("23F8236E");	// strht r6, [r3, #0x23]
+            Given_HexString("23F8236E");	// strht r6, [r3, #0x23]
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|Mem0[r3 + 35:word16] = (uint16) r6");
+                "1|L--|Mem0[r3 + 35<i32>:word16] = (uint16) r6");
         }
 
         [Test]
         public void ThumbRw_strbt()
         {
-            RewriteCode("08F8031E");	// strbt r1, [r8, #3]
+            Given_HexString("08F8031E");	// strbt r1, [r8, #3]
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|Mem0[r8 + 3:byte] = (byte) r1");
+                "1|L--|Mem0[r8 + 3<i32>:byte] = (byte) r1");
         }
 
         [Test]
         public void ThumbRw_smlsdx()
         {
-            RewriteCode("4CFB143D");	// smlsdx sp, ip, r4, r3
+            Given_HexString("4CFB143D");	// smlsdx sp, ip, r4, r3
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|sp = sp + ((int16) ip *s (r4 >> 16) - (ip >> 16) *s (int16) r4)");
+                "1|L--|sp = sp + ((int16) ip *s (r4 >> 16<i32>) - (ip >> 16<i32>) *s (int16) r4)");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_vdup()
         {
-            RewriteCode("FFFF2BFC");	// vdup.8 d31, d27[7]
+            Given_HexString("FFFF2BFC");	// vdup.8 d31, d27[7]
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|d31 = __vdup_8(d27[7<i32>])");
         }
 
         [Test]
         public void ThumbRw_veor()
         {
-            RewriteCode("46FF5421");	// veor q9, q3, q2
+            Given_HexString("46FF5421");	// veor q9, q3, q2
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|q9 = q3 ^ q2");
@@ -7775,7 +7727,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vabal()
         {
-            RewriteCode("A1FF8045");	// vabal.u32 q2, d17, d0
+            Given_HexString("A1FF8045");	// vabal.u32 q2, d17, d0
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -7785,45 +7737,44 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_smlsld()
         {
-            RewriteCode("D2FBC927");	// smlsld lr, r7, r2, sb
+            Given_HexString("D2FBC927");	// smlsld lr, r7, r2, sb
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r7_r2 = r7_r2 + ((int16) r2 *s (int16) r9 - (r2 >> 16) *s (r9 >> 16))");
+                "1|L--|r7_r2 = r7_r2 + ((int16) r2 *s (int16) r9 - (r2 >> 16<i32>) *s (r9 >> 16<i32>))");
         }
 
         [Test]
         public void ThumbRw_smlsldx()
         {
-            RewriteCode("D2FBDD28");	// smlsldx r2, r8, r2, sp
+            Given_HexString("D2FBDD28");	// smlsldx r2, r8, r2, sp
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r8_r2 = r8_r2 + ((int16) r2 *s (sp >> 16) - (r2 >> 16) *s (int16) sp)");
+                "1|L--|r8_r2 = r8_r2 + ((int16) r2 *s (sp >> 16<i32>) - (r2 >> 16<i32>) *s (int16) sp)");
         }
 
         [Test]
         public void ThumbRw_smmul()
         {
-            RewriteCode("5AFB04F1");	// smmul r1, r10, r4
+            Given_HexString("5AFB04F1");	// smmul r1, r10, r4
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r1 = (int32) (r10 *s r4 >> 32)");
+                "1|L--|r1 = (int32) (r10 *s r4 >> 32<i32>)");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_smuad()
         {
-            RewriteCode("22FB04F1");	// smuad r1, r2, r4
+            Given_HexString("22FB04F1");	// smuad r1, r2, r4
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|r1 = r1 + ((int16) r2 *s (int16) r4 + (r2 >> 16<i32>) *s (r4 >> 16<i32>))");
         }
 
         [Test]
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_vraddhn()
         {
-            RewriteCode("C4FF2044");	// vraddhn.i16 d20, q2, q8
+            Given_HexString("C4FF2044");	// vraddhn.i16 d20, q2, q8
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|@@@");
@@ -7832,16 +7783,16 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_smlald()
         {
-            RewriteCode("C3FBC0B5");	// smlald fp, r5, r3, r0
+            Given_HexString("C3FBC0B5");	// smlald fp, r5, r3, r0
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r5_fp = r5_fp + ((int16) r3 *s (int16) r0 + (r3 >> 16) *s (r0 >> 16))");
+                "1|L--|r5_fp = r5_fp + ((int16) r3 *s (int16) r0 + (r3 >> 16<i32>) *s (r0 >> 16<i32>))");
         }
 
         [Test]
         public void ThumbRw_smlald_pc()
         {
-            RewriteCode("CFFBC0B5");	// smlald fp, r5, pc, r0
+            Given_HexString("CFFBC0B5");	// smlald fp, r5, pc, r0
             AssertCode(
                 "0|---|00100000(4): 1 instructions",
                 "1|---|<invalid>");
@@ -7850,25 +7801,25 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_smlaldx()
         {
-            RewriteCode("C6FBDE4B");	// smlaldx r4, fp, r6, lr
+            Given_HexString("C6FBDE4B");	// smlaldx r4, fp, r6, lr
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|fp_r4 = fp_r4 + ((int16) r6 *s (lr >> 16) + (r6 >> 16) *s (int16) lr)");
+                "1|L--|fp_r4 = fp_r4 + ((int16) r6 *s (lr >> 16<i32>) + (r6 >> 16<i32>) *s (int16) lr)");
         }
 
         [Test]
         public void ThumbRw_vclt()
         {
-            RewriteCode("F9FF0646");	// vclt.f32 d20, d6, #0
+            Given_HexString("F9FF0646");	// vclt.f32 d20, d6, #0
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|d20 = __vclt_f32(d6, 0x0000000000000000)");
+                "1|L--|d20 = __vclt_f32(d6, 0<64>)");
         }
 
         [Test]
         public void ThumbRw_usub8()
         {
-            RewriteCode("C6FA43F0");	// usub8 r0, r6, r3
+            Given_HexString("C6FA43F0");	// usub8 r0, r6, r3
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r0 = __usub_i8(r6, r3)");
@@ -7877,35 +7828,34 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_usub16()
         {
-            RewriteCode("D7FA40F6");	// usub16 r6, r7, r0
+            Given_HexString("D7FA40F6");	// usub16 r6, r7, r0
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r6 = __usub_i16(r7, r0)");
         }
 
         [Test]
-        [Ignore(Categories.FailedTests)]
         public void ThumbRw_vtst()
         {
-            RewriteCode("0EEFB088");	// vtst.8 d8, d30, d16
+            Given_HexString("0EEFB088");	// vtst.8 d8, d30, d16
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|@@@");
+                "1|L--|d8 = __vtst_i8(d30, d16)");
         }
 
         [Test]
         public void ThumbRw_cps()
         {
-            RewriteCode("66B6");	// cpsie ai
+            Given_HexString("66B6");	// cpsie ai
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
-                "1|L--|__cps_id()");
+                "1|L--|__cps()");
         }
 
         [Test]
         public void ThumbRw_yield()
         {
-            RewriteCode("10BF");	// yield 
+            Given_HexString("10BF");	// yield 
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
                 "1|L--|__yield()");
@@ -7915,7 +7865,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Ignore(Categories.FailedTests)]
         public void ThumbRw_sev()
         {
-            RewriteCode("40BF");	// sev 
+            Given_HexString("40BF");	// sev 
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
                 "1|L--|@@@");
@@ -7924,25 +7874,25 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_vmla()
         {
-            RewriteCode("A0EFE541");	// vmla.f32 d4, d16, d5[1]
+            Given_HexString("A0EFE541");	// vmla.f32 d4, d16, d5[1]
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|d4 = __vmla_f32(d16, d21)");
         }
 
         [Test]
-        public void ThumbRw_vmls()
+        public void ThumbRw_vmls_i16()
         {
-            RewriteCode("1CFF2469");	// vmls.i16 d6, d12, d20
+            Given_HexString("1CFF2469");	// vmls.u16 d6, d12, d20
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|d6 = __vmls_i16(d12, d20)");
+                "1|L--|d6 = __vmls_u16(d12, d20)");
         }
 
         [Test]
         public void ThumbRw_mov_r0_r0()
         {
-            RewriteCode("0000");	// mov r0,r0
+            Given_HexString("0000");	// mov r0,r0
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
                 "1|L--|r0 = r0");
@@ -7951,7 +7901,7 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_wfi()
         {
-            RewriteCode("30BF");
+            Given_HexString("30BF");
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
                 "1|L--|__wait_for_interrupt()");
@@ -7961,16 +7911,16 @@ namespace Reko.UnitTests.Arch.Arm
         public void ThumbRw_ldr_literal_at_offset_0002()
         {
             Given_Address(0x00100002);
-            RewriteCode("004A");
+            Given_HexString("004A");
             AssertCode(
                 "0|L--|00100002(2): 1 instructions",
-                "1|L--|r2 = Mem0[0x00100004:word32]");
+                "1|L--|r2 = Mem0[0x00100004<p32>:word32]");
         }
 
         [Test]
         public void ThumbRw_bx_lr()
         {
-            RewriteCode("7047");// bx lr
+            Given_HexString("7047");// bx lr
             AssertCode(
                 "0|T--|00100000(2): 1 instructions",
                 "1|T--|return (0,0)");
@@ -7979,10 +7929,96 @@ namespace Reko.UnitTests.Arch.Arm
         [Test]
         public void ThumbRw_bne_backwards()
         {
-            RewriteCode("FED1");    // bne 
+            Given_HexString("FED1");    // bne 
             AssertCode(
                 "0|T--|00100000(2): 1 instructions",
                 "1|T--|if (Test(NE,Z)) branch 00100000");
         }
+
+        [Test]
+        public void ThumbRw_hlt()
+        {
+            Given_HexString("86BA");
+            AssertCode(
+                "0|H--|00100000(2): 1 instructions",
+                "1|H--|__hlt()");
+        }
+
+
+        [Test]
+        public void ThumbRw_movs_w()
+        {
+            Given_HexString("5FEA5B0B");    // movs.w\tfp,fp,lsr #1
+            AssertCode(
+                "0|L--|00100000(4): 2 instructions",
+                "1|L--|fp = fp >> 1<u32>",
+                "2|L--|NZC = cond(fp)");
+        }
+
+        [Test]
+        public void ThumbRw_eor_w_lsl()
+        {
+            Given_HexString("80EA8000");
+            AssertCode(
+                "0|L--|00100000(4): 1 instructions",
+                "1|L--|r0 = r0 ^ r0 << 2<u32>");
+        }
+
+        [Test]
+        public void ThumbRw_teqs_w()
+        {
+            Given_HexString("9CEA000F");    // teqs.w\tip,r0
+            AssertCode(
+                "0|L--|00100000(4): 1 instructions",
+                "1|L--|NZC = cond(ip ^ r0)");
+        }
+
+        [Test]
+        public void ThumbRw_adds_w()
+        {
+            Given_HexString("10EB0208"); // adds.w\tr8,r0,r2
+            AssertCode(
+                 "0|L--|00100000(4): 2 instructions",
+                 "1|L--|r8 = r0 + r2");
+        }
+
+        [Test]
+        public void ThumbRw_adcs_rxx()
+        {
+            Given_HexString("54EB3200"); // adcs.w\tr0,r4,r2,rrx
+            AssertCode(
+                 "0|L--|00100000(4): 2 instructions",
+                 "1|L--|r0 = r4 + __rcr(r2, 1<u32>, C) + C");
+        }
+
+        [Test]
+        public void ThumbRw_subs_w()
+        {
+            Given_HexString("B6EB0A08"); // subs.w\tr8,r6,r10
+            AssertCode(
+                 "0|L--|00100000(4): 2 instructions",
+                 "1|L--|r8 = r6 - r10",
+                 "2|L--|NZCV = cond(r8)");
+        }
+
+        [Test]
+        public void ThumbRw_sub_w()
+        {
+            Given_HexString("A9EB0809"); // sub.w\tr9,r9,r8
+            AssertCode(
+                 "0|L--|00100000(4): 1 instructions",
+                 "1|L--|r9 = r9 - r8");
+        }
+
+        [Test]
+        public void ThumbRw_cmp_w_lsl()
+        {
+            Given_HexString("B0EB450F"); // cmp.w\tr0,r5,lsl #1"
+            AssertCode(
+                 "0|L--|00100000(4): 1 instructions",
+                 "1|L--|NZCV = cond(r0 - (r5 << 1<u32>))");
+        }
+
+  
     }
 }

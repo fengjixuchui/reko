@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,12 +33,14 @@ using System.Linq;
 namespace Reko.Analysis
 {
     /// <summary>
-    /// Performs propagation by replacing occurences of expressions with simpler expressions if these are beneficial. 
-    /// Constants are folded, and so on.
+    /// Performs propagation by replacing occurences of expressions with 
+    /// simpler expressions if these are beneficial. Constants are folded,
+    /// and so on.
     /// </summary>
     /// <remarks>
-    /// This is a useful transform that doesn't cause too many problems for later transforms. Calling it will flush out
-    /// lots of dead expressions that can be removed with DeadCode.Eliminate()
+    /// This is a useful transform that doesn't cause too many problems for
+    /// later transforms. Calling it will flush out lots of dead expressions
+    /// that can be removed with DeadCode.Eliminate()
     /// </remarks>
     public class ValuePropagator : InstructionVisitor<Instruction>
     {
@@ -49,7 +51,6 @@ namespace Reko.Analysis
         private readonly CallGraph callGraph;
         private readonly ExpressionSimplifier eval;
         private readonly SsaEvaluationContext evalCtx;
-        private readonly SsaIdentifierTransformer ssaIdTransformer;
         private readonly SsaMutator ssam;
         private readonly DecompilerEventListener eventListener;
         private Statement stmCur;
@@ -58,16 +59,15 @@ namespace Reko.Analysis
             SegmentMap segmentMap,
             SsaState ssa,
             CallGraph callGraph,
-            IImportResolver importResolver,
+            IDynamicLinker dynamicLinker,
             DecompilerEventListener eventListener)
         {
             this.ssa = ssa;
             this.callGraph = callGraph;
             this.arch = ssa.Procedure.Architecture;
             this.eventListener = eventListener;
-            this.ssaIdTransformer = new SsaIdentifierTransformer(ssa);
             this.ssam = new SsaMutator(ssa);
-            this.evalCtx = new SsaEvaluationContext(arch, ssa.Identifiers, importResolver);
+            this.evalCtx = new SsaEvaluationContext(arch, ssa.Identifiers, dynamicLinker);
             this.eval = new ExpressionSimplifier(segmentMap, evalCtx, eventListener);
         }
 
@@ -82,6 +82,8 @@ namespace Reko.Analysis
                 Changed = false;
                 foreach (Statement stm in ssa.Procedure.Statements.ToArray())
                 {
+                    if (eventListener.IsCanceled())
+                        return;
                     this.stmCur = stm;
                     Transform(stm);
                 }
@@ -91,9 +93,9 @@ namespace Reko.Analysis
         public void Transform(Statement stm)
         {
             evalCtx.Statement = stm;
-            if (trace.TraceVerbose) Debug.WriteLine(string.Format("From: {0}", stm.Instruction.ToString()));
+            trace.Verbose("From: {0}", stm.Instruction.ToString());
             stm.Instruction = stm.Instruction.Accept(this);
-            if (trace.TraceVerbose) Debug.WriteLine(string.Format("  To: {0}", stm.Instruction.ToString()));
+            trace.Verbose("  To: {0}", stm.Instruction.ToString());
         }
 
         #region InstructionVisitor<Instruction> Members
@@ -131,6 +133,15 @@ namespace Reko.Analysis
                     // this statement and the callee.
                     callGraph.AddEdge(stmCur, procCallee);
                 }
+            }
+            foreach (var use in ci.Uses)
+            {
+                use.Expression = use.Expression.Accept(eval);
+            }
+            foreach (var def in ci.Definitions
+                .Where(d => !( d.Expression is Identifier)))
+            {
+                def.Expression = def.Expression.Accept(eval);
             }
             return ci;
         }
@@ -175,21 +186,25 @@ namespace Reko.Analysis
 
         public Instruction VisitSideEffect(SideEffect side)
         {
-            side.Expression = side.Expression.Accept(eval);
-            return side;
+            var exp = side.Expression.Accept(eval);
+            return new SideEffect(exp);
         }
 
         public Instruction VisitStore(Store store)
         {
             store.Src = store.Src.Accept(eval);
-            store.Dst = store.Dst.Accept(eval);
+            var idDst = store.Dst as Identifier;
+            if (idDst == null || (!(idDst.Storage is OutArgumentStorage)))
+            {
+                store.Dst = store.Dst.Accept(eval);
+            }
             return store;
         }
 
         public Instruction VisitSwitchInstruction(SwitchInstruction si)
         {
-            si.Expression = si.Expression.Accept(eval);
-            return si;
+            var exp = si.Expression.Accept(eval);
+            return new SwitchInstruction(exp, si.Targets);
         }
 
         public Instruction VisitUseInstruction(UseInstruction u)
@@ -210,11 +225,14 @@ namespace Reko.Analysis
                 ci,
                 this.arch.StackRegister,
                 sig.StackDelta - ci.CallSite.SizeOfReturnAddressOnStack);
-            var ab = new ApplicationBuilder(
-                arch, ssa.Procedure.Frame, ci.CallSite,
-                ci.Callee, sig, false);
-            stm.Instruction = ab.CreateInstruction();
-            ssaIdTransformer.Transform(stm, ci);
+            ssam.AdjustRegisterAfterCall(
+                stm,
+                ci,
+                this.arch.FpuStackRegister,
+                -sig.FpuStackDelta);
+            var ab = new CallApplicationBuilder(this.ssa, stm, ci, ci.Callee);
+            stm.Instruction = ab.CreateInstruction(sig, chr);
+            ssam.AdjustSsa(stm, ci);
         }
     }
 }

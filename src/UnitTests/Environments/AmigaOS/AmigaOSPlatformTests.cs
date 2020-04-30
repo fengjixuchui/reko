@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -84,7 +84,7 @@ namespace Reko.UnitTests.Environments.AmigaOS
             When_Create_Platform();
             m.Call(m.IAdd(binder.EnsureRegister(Registers.a6), -512), 4);
             var state = arch.CreateProcessorState();
-            var svc = platform.FindService(rtls.Last(), state);
+            var svc = platform.FindService(rtls.Last(), state, null);
 
             Assert.AreEqual("Allocate", svc.Name);
             Assert.AreEqual(2, svc.Signature.Parameters.Length);

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -48,6 +48,8 @@ namespace Reko.Core.Configuration
 
         public string MemoryMapFile { get; set; }
 
+        public bool CaseInsensitive { get; set; }
+
         public virtual List<TypeLibraryDefinition> TypeLibraries { get; internal set; }
         public virtual List<TypeLibraryDefinition> CharacteristicsLibraries { get; internal set; }
         public virtual List<PlatformArchitectureDefinition> Architectures { get; internal set; }
@@ -83,18 +85,18 @@ namespace Reko.Core.Configuration
             {
                 return new PlatformHeuristics
                 {
-                    ProcedurePrologs = new BytePattern[0],
+                    ProcedurePrologs = new MaskedPattern[0],
                 };
             }
-            BytePattern[] prologs;
+            MaskedPattern[] prologs;
             if (heuristics.ProcedurePrologs == null)
             {
-                prologs = new BytePattern[0];
+                prologs = new MaskedPattern[0];
             }
             else
             {
                 prologs = heuristics.ProcedurePrologs
-                    .Select(p => LoadBytePattern(p))
+                    .Select(p => LoadMaskedPattern(p))
                     .Where(p => p.Bytes != null)
                     .ToArray();
             }
@@ -105,10 +107,10 @@ namespace Reko.Core.Configuration
             };
         }
 
-        public BytePattern LoadBytePattern(BytePattern_v1 sPattern)
+        public MaskedPattern LoadMaskedPattern(BytePattern_v1 sPattern)
         {
-            List<byte> bytes = null;
-            List<byte> mask = null;
+            List<byte> bytes;
+            List<byte> mask;
             if (sPattern.Bytes == null)
                 return null;
             if (sPattern.Mask == null)
@@ -121,11 +123,10 @@ namespace Reko.Core.Configuration
                 for (int i = 0; i < sPattern.Bytes.Length; ++i)
                 {
                     char c = sPattern.Bytes[i];
-                    byte b;
-                    if (BytePattern.TryParseHexDigit(c, out b))
+                    if (BytePattern.TryParseHexDigit(c, out byte b))
                     {
-                        bb = bb | (b << shift);
-                        mm = mm | (0x0F << shift);
+                        bb |= (b << shift);
+                        mm |= (0x0F << shift);
                         shift -= 4;
                         if (shift < 0)
                         {
@@ -151,43 +152,17 @@ namespace Reko.Core.Configuration
             }
             else
             {
-                bytes = LoadHexBytes(sPattern.Bytes);
-                mask = LoadHexBytes(sPattern.Mask);
+                bytes = BytePattern.FromHexBytes(sPattern.Bytes);
+                mask = BytePattern.FromHexBytes(sPattern.Mask);
             }
             if (bytes.Count == 0)
                 return null;
             else
-                return new BytePattern
+                return new MaskedPattern
                 {
                     Bytes = bytes.ToArray(),
                     Mask = mask.ToArray()
                 };
-
-        }
-
-        //$REFACTOR: this is so generic it should live somewhere else.
-        public static List<byte> LoadHexBytes(string sBytes)
-        {
-            int shift = 4;
-            int bb = 0;
-            var bytes = new List<byte>();
-            for (int i = 0; i < sBytes.Length; ++i)
-            {
-                char c = sBytes[i];
-                byte b;
-                if (BytePattern.TryParseHexDigit(c, out b))
-                {
-                    bb = bb | (b << shift);
-                    shift -= 4;
-                    if (shift < 0)
-                    {
-                        bytes.Add((byte)bb);
-                        shift = 4;
-                        bb = 0;
-                    }
-                }
-            }
-            return bytes;
         }
 
         public override string ToString()

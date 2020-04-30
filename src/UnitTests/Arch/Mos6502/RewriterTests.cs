@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,35 +33,22 @@ namespace Reko.UnitTests.Arch.Mos6502
     [TestFixture]
     class RewriterTests : RewriterTestBase
     {
-        private Mos6502ProcessorArchitecture arch = new Mos6502ProcessorArchitecture("mos6502");
-        private MemoryArea image;
-        private Address addrBase = Address.Ptr16(0x0200);
+        private readonly Mos6502Architecture arch = new Mos6502Architecture("mos6502");
+        private readonly Address addrBase = Address.Ptr16(0x0200);
 
-        public override IProcessorArchitecture Architecture
-        {
-            get { return arch; }
-        }
+        public override IProcessorArchitecture Architecture => arch;
+        public override Address LoadAddress => addrBase;
 
-        protected override IEnumerable<RtlInstructionCluster> GetInstructionStream(IStorageBinder binder, IRewriterHost host)
+        protected override IEnumerable<RtlInstructionCluster> GetRtlStream(MemoryArea mem, IStorageBinder binder, IRewriterHost host)
         {
             var state = new Mos6502ProcessorState(arch);
-            return new Rewriter(arch, image.CreateLeReader(0), state, new Frame(arch.FramePointerType), host);
-        }
-
-        public override Address LoadAddress
-        {
-            get { return addrBase; }
-        }
-
-        private void BuildTest(params byte[] bytes)
-        {
-            image = new MemoryArea(addrBase, bytes);
+            return new Rewriter(arch, mem.CreateLeReader(0), state, new Frame(arch.FramePointerType), host);
         }
 
         [Test]
         public void Rw6502_tax()
         {
-            BuildTest(0xAA);
+            Given_Bytes(0xAA);
             AssertCode(
                 "0|L--|0200(1): 2 instructions",
                 "1|L--|x = a",
@@ -71,28 +58,28 @@ namespace Reko.UnitTests.Arch.Mos6502
         [Test]
         public void Rw6502_sbc()
         {
-            BuildTest(0xF1, 0xE0);
+            Given_Bytes(0xF1, 0xE0);
             AssertCode(
                 "0|L--|0200(2): 2 instructions",
-                "1|L--|a = a - Mem0[Mem0[0x00E0:ptr16] + (uint16) y:byte] - !C",
+                "1|L--|a = a - Mem0[Mem0[0x00E0<p16>:ptr16] + (uint16) y:byte] - !C",   //$LIT
                 "2|L--|NVZC = cond(a)");
         }
 
         [Test]
         public void Rw6502_dec_A()
         {
-            BuildTest(0xCE, 0x34, 0x12);
+            Given_Bytes(0xCE, 0x34, 0x12);
             AssertCode(
                 "0|L--|0200(3): 3 instructions",
-                "1|L--|v2 = Mem0[0x1234:byte] - 0x01",
-                "2|L--|Mem0[0x1234:byte] = v2",
+                "1|L--|v2 = Mem0[0x1234<p16>:byte] - 1<8>",
+                "2|L--|Mem0[0x1234<p16>:byte] = v2",
                 "3|L--|NZ = cond(v2)");
         }
 
         [Test]
         public void Rw6502_rts()
         {
-            BuildTest(0x60);
+            Given_Bytes(0x60);
             AssertCode(
                 "0|T--|0200(1): 1 instructions",
                 "1|T--|return (2,0)");
@@ -101,38 +88,38 @@ namespace Reko.UnitTests.Arch.Mos6502
         [Test]
         public void Rw6502_pha()
         {
-            BuildTest(0x48);
+            Given_Bytes(0x48);
             AssertCode(
                 "0|L--|0200(1): 2 instructions",
-                "1|L--|s = s - 1",
+                "1|L--|s = s - 1<i8>",
                 "2|L--|Mem0[s:byte] = a");
         }
 
         [Test]
         public void Rw6502_pla()
         {
-            BuildTest(0x68);
+            Given_Bytes(0x68);
             AssertCode(
                 "0|L--|0200(1): 3 instructions",
                 "1|L--|a = Mem0[s:byte]",
-                "2|L--|s = s + 1",
+                "2|L--|s = s + 1<i8>",
                 "3|L--|NZ = cond(a)");
         }
         [Test]
         public void Rw6502_asl_zx()
         {
-            BuildTest(0x16, 0x64);
+            Given_Bytes(0x16, 0x64);
             AssertCode(
                 "0|L--|0200(2): 3 instructions",
-                "1|L--|v3 = Mem0[0x0064 + x:byte] << 0x01",
-                "2|L--|Mem0[0x0064 + x:byte] = v3",
+                "1|L--|v3 = Mem0[0x0064<p16> + x:byte] << 1<8>",
+                "2|L--|Mem0[0x0064<p16> + x:byte] = v3",
                 "3|L--|NZC = cond(v3)");
         }
 
         [Test]
         public void Rw6502_beq()
         {
-            BuildTest(0xF0, 0x64);
+            Given_Bytes(0xF0, 0x64);
             AssertCode(
                 "0|T--|0200(2): 1 instructions",
                 "1|T--|if (Test(EQ,Z)) branch 0266");
@@ -141,29 +128,29 @@ namespace Reko.UnitTests.Arch.Mos6502
         [Test]
         public void Rw6502_cmp_iX()
         {
-            BuildTest(0xC1, 0x38);
+            Given_Bytes(0xC1, 0x38);
             AssertCode(
                 "0|L--|0200(2): 1 instructions",
-                "1|L--|NZC = cond(a - Mem0[Mem0[0x0038 + (uint16) x:ptr16]:byte])");
+                "1|L--|NZC = cond(a - Mem0[Mem0[0x0038<p16> + (uint16) x:ptr16]:byte])");
         }
 
         [Test]
         public void Rw6502_ldy_x()
         {
-            BuildTest(0xBC, 0x34, 0x12);
+            Given_Bytes(0xBC, 0x34, 0x12);
             AssertCode(
                 "0|L--|0200(3): 2 instructions",
-                "1|L--|y = Mem0[0x1234 + x:byte]",
+                "1|L--|y = Mem0[0x1234<p16> + x:byte]",
                 "2|L--|NZ = cond(y)");
         }
 
         [Test]
         public void Rw6502_asl()
         {
-            BuildTest(0x0A);
+            Given_Bytes(0x0A);
             AssertCode(
                 "0|L--|0200(1): 3 instructions",
-                "1|L--|v3 = a << 0x01",
+                "1|L--|v3 = a << 1<8>",
                 "2|L--|a = v3",
                 "3|L--|NZC = cond(v3)");
         }
@@ -171,7 +158,7 @@ namespace Reko.UnitTests.Arch.Mos6502
         [Test]
         public void Rw6502_jsr()
         {
-            BuildTest(0x20, 0x13, 0xEA);
+            Given_Bytes(0x20, 0x13, 0xEA);
             AssertCode(
                 "0|T--|0200(3): 1 instructions",
                 "1|T--|call EA13 (2)");
@@ -180,38 +167,38 @@ namespace Reko.UnitTests.Arch.Mos6502
         [Test]
         public void Rw6502_sta()
         {
-            BuildTest(0x85, 0xD0);
+            Given_Bytes(0x85, 0xD0);
             AssertCode(
                 "0|L--|0200(2): 1 instructions",
-                "1|L--|Mem0[0x00D0:byte] = a");
+                "1|L--|Mem0[0x00D0<p16>:byte] = a");
         }
 
         [Test]
         public void Rw6502_jmp_indirect()
         {
-            BuildTest(0x6C, 0x34, 0x12);
+            Given_Bytes(0x6C, 0x34, 0x12);
             AssertCode(
                 "0|T--|0200(3): 1 instructions",
-                "1|T--|goto Mem0[0x1234:word16]");
+                "1|T--|goto Mem0[0x1234<p16>:word16]");
         }
 
         [Test]
         public void Rw6502_plp()
         {
-            BuildTest(0x28);	// plp
+            Given_Bytes(0x28);	// plp
             AssertCode(
                 "0|L--|0200(1): 2 instructions",
                 "1|L--|NVIDZC = Mem0[s:byte]",
-                "2|L--|s = s + 1");
+                "2|L--|s = s + 1<i8>");
         }
 
         [Test]
         public void Rw6502_sta_y()
         {
-            BuildTest(0x99, 0xF8, 0x00); // sta $00F8,y
+            Given_Bytes(0x99, 0xF8, 0x00); // sta $00F8,y
             AssertCode(
                 "0|L--|0200(3): 1 instructions",
-                "1|L--|Mem0[0x00F8 + y:byte] = a");
+                "1|L--|Mem0[0x00F8<p16> + y:byte] = a");
         }
     }
 }

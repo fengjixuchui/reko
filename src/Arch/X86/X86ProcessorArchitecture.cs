@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,6 +29,9 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Text;
+using Reko.Core.Code;
+using Reko.Core.Operators;
+using Reko.Core.Assemblers;
 
 namespace Reko.Arch.X86
 {
@@ -44,8 +47,6 @@ namespace Reko.Arch.X86
 		
         OF = 16,            // overflow
         PF = 32,            // parity
-
-        FPUF = 64,          // FPU flags
 	}
 
     /// <summary>
@@ -56,61 +57,36 @@ namespace Reko.Arch.X86
 	public class IntelArchitecture : ProcessorArchitecture
 	{
 		private ProcessorMode mode;
-        private List<FlagGroupStorage> flagGroups;
+        private Dictionary<uint, FlagGroupStorage> flagGroupCache;
 
         public IntelArchitecture(string archId, ProcessorMode mode) : base(archId)
         {
             this.mode = mode;
-            this.flagGroups = new List<FlagGroupStorage>();
+            this.flagGroupCache = new Dictionary<uint, FlagGroupStorage>();
+            this.Endianness = EndianServices.Little;
             this.InstructionBitSize = 8;
             this.CarryFlagMask = (uint)FlagM.CF;
             this.PointerType = mode.PointerType;
             this.WordWidth = mode.WordWidth;
             this.FramePointerType = mode.FramePointerType;
             this.StackRegister = mode.StackRegister;
+            this.FpuStackRegister = Registers.Top;
             this.Options = new X86Options();
         }
 
-		public Address AddressFromSegOffset(X86State state, RegisterStorage seg, uint offset)
-		{
-			if (mode == ProcessorMode.Protected32)
-			{
-				return Address.Ptr32(offset);
-			}
-			else
-			{
-				return state.AddressFromSegOffset(seg, offset);
-			}
-		}
+        public override IAssembler CreateAssembler(string asmDialect)
+        {
+            return new Assembler.X86TextAssembler(this);
+        }
 
         public X86Disassembler CreateDisassemblerImpl(EndianImageReader imageReader)
         {
             return mode.CreateDisassembler(imageReader, Options);
         }
 
-        public override EndianImageReader CreateImageReader(MemoryArea image, Address addr)
+        public override IProcessorEmulator CreateEmulator(SegmentMap segmentMap, IPlatformEmulator envEmulator)
         {
-            return new LeImageReader(image, addr);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea image, Address addrBegin, Address addrEnd)
-        {
-            return new LeImageReader(image, addrBegin, addrEnd);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea image, ulong offset)
-        {
-            return new LeImageReader(image, offset);
-        }
-
-        public override ImageWriter CreateImageWriter()
-        {
-            return new LeImageWriter();
-        }
-
-        public override ImageWriter CreateImageWriter(MemoryArea mem, Address addr)
-        {
-            return new LeImageWriter(mem, addr);
+            return mode.CreateEmulator(this, segmentMap, envEmulator);
         }
 
         public override IEqualityComparer<MachineInstruction> CreateInstructionComparer(Normalize norm)
@@ -118,40 +94,25 @@ namespace Reko.Arch.X86
             return new X86InstructionComparer(norm);
         }
 
-        public override SortedList<string, int> GetOpcodeNames()
+        public override FrameApplicationBuilder CreateFrameApplicationBuilder(IStorageBinder binder, CallSite site, Expression callee)
         {
-            return Enum.GetValues(typeof(Opcode))
-                .Cast<Opcode>()
+            return new X86FrameApplicationBuilder(this, binder, site, callee, false);
+        }
+
+        public override SortedList<string, int> GetMnemonicNames()
+        {
+            return Enum.GetValues(typeof(Mnemonic))
+                .Cast<Mnemonic>()
                 .ToSortedList(
                     v => v.ToString(),
                     v => (int)v);
         }
 
-        public override int? GetOpcodeNumber(string name)
+        public override int? GetMnemonicNumber(string name)
         {
-            if (!Enum.TryParse(name, true, out Opcode result))
+            if (!Enum.TryParse(name, true, out Mnemonic result))
                 return null;
             return (int)result;
-        }
-
-        public override RegisterStorage GetWidestSubregister(RegisterStorage reg, HashSet<RegisterStorage> bits)
-        {
-            ulong mask = bits.Where(b => b.OverlapsWith(reg)).Aggregate(0ul, (a, r) => a | r.BitMask);
-            if ((mask & reg.BitMask) == reg.BitMask)
-                return reg;
-                RegisterStorage rMax = null;
-            if (Registers.SubRegisters.TryGetValue(reg, out var subregs))
-            {
-                foreach (var subreg in subregs.Values)
-                {
-                    if ((subreg.BitMask & mask) == subreg.BitMask &&
-                        (rMax == null || subreg.BitSize > rMax.BitSize))
-                    {
-                        rMax = subreg;
-                    }
-                }
-            }
-            return rMax;
         }
 
         public override IEnumerable<MachineInstruction> CreateDisassembler(EndianImageReader imageReader)
@@ -179,7 +140,28 @@ namespace Reko.Arch.X86
             return mode.CreateStackAccess(binder, offset, dataType);
         }
 
-        public override Address MakeAddressFromConstant(Constant c)
+        //$REFACTOR: this probably should live in X86FrameApplicationBuilder
+        public override Expression CreateFpuStackAccess(IStorageBinder binder, int offset, DataType dataType)
+        {
+            Expression e = binder.EnsureRegister(Registers.Top);
+            if (offset != 0)
+            {
+                BinaryOperator op;
+                if (offset < 0)
+                {
+                    offset = -offset;
+                    op = Operator.ISub;
+                }
+                else
+                {
+                    op = Operator.IAdd;
+                }
+                e = new BinaryExpression(op, e.DataType, e, Constant.Create(e.DataType, offset));
+            }
+            return new MemoryAccess(Registers.ST, e, dataType);
+        }
+
+        public override Address MakeAddressFromConstant(Constant c, bool codeAlign)
         {
             return mode.MakeAddressFromConstant(c);
         }
@@ -201,18 +183,17 @@ namespace Reko.Arch.X86
             return mode.GetControlRegister(v);
         }
 
-        public override FlagGroupStorage GetFlagGroup(uint grf)
+        public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)
 		{
-			foreach (FlagGroupStorage f in flagGroups)
+            if (flagGroupCache.TryGetValue(grf, out FlagGroupStorage f))
 			{
-				if (f.FlagGroupBits == grf)
-					return f;
+				return f;
 			}
 
-			PrimitiveType dt = Bits.IsSingleBitSet(grf) ? PrimitiveType.Bool : PrimitiveType.Byte;
-            var fl = new FlagGroupStorage(Registers.eflags, grf, GrfToString(grf), dt);
-			flagGroups.Add(fl);
-			return fl;
+			var dt = Bits.IsSingleBitSet(grf) ? PrimitiveType.Bool : PrimitiveType.Byte;
+            f = new FlagGroupStorage(Registers.eflags, grf, GrfToString(flagRegister, "", grf), dt);
+			flagGroupCache.Add(grf, f);
+			return f;
 		}
 
         public override FlagGroupStorage GetFlagGroup(string name)
@@ -231,12 +212,7 @@ namespace Reko.Arch.X86
                 default: return null;
 				}
 			}
-			return GetFlagGroup((uint) grf);
-		}
-
-		public override RegisterStorage GetRegister(int i)
-		{
-			return Registers.GetRegister(i);
+			return GetFlagGroup(Registers.eflags, (uint) grf);
 		}
 
         public override RegisterStorage GetRegister(string name)
@@ -247,6 +223,11 @@ namespace Reko.Arch.X86
 			return r;
 		}
 
+        public override RegisterStorage GetRegister(StorageDomain domain, BitRange range)
+        {
+            return GetSubregisterUsingMask(domain, range.BitMask());
+        }
+
         public override IEnumerable<RegisterStorage> GetAliases(RegisterStorage reg)
         {
             return Registers.All.Where(r => r != null && r.OverlapsWith(reg));
@@ -254,13 +235,59 @@ namespace Reko.Arch.X86
 
         public override RegisterStorage GetSubregister(RegisterStorage reg, int offset, int width)
         {
-            if (offset == 0 && reg.BitSize == (ulong) width)
-                return reg;
-            if (!Registers.SubRegisters.TryGetValue(reg, out var dict))
+            var mask = reg.BitMask & new BitRange(offset, offset + width).BitMask();
+            var subreg = GetSubregisterUsingMask(reg.Domain, mask) ?? reg;
+            return subreg;
+        }
+
+        public override IEnumerable<FlagGroupStorage> GetSubFlags(FlagGroupStorage flags)
+        {
+            uint grf = flags.FlagGroupBits;
+            if ((grf & Registers.S.FlagGroupBits) != 0) yield return Registers.S;
+            if ((grf & Registers.C.FlagGroupBits) != 0) yield return Registers.C;
+            if ((grf & Registers.Z.FlagGroupBits) != 0) yield return Registers.Z;
+            if ((grf & Registers.D.FlagGroupBits) != 0) yield return Registers.D;
+            if ((grf & Registers.O.FlagGroupBits) != 0) yield return Registers.O;
+            if ((grf & Registers.P.FlagGroupBits) != 0) yield return Registers.P;
+        }
+
+        private static RegisterStorage GetSubregisterUsingMask(StorageDomain domain, ulong mask)
+        {
+            RegisterStorage[] subregs;
+            if (mask == 0)
                 return null;
-            if (!dict.TryGetValue((uint)(offset * 256 + width), out var subReg))
+            RegisterStorage reg = null;
+            if (Registers.SubRegisters.TryGetValue(domain, out subregs))
+            {
+                for (int i = 0; i < subregs.Length; ++i)
+                {
+                    var subreg = subregs[i];
+                    var regMask = subreg.BitMask;
+                    if ((mask & (~regMask)) == 0)
+                        reg = subreg;
+                }
+            }
+            return reg;
+        }
+
+        public override RegisterStorage GetWidestSubregister(RegisterStorage reg, HashSet<RegisterStorage> bits)
+        {
+            ulong mask = bits.Where(b => b.OverlapsWith(reg)).Aggregate(0ul, (a, r) => a | r.BitMask);
+            if (mask == 0)
                 return null;
-            return subReg;
+            mask &= reg.BitMask;
+            RegisterStorage[] subregs;
+            if (Registers.SubRegisters.TryGetValue(reg.Domain, out subregs))
+            {
+                for (int i = 0; i < subregs.Length; ++i)
+                {
+                    var subreg = subregs[i];
+                    var regMask = subreg.BitMask;
+                    if ((mask & (~regMask)) == 0)
+                        reg = subreg;
+                }
+            }
+            return reg;
         }
 
         public override RegisterStorage[] GetRegisters()
@@ -314,13 +341,12 @@ namespace Reko.Arch.X86
             return (reg != RegisterStorage.None);
         }
 
-		public override string GrfToString(uint grf)
+		public override string GrfToString(RegisterStorage flagregister, string prefix, uint grf)
 		{
 			StringBuilder s = new StringBuilder();
-			for (int r = Registers.S.Number; grf != 0; ++r, grf >>= 1)
-			{
-				if ((grf & 1) != 0)
-					s.Append(Registers.GetRegister(r).Name);
+            foreach (var fr in Registers.EflagsBits)
+            {
+                if ((fr.FlagGroupBits & grf) != 0) s.Append(fr.Name);
 			}
 			return s.ToString();
 		}
@@ -335,11 +361,6 @@ namespace Reko.Arch.X86
         public override bool TryParseAddress(string txtAddress, out Address addr)
         {
             return mode.TryParseAddress(txtAddress, out addr);
-        }
-
-        public override bool TryRead(MemoryArea mem, Address addr, PrimitiveType dt, out Constant value)
-        {
-            return mem.TryReadLe(addr, dt, out value);
         }
     }
 

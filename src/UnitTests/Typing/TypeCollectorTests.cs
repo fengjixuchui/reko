@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,17 +19,15 @@
 #endregion
 
 using NUnit.Framework;
-using Reko.Typing;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using Reko.Core;
-using Reko.Core.Types;
-using Reko.UnitTests.Mocks;
 using Reko.Core.Expressions;
-using Reko.UnitTests.Fragments;
 using Reko.Core.Serialization;
+using Reko.Core.Types;
+using Reko.Typing;
+using Reko.UnitTests.Fragments;
+using Reko.UnitTests.Mocks;
+using System;
+using System.Linq;
 
 namespace Reko.UnitTests.Typing
 {
@@ -99,7 +97,6 @@ namespace Reko.UnitTests.Typing
             return tyco;
         }
 
-
         private void DumpProgAndStore(Program program, FileUnitTester fut)
         {
             foreach (Procedure proc in program.Procedures.Values)
@@ -111,6 +108,8 @@ namespace Reko.UnitTests.Typing
             program.TypeStore.Write(fut.TextWriter);
             fut.AssertFilesEqual();
         }
+
+        
 
         [Test]
         public void TycoMemStore()
@@ -168,7 +167,7 @@ namespace Reko.UnitTests.Typing
             {
                 var foo = Identifier.Global("foo", new UnknownType());
                 var r1 = m.Reg32("r1", 1);
-                m.Assign(r1, m.AddrOf(foo));
+                m.Assign(r1, m.AddrOf(PrimitiveType.Ptr32, foo));
                 m.MStore(r1, m.Word16(0x1234));
                 m.MStore(m.IAdd(r1, 4), m.Byte(0x0A));
                 m.Return();
@@ -189,7 +188,7 @@ namespace Reko.UnitTests.Typing
                 });
                 var foo = Identifier.Global("foo", str);
                 var r1 = m.Reg32("r1", 1);
-                m.Assign(r1, m.AddrOf(foo));
+                m.Assign(r1, m.AddrOf(PrimitiveType.Ptr32, foo));
                 m.MStore(r1, m.Word16(0x1234));
                 m.MStore(m.IAdd(r1, 4), m.Byte(0x0A));
                 m.Return();
@@ -210,7 +209,6 @@ namespace Reko.UnitTests.Typing
             RunTest(pp.BuildProgram(), "Typing/TycoArrayConstantPointers.txt");
         }
 
-
         [Test]
         public void TycoFramePointer()
         {
@@ -219,14 +217,15 @@ namespace Reko.UnitTests.Typing
             RunTest(mock, "Typing/TycoFramePointer.txt");
         }
 
-
         [Test]
+        [Category(Categories.IntegrationTests)]
         public void TycoReg00014()
         {
             RunTest32("Fragments/regressions/r00014.asm", "Typing/TycoReg00014.txt");
         }
 
         [Test]
+        [Category(Categories.IntegrationTests)]
         public void TycoReg00300()
         {
             buildEquivalenceClasses = true;
@@ -237,6 +236,34 @@ namespace Reko.UnitTests.Typing
             }, "Typing/TycoReg00300.txt");
         }
 
+
+        [Test]
+        [Category(Categories.IntegrationTests)]
+        public void TycoCallFunctionWithArraySize()
+        {
+            var m = new ProcedureBuilder();
+            var sig = FunctionType.Func(
+                new Identifier("", new Pointer(VoidType.Instance, 32), null),
+                m.Frame.EnsureStackArgument(0, PrimitiveType.Word32));
+            var ex = new ExternalProcedure("malloc", sig, new ProcedureCharacteristics
+            {
+                Allocator = true,
+                ArraySize = new ArraySizeCharacteristic
+                {
+                    Argument = "r",
+                    Factors = new ArraySizeFactor[]
+                    {
+                        new ArraySizeFactor { Constant = "1" }
+                    }
+                }
+            });
+
+            RunTest(n =>
+            {
+                Identifier eax = m.Local32("eax");
+                var call = n.Assign(eax, n.Fn(new ProcedureConstant(PrimitiveType.Word32, ex), n.Word32(3)));
+            }, "Typing/TycoCallFunctionWithArraySize.txt");
+        }
 
         [Test(Description = "According to C/C++ rules, adding signed + unsigned yields an unsigned value.")]
         public void TycoSignedUnsignedAdd()
@@ -294,6 +321,34 @@ namespace Reko.UnitTests.Typing
             tyco.CollectUserGlobalVariableTypes();
 
             Assert.AreEqual("400: xAcceleration: real64", program.GlobalFields.Fields.First().ToString());
+        }
+
+        [Test]
+        [Category(Categories.IntegrationTests)]
+        public void TycoFactorial()
+        {
+            RunTest16("Fragments/factorial.asm", "Typing/TycoFactorial.txt");
+        }
+
+        [Test]
+        [Category(Categories.IntegrationTests)]
+        public void TycoFactorialReg()
+        {
+            RunTest16("Fragments/factorial_reg.asm", "Typing/TycoFactorialReg.txt");
+        }
+
+        [Test]
+        [Category(Categories.IntegrationTests)]
+        public void TycoReg00011()
+        {
+            RunTest16("Fragments/regressions/r00011.asm", "Typing/TycoReg00011.txt");
+        }
+
+        [Test]
+        [Category(Categories.IntegrationTests)]
+        public void TycoReg00012()
+        {
+            RunTest16("Fragments/regressions/r00012.asm", "Typing/TycoReg00012.txt");
         }
     }
 }

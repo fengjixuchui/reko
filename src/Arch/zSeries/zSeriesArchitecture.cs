@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,6 +35,7 @@ namespace Reko.Arch.zSeries
     {
         public zSeriesArchitecture(string archId) : base(archId)
         {
+            this.Endianness = EndianServices.Big;
             this.InstructionBitSize = 16;
             this.WordWidth = PrimitiveType.Word32;
             this.PointerType = PrimitiveType.Ptr32;
@@ -48,29 +49,9 @@ namespace Reko.Arch.zSeries
             return new zSeriesDisassembler(this, imageReader);
         }
 
-        public override EndianImageReader CreateImageReader(MemoryArea img, Address addr)
+        public override IProcessorEmulator CreateEmulator(SegmentMap segmentMap, IPlatformEmulator envEmulator)
         {
-            return new BeImageReader(img, addr);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea img, Address addrBegin, Address addrEnd)
-        {
-            return new BeImageReader(img, addrBegin, addrEnd);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea img, ulong off)
-        {
-            return new BeImageReader(img, off);
-        }
-
-        public override ImageWriter CreateImageWriter()
-        {
-            return new BeImageWriter();
-        }
-
-        public override ImageWriter CreateImageWriter(MemoryArea img, Address addr)
-        {
-            return new BeImageWriter(img, addr);
+            throw new NotImplementedException();
         }
 
         public override IEqualityComparer<MachineInstruction> CreateInstructionComparer(Normalize norm)
@@ -93,8 +74,13 @@ namespace Reko.Arch.zSeries
             return new zSeriesRewriter(this, rdr, state, binder, host);
         }
 
-        public override FlagGroupStorage GetFlagGroup(uint grf)
+        // zSeries uses a link register
+        public override int ReturnAddressOnStack => 0;
+
+
+        public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)
         {
+            //$BUG: not close to correct but it's a start.
             return Registers.CC;
         }
 
@@ -103,19 +89,24 @@ namespace Reko.Arch.zSeries
             throw new NotImplementedException();
         }
 
-        public override SortedList<string, int> GetOpcodeNames()
+        public override SortedList<string, int> GetMnemonicNames()
         {
             throw new NotImplementedException();
         }
 
-        public override int? GetOpcodeNumber(string name)
+        public override int? GetMnemonicNumber(string name)
         {
             throw new NotImplementedException();
         }
 
-        public override RegisterStorage GetRegister(int i)
+        public RegisterStorage GetRegister(int i)
         {
             return Registers.GpRegisters[i];
+        }
+
+        public override RegisterStorage GetRegister(StorageDomain domain, BitRange range)
+        {
+            return Registers.GpRegisters[domain - StorageDomain.Register];
         }
 
         public override RegisterStorage GetRegister(string name)
@@ -131,15 +122,28 @@ namespace Reko.Arch.zSeries
             return Registers.GpRegisters;
         }
 
-        public override string GrfToString(uint grf)
+        public override IEnumerable<FlagGroupStorage> GetSubFlags(FlagGroupStorage flags)
+        {
+            yield return Registers.CC;
+        }
+
+        public override RegisterStorage GetSubregister(RegisterStorage reg, int offset, int width)
+        {
+            return reg;
+        }
+
+        public override string GrfToString(RegisterStorage flagRegister, string prefix, uint grf)
         {
             //$BUG: this is clearly not correct.
             return "CC";
         }
 
-        public override Address MakeAddressFromConstant(Constant c)
+        public override Address MakeAddressFromConstant(Constant c, bool codeAlign)
         {
-            throw new NotImplementedException();
+            var uAddr = c.ToUInt32();
+            if (codeAlign)
+                uAddr &= ~1u;
+            return Address.Ptr32(uAddr);
         }
 
         public override Address ReadCodeAddress(int size, EndianImageReader rdr, ProcessorState state)
@@ -149,17 +153,12 @@ namespace Reko.Arch.zSeries
 
         public override bool TryGetRegister(string name, out RegisterStorage reg)
         {
-            throw new NotImplementedException();
+            return Registers.RegistersByName.TryGetValue(name, out reg);
         }
 
         public override bool TryParseAddress(string txtAddr, out Address addr)
         {
             return Address.TryParse64(txtAddr, out addr);
-        }
-
-        public override bool TryRead(MemoryArea mem, Address addr, PrimitiveType dt, out Constant value)
-        {
-            throw new NotImplementedException();
         }
     }
 }

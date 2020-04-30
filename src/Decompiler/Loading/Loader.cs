@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,8 +40,8 @@ namespace Reko.Loading
     /// </summary>
     public class Loader : ILoader
     {
-        private IConfigurationService cfgSvc;
-        private UnpackingService unpackerSvc;
+        private readonly IConfigurationService cfgSvc;
+        private readonly UnpackingService unpackerSvc;
 
         public Loader(IServiceProvider services)
         {
@@ -55,25 +55,17 @@ namespace Reko.Loading
         public string DefaultToFormat { get; set; }
         public IServiceProvider Services { get; private set; }
 
-        public Program AssembleExecutable(string filename, string assemblerName, Address addrLoad)
-        {
-            var bytes = LoadImageBytes(filename, 0);
-            var asm = cfgSvc.GetAssembler(assemblerName);
-            if (asm == null)
-                throw new ApplicationException(string.Format("Unknown assembler name '{0}'.", assemblerName));
-            return AssembleExecutable(filename, bytes, asm, addrLoad);
-        }
-
-        public Program AssembleExecutable(string fileName, Assembler asm, Address addrLoad)
+        public Program AssembleExecutable(string fileName, IAssembler asm, IPlatform platform, Address addrLoad)
         {
             var bytes = LoadImageBytes(fileName, 0);
-            return AssembleExecutable(fileName, bytes, asm, addrLoad);
+            return AssembleExecutable(fileName, bytes, asm, platform, addrLoad);
         }
 
-        public Program AssembleExecutable(string fileName, byte[] image, Assembler asm, Address addrLoad)
+        public Program AssembleExecutable(string fileName, byte[] image, IAssembler asm, IPlatform platform, Address addrLoad)
         {
             var program = asm.Assemble(addrLoad, new StreamReader(new MemoryStream(image), Encoding.UTF8));
             program.Name = Path.GetFileName(fileName);
+            program.Platform = platform;
             foreach (var sym in asm.ImageSymbols)
             {
                 program.ImageSymbols[sym.Address] = sym;
@@ -85,6 +77,7 @@ namespace Reko.Loading
             program.EntryPoints[asm.StartAddress] =
                 ImageSymbol.Procedure(program.Architecture, asm.StartAddress);
             CopyImportReferences(asm.ImportReferences, program);
+            program.User.OutputFilePolicy = Program.SegmentFilePolicy;
             return program;
         }
 
@@ -147,6 +140,7 @@ namespace Reko.Loading
                 }
                 program.ImageMap = program.SegmentMap.CreateImageMap();
             }
+            program.User.OutputFilePolicy = Program.SegmentFilePolicy;
             return program;
         }
 
@@ -193,6 +187,7 @@ namespace Reko.Loading
             program.User.Environment = platform.Name;
             program.User.Loader = details.LoaderName;
             program.User.LoadAddress = addrLoad;
+            program.User.OutputFilePolicy = Program.SegmentFilePolicy;
 
             program.Architecture.PostprocessProgram(program);
             program.ImageMap = program.SegmentMap.CreateImageMap();
@@ -337,14 +332,13 @@ namespace Reko.Loading
             return default(T);
         }
 
-        public bool ImageHasMagicNumber(byte[] image, string magicNumber, string sOffset)
+        public bool ImageHasMagicNumber(byte[] image, string magicNumber, long offset)
         {
-            int offset = ConvertOffset(sOffset);
             byte[] magic = ConvertHexStringToBytes(magicNumber);
             if (image.Length < offset + magic.Length)
                 return false;
 
-            for (int i = 0, j = offset; i < magic.Length; ++i, ++j)
+            for (long i = 0, j = offset; i < magic.Length; ++i, ++j)
             {
                 if (magic[i] != image[j])
                     return false;
@@ -397,12 +391,26 @@ namespace Reko.Loading
             }
         }
 
+        /// <summary>
+        /// Create an <see cref="ImageLoader"/> using the provided parameters.
+        /// </summary>
         public static T CreateImageLoader<T>(IServiceProvider services, string typeName, string filename, byte[] bytes)
         {
             Type t = Type.GetType(typeName);
             if (t == null)
                 throw new ApplicationException(string.Format("Unable to find loader {0}.", typeName));
             return (T) Activator.CreateInstance(t, services, filename, bytes);
+        }
+
+        /// <summary>
+        /// Creates an <see cref="ImageLoader"/> that wraps an existing ImageLoader.
+        /// </summary>
+        public static T CreateOuterImageLoader<T>(string typeName, ImageLoader innerLoader)
+        {
+            Type t = Type.GetType(typeName);
+            if (t == null)
+                throw new ApplicationException(string.Format("Unable to find loader {0}.", typeName));
+            return (T) Activator.CreateInstance(t, innerLoader);
         }
 
         /// <summary>

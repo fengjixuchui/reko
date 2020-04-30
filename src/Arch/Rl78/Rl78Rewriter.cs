@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -145,10 +145,7 @@ namespace Reko.Arch.Rl78
                 case Mnemonic.xor: RewriteLogical(m.Xor); break;
                 case Mnemonic.xor1: RewriteLogical1(m.Xor); break;
                 }
-                yield return new RtlInstructionCluster(instr.Address, instr.Length, instrs.ToArray())
-                {
-                    Class = this.iclass
-                };
+                yield return m.MakeCluster(instr.Address, instr.Length, iclass);
             }
         }
 
@@ -186,19 +183,19 @@ namespace Reko.Arch.Rl78
 
         private Identifier C()
         {
-            var c = arch.GetFlagGroup((uint) FlagM.CF);
+            var c = arch.GetFlagGroup(Registers.psw, (uint) FlagM.CF);
             return binder.EnsureFlagGroup(c);
         }
 
         private Identifier CZ()
         {
-            var cz = arch.GetFlagGroup((uint) (FlagM.CF | FlagM.ZF));
+            var cz = arch.GetFlagGroup(Registers.psw, (uint) (FlagM.CF | FlagM.ZF));
             return binder.EnsureFlagGroup(cz);
         }
 
         private Identifier Z()
         {
-            var z = arch.GetFlagGroup((uint) FlagM.ZF);
+            var z = arch.GetFlagGroup(Registers.psw, (uint) FlagM.ZF);
             return binder.EnsureFlagGroup(z);
         }
 
@@ -224,7 +221,7 @@ namespace Reko.Arch.Rl78
                 }
                 else
                 {
-                    ea = m.Word32(mop.Offset);
+                    ea = m.Ptr32((uint)mop.Offset);
                 }
                 if (mop.Index != null)
                 {
@@ -270,7 +267,7 @@ namespace Reko.Arch.Rl78
                 }
                 else
                 {
-                    ea = m.Word32(mop.Offset);
+                    ea = m.Ptr32((uint)mop.Offset);
                 }
                 if (mop.Index != null)
                 {

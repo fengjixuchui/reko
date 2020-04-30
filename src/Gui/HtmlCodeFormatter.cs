@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,7 +33,9 @@ namespace Reko.Gui
         private HtmlFormatter formatter;
         private IDictionary<Address, Procedure> procedureMap;
 
-        public HtmlCodeFormatter(TextWriter writer, IDictionary<Address, Procedure> procedureMap)
+        public HtmlCodeFormatter(
+            TextWriter writer, 
+            IDictionary<Address, Procedure> procedureMap)
             : base(new HtmlFormatter(writer))
         {
             this.formatter = (HtmlFormatter)InnerFormatter;

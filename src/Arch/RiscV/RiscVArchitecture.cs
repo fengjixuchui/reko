@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -55,6 +55,7 @@ namespace Reko.Arch.RiscV
 
         public RiscVArchitecture(string archId) : base(archId)
         {
+            this.Endianness = EndianServices.Little;
             this.InstructionBitSize = 16;
             //$TODO: what about 32-bit version of arch?
             this.PointerType = PrimitiveType.Ptr64;
@@ -82,34 +83,23 @@ namespace Reko.Arch.RiscV
             this.StackRegister = regs[2];       // sp
         }
 
+        /// <summary>
+        /// The size of the return address (in bytes) if pushed on stack.
+        /// </summary>
+        /// <remarks>
+        /// Return address is not pushed directly on a stack in memory on
+        /// RISC-V.
+        /// </remarks>
+        public override int ReturnAddressOnStack => 0;
+
         public override IEnumerable<MachineInstruction> CreateDisassembler(EndianImageReader imageReader)
         {
             return new RiscVDisassembler(this, imageReader);
         }
 
-        public override EndianImageReader CreateImageReader(MemoryArea img, ulong off)
-        {
-            return new LeImageReader(img, off);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea img, Address addr)
-        {
-            return new LeImageReader(img, addr);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea img, Address addrBegin, Address addrEnd)
+        public override IProcessorEmulator CreateEmulator(SegmentMap segmentMap, IPlatformEmulator envEmulator)
         {
             throw new NotImplementedException();
-        }
-
-        public override ImageWriter CreateImageWriter()
-        {
-            throw new NotImplementedException();
-        }
-
-        public override ImageWriter CreateImageWriter(MemoryArea img, Address addr)
-        {
-            return new LeImageWriter(img, addr);
         }
 
         public override IEqualityComparer<MachineInstruction> CreateInstructionComparer(Normalize norm)
@@ -137,31 +127,35 @@ namespace Reko.Arch.RiscV
             throw new NotImplementedException();
         }
 
-        public override FlagGroupStorage GetFlagGroup(uint grf)
+        public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)
         {
             throw new NotImplementedException();
         }
 
-        public override SortedList<string, int> GetOpcodeNames()
+        public override SortedList<string, int> GetMnemonicNames()
         {
             throw new NotImplementedException();
         }
 
-        public override int? GetOpcodeNumber(string name)
+        public override int? GetMnemonicNumber(string name)
         {
             throw new NotImplementedException();
         }
 
         public override RegisterStorage GetRegister(string name)
         {
-            RegisterStorage reg;
-            if (regsByName.TryGetValue(name, out reg))
+            if (regsByName.TryGetValue(name, out RegisterStorage reg))
                 return reg;
             else
                 return null;
         }
 
-        public override RegisterStorage GetRegister(int i)
+        public override RegisterStorage GetRegister(StorageDomain domain, BitRange range)
+        {
+            return regs[domain - StorageDomain.Register];
+        }
+
+        public RegisterStorage GetRegister(int i)
         {
             return regs[i];
         }
@@ -171,15 +165,18 @@ namespace Reko.Arch.RiscV
             return regs;
         }
 
-        public override string GrfToString(uint grf)
+        public override string GrfToString(RegisterStorage flagRegister, string prefix, uint grf)
         {
             return "";
         }
 
-        public override Address MakeAddressFromConstant(Constant c)
+        public override Address MakeAddressFromConstant(Constant c, bool codeAlign)
         {
             //$TODO: what about 32-bit? 
-            return Address.FromConstant(c);
+            var uAddr = c.ToUInt32();
+            if (codeAlign)
+                uAddr &= ~1u;
+            return Address.Ptr32(uAddr);
         }
 
         public override Address ReadCodeAddress(int size, EndianImageReader rdr, ProcessorState state)
@@ -196,11 +193,6 @@ namespace Reko.Arch.RiscV
         {
             //$TODO: what if 32-bit?
             return Address.TryParse64(txtAddr, out addr);
-        }
-
-        public override bool TryRead(MemoryArea mem, Address addr, PrimitiveType dt, out Constant value)
-        {
-            return mem.TryReadLe(addr, dt, out value);
         }
     }
 }

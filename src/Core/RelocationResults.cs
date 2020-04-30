@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,7 +29,7 @@ namespace Reko.Core
     {
         // Known locations in the binary, along with some
         // type information and a name.
-        public SortedList<Address, ImageSymbol> Symbols;
+        public readonly SortedList<Address, ImageSymbol> Symbols;
 
         // Known callable entry points. This is a subset
         // of the list of symbols above.

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -119,7 +119,7 @@ namespace Reko.UnitTests.Core
         public void Tlldr_void_fn()
         {
             Given_ArchitectureStub();
-            Given_ProcedureSignature(new FunctionType());
+            Given_ProcedureSignature(FunctionType.Action());
 
             var tlLdr = new TypeLibraryDeserializer(platform.Object, true, new TypeLibrary());
             var slib = new SerializedLibrary
@@ -255,11 +255,11 @@ namespace Reko.UnitTests.Core
                 Name = "variant_union",
                 Alternatives = new[]
                 {
-                    new SerializedUnionAlternative {
+                    new UnionAlternative_v1 {
                         Name = "foo",
                         Type = new PrimitiveType_v1 { Domain = Domain.Integer, ByteSize=4 },
                     },
-                    new SerializedUnionAlternative {
+                    new UnionAlternative_v1 {
                         Name = "bar",
                         Type = new PrimitiveType_v1 { Domain = Domain.Real, ByteSize=4 }
                     }
@@ -276,11 +276,9 @@ namespace Reko.UnitTests.Core
             Given_ArchitectureStub();
             arch.Setup(a => a.GetRegister("r3")).Returns(new RegisterStorage("r3", 3, 0, PrimitiveType.Word32));
             var r3 = new RegisterStorage("r3", 3, 0, PrimitiveType.Word32);
-            Given_ProcedureSignature(new FunctionType(
+            Given_ProcedureSignature(FunctionType.Func(
                 new Identifier("", PrimitiveType.Int32, r3),
-                new[] {
-                    new Identifier("", PrimitiveType.Real32, r3)}
-                ));
+                new Identifier("", PrimitiveType.Real32, r3)));
 
             var typelib = new TypeLibrary();
             var tlldr = new TypeLibraryDeserializer(platform.Object, true, typelib);
@@ -360,6 +358,40 @@ namespace Reko.UnitTests.Core
             var lib = tlLdr.Load(slib);
 
             Assert.AreEqual("(enum empty,())", lib.LookupType("empty_enum").ToString());
+        }
+
+        [Test(Description = "Keep size of forward declaration of a structure")]
+        public void Tlldr_typedef_forwarded_struct_size()
+        {
+            Given_ArchitectureStub();
+
+            var typelib = new TypeLibrary();
+            var tlldr = new TypeLibraryDeserializer(platform.Object, true, typelib);
+            new SerializedTypedef
+            {
+                Name = "_sized_struct",
+                DataType = new StructType_v1
+                {
+                    Name = "sized_struct",
+                }
+            }.Accept(tlldr);
+            new StructType_v1
+            {
+                Name = "sized_struct",
+                Fields = new StructField_v1[]
+                {
+                    new StructField_v1 {
+                        Name = "foo",
+                        Offset = 0,
+                        Type = PrimitiveType_v1.Int64(),
+                    }
+                },
+                ByteSize = 8,
+            }.Accept(tlldr);
+
+            var str = (StructureType) typelib.Types["_sized_struct"];
+            var expected = @"(struct ""sized_struct"" 0008 (0 int64 foo))";
+            Assert.AreEqual(expected, str.ToString());
         }
     }
 }

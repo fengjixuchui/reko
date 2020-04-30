@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -527,7 +527,7 @@ namespace Reko.Core.CLanguage
             }
         }
 
-        private IEnumerable<SerializedUnionAlternative> ExpandUnionFields(IEnumerable<StructDecl> decls)
+        private IEnumerable<UnionAlternative_v1> ExpandUnionFields(IEnumerable<StructDecl> decls)
         {
             foreach (var decl in decls)
             {
@@ -535,7 +535,7 @@ namespace Reko.Core.CLanguage
                 foreach (var declarator in decl.FieldDeclarators)
                 {
                     var nt = ndte.GetNameAndType(declarator);
-                    yield return new SerializedUnionAlternative
+                    yield return new UnionAlternative_v1
                     {
                         Name = nt.Name,
                         Type = nt.DataType
@@ -558,6 +558,7 @@ namespace Reko.Core.CLanguage
             {
             case CTokenType.__Cdecl:
             case CTokenType.__Fastcall:
+            case CTokenType.__Pascal:
             case CTokenType.__Stdcall:
             case CTokenType.__Thiscall:
                 ApplyCallConvention(storageClassSpec.Type);

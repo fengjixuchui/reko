@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,9 +44,8 @@ namespace Reko.Arch.Rl78
             WordWidth = PrimitiveType.Word32;
             CarryFlagMask = (uint) FlagM.CF;
             StackRegister = Registers.sp;
-
+            Endianness = EndianServices.Little;
             this.flagGroups = new Dictionary<uint, FlagGroupStorage>();
-
         }
 
         public override IEnumerable<MachineInstruction> CreateDisassembler(EndianImageReader rdr)
@@ -54,29 +53,9 @@ namespace Reko.Arch.Rl78
             return new Rl78Disassembler(this, rdr);
         }
 
-        public override EndianImageReader CreateImageReader(MemoryArea img, Address addr)
+        public override IProcessorEmulator CreateEmulator(SegmentMap segmentMap, IPlatformEmulator envEmulator)
         {
-            return new LeImageReader(img, addr);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea img, Address addrBegin, Address addrEnd)
-        {
-            return new LeImageReader(img, addrBegin, addrEnd);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea img, ulong off)
-        {
-            return new LeImageReader(img, off);
-        }
-
-        public override ImageWriter CreateImageWriter()
-        {
-            return new LeImageWriter();
-        }
-
-        public override ImageWriter CreateImageWriter(MemoryArea img, Address addr)
-        {
-            return new LeImageWriter(img, addr);
+            throw new NotImplementedException();
         }
 
         public override IEqualityComparer<MachineInstruction> CreateInstructionComparer(Normalize norm)
@@ -99,13 +78,13 @@ namespace Reko.Arch.Rl78
             return new Rl78Rewriter(this, rdr, state, binder, host);
         }
 
-        public override FlagGroupStorage GetFlagGroup(uint grf)
+        public override FlagGroupStorage GetFlagGroup(RegisterStorage reg, uint grf)
         {
             if (flagGroups.TryGetValue(grf, out FlagGroupStorage f))
                 return f;
 
             PrimitiveType dt = Bits.IsSingleBitSet(grf) ? PrimitiveType.Bool : PrimitiveType.Byte;
-            var fl = new FlagGroupStorage(Registers.psw, grf, GrfToString(grf), dt);
+            var fl = new FlagGroupStorage(Registers.psw, grf, GrfToString(reg, "", grf), dt);
             flagGroups.Add(grf, fl);
             return fl;
         }
@@ -115,18 +94,17 @@ namespace Reko.Arch.Rl78
             throw new NotImplementedException();
         }
 
-        public override SortedList<string, int> GetOpcodeNames()
+        public override SortedList<string, int> GetMnemonicNames()
         {
             throw new NotImplementedException();
         }
 
-        public override int? GetOpcodeNumber(string name)
+        public override int? GetMnemonicNumber(string name)
         {
             throw new NotImplementedException();
         }
 
-        public override RegisterStorage GetRegister(int i)
-        {
+        public override RegisterStorage GetRegister(StorageDomain domain, BitRange range) {
             throw new NotImplementedException();
         }
 
@@ -140,7 +118,7 @@ namespace Reko.Arch.Rl78
             throw new NotImplementedException();
         }
 
-        public override string GrfToString(uint grf)
+        public override string GrfToString(RegisterStorage reg, string str, uint grf)
         {
             var s = new StringBuilder();
             var flags = (FlagM) grf;
@@ -149,9 +127,10 @@ namespace Reko.Arch.Rl78
             return s.ToString();
         }
 
-        public override Address MakeAddressFromConstant(Constant c)
+        public override Address MakeAddressFromConstant(Constant c, bool codeAlign)
         {
-            return Address.Ptr32(c.ToUInt32());
+            var uAddr = c.ToUInt32();
+            return Address.Ptr32(uAddr);
         }
 
         public override Address ReadCodeAddress(int size, EndianImageReader rdr, ProcessorState state)
@@ -167,11 +146,6 @@ namespace Reko.Arch.Rl78
         public override bool TryParseAddress(string txtAddr, out Address addr)
         {
             return Address.TryParse32(txtAddr, out addr);
-        }
-
-        public override bool TryRead(MemoryArea mem, Address addr, PrimitiveType dt, out Constant value)
-        {
-            throw new NotImplementedException();
         }
     }
 }

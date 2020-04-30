@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,16 +19,16 @@
 #endregion
 
 using Reko.Core;
+using Reko.Core.Machine;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.Emit;
 using System.Text;
 
-
 namespace Reko.Arch.Cil
 {
-    public class CilDisassembler : DisassemblerBase<CilInstruction>
+    public class CilDisassembler : DisassemblerBase<CilInstruction, OpCode>
     {
         private EndianImageReader rdr;
         private CilInstruction instr;
@@ -47,6 +47,7 @@ namespace Reko.Arch.Cil
             instr = new CilInstruction
             {
                 Address = addr,
+                Operands = MachineInstruction.NoOperands,
             };
             switch (opcode)
             {
@@ -891,6 +892,16 @@ namespace Reko.Arch.Cil
             }
             instr.Length = (int)(rdr.Address - addr);
             return instr;
+        }
+
+        public override CilInstruction CreateInvalidInstruction()
+        {
+            return new CilInstruction
+            {
+                InstructionClass = InstrClass.Invalid,
+                Opcode = default(OpCode),
+                Operands = MachineInstruction.NoOperands,
+            };
         }
     }
 }

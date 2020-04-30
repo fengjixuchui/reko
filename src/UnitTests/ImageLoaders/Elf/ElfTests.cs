@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -93,6 +93,7 @@ namespace Reko.UnitTests.ImageLoaders.Elf
         {
             this.arch = new Mock<IProcessorArchitecture>();
             this.arch.Setup(a => a.CreateImageWriter()).Returns(() => new BeImageWriter());
+            cfgSvc.Setup(d => d.GetArchitecture("sparc32")).Returns(arch.Object);
         }
 
         protected int Given_SegName(string segname)

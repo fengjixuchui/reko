@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,12 +50,6 @@ namespace Reko.UnitTests.Arch.M68k
         public override Address LoadAddress
         {
             get { return Address.Ptr32(0x10000000); }
-        }
-
-
-        protected override ImageWriter CreateImageWriter(byte[] bytes)
-        {
-            return new BeImageWriter(bytes);
         }
 
         private void RunTest(string expected, params ushort[] words)
@@ -769,5 +763,10 @@ namespace Reko.UnitTests.Arch.M68k
         {
             RunTest("eori.b\t#$80,ccr", 0x0A3C, 0x0080);
         }
+
+        /*
+        R:rorl  %a2@(19131)                         E6 EA 4A BB
+        O:rorw %a2@(0)                             E6 EA 4A BB
+        */
     }
 }

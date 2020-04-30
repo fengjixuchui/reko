@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,6 +50,7 @@ namespace Reko.Arch.Arm
 
         public Arm32Architecture(string archId) : base(archId)
         {
+            Endianness = EndianServices.Little;
             InstructionBitSize = 32;
             FramePointerType = PrimitiveType.Ptr32;
             PointerType = PrimitiveType.Ptr32;
@@ -136,29 +137,9 @@ namespace Reko.Arch.Arm
 #endif
         }
 
-        public override EndianImageReader CreateImageReader(MemoryArea img, Address addr)
+        public override IProcessorEmulator CreateEmulator(SegmentMap segmentMap, IPlatformEmulator envEmulator)
         {
-            return new LeImageReader(img, addr);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea img, Address addrBegin, Address addrEnd)
-        {
-            return new LeImageReader(img, addrBegin, addrEnd);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea img, ulong off)
-        {
-            return new LeImageReader(img, off);
-        }
-
-        public override ImageWriter CreateImageWriter()
-        {
-            return new LeImageWriter();
-        }
-
-        public override ImageWriter CreateImageWriter(MemoryArea img, Address addr)
-        {
-            return new LeImageWriter(img, addr);
+            throw new NotImplementedException();
         }
 
         public override IEqualityComparer<MachineInstruction> CreateInstructionComparer(Normalize norm)
@@ -179,10 +160,10 @@ namespace Reko.Arch.Arm
             while (rdr.IsValid)
             {
                 uint linAddrCall =  rdr.Address.ToUInt32();
-                var opcode = rdr.ReadLeUInt32();
-                if ((opcode & 0x0F000000) == 0x0B000000)         // BL
+                var wInstr = rdr.ReadLeUInt32();
+                if ((wInstr & 0x0F000000) == 0x0B000000)         // BL
                 {
-                    int offset = ((int)opcode << 8) >> 6;
+                    int offset = ((int)wInstr << 8) >> 6;
                     uint target = (uint)(linAddrCall + 8 + offset);
                     if (knownLinAddresses.Contains(target))
                         yield return Address.Ptr32(linAddrCall);
@@ -205,9 +186,12 @@ namespace Reko.Arch.Arm
             return new Arm32CallingConvention();
         }
 
-        public override RegisterStorage GetRegister(int i)
+        public override RegisterStorage GetRegister(StorageDomain domain, BitRange range)
         {
-            throw new NotImplementedException();
+            if (Registers.RegistersByDomain.TryGetValue(domain, out var reg))
+                return reg;
+            else
+                return null;
         }
 
         public override RegisterStorage GetRegister(string name)
@@ -228,14 +212,23 @@ namespace Reko.Arch.Arm
 #endif
         }
 
-        public override int? GetOpcodeNumber(string name)
+        public override IEnumerable<FlagGroupStorage> GetSubFlags(FlagGroupStorage flags)
         {
-            if (!Enum.TryParse(name, true, out Opcode result))
+            uint grf = flags.FlagGroupBits;
+            if ((grf & (uint) FlagM.NF) != 0) yield return GetFlagGroup(flags.FlagRegister, (uint) FlagM.NF);
+            if ((grf & (uint) FlagM.ZF) != 0) yield return GetFlagGroup(flags.FlagRegister, (uint) FlagM.ZF);
+            if ((grf & (uint) FlagM.CF) != 0) yield return GetFlagGroup(flags.FlagRegister, (uint) FlagM.CF);
+            if ((grf & (uint) FlagM.VF) != 0) yield return GetFlagGroup(flags.FlagRegister, (uint) FlagM.VF);
+        }
+
+        public override int? GetMnemonicNumber(string name)
+        {
+            if (!Enum.TryParse(name, true, out Mnemonic result))
                 return null;
             return (int)result;
         }
 
-        public override SortedList<string, int> GetOpcodeNames()
+        public override SortedList<string, int> GetMnemonicNames()
         {
             //$TOD: write a dictionary mapping ARM instructions to ARM_INS_xxx.
             return new SortedList<string, int>();
@@ -250,7 +243,7 @@ namespace Reko.Arch.Arm
 #endif
         }
 
-        public override FlagGroupStorage GetFlagGroup(uint grf)
+        public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)
         {
             if (flagGroups.TryGetValue(grf, out var f))
             {
@@ -264,7 +257,7 @@ namespace Reko.Arch.Arm
 #else
                 Registers.cpsr;
 #endif
-            var fl = new FlagGroupStorage(flagregister, grf, GrfToString(grf), dt);
+            var fl = new FlagGroupStorage(flagregister, grf, GrfToString(flagRegister, "", grf), dt);
             flagGroups.Add(grf, fl);
             return fl;
         }
@@ -274,7 +267,7 @@ namespace Reko.Arch.Arm
             throw new NotImplementedException();
         }
 
-        public override string GrfToString(uint grf)
+        public override string GrfToString(RegisterStorage flagregister, string prefix, uint grf)
         {
             StringBuilder s = new StringBuilder();
             if ((grf & (uint)FlagM.NF) != 0) s.Append('N');
@@ -284,9 +277,12 @@ namespace Reko.Arch.Arm
             return s.ToString();
         }
 
-        public override Address MakeAddressFromConstant(Constant c)
+        public override Address MakeAddressFromConstant(Constant c, bool codeAlign)
         {
-            return Address.Ptr32(c.ToUInt32());
+            var uAddr = c.ToUInt32();
+            if (codeAlign)
+                uAddr &= ~3u;
+            return Address.Ptr32(uAddr);
         }
 
         public override Address ReadCodeAddress(int size, EndianImageReader rdr, ProcessorState state)
@@ -299,10 +295,29 @@ namespace Reko.Arch.Arm
             return Address.TryParse32(txtAddress, out addr);
         }
 
-        public override bool TryRead(MemoryArea mem, Address addr, PrimitiveType dt, out Constant value)
+        public static PrimitiveType VectorElementDataType(ArmVectorData elemType)
         {
-            return mem.TryReadLe(addr, dt, out value);
+            switch (elemType)
+            {
+            case ArmVectorData.I8: return PrimitiveType.SByte;
+            case ArmVectorData.S8: return PrimitiveType.SByte;
+            case ArmVectorData.U8: return PrimitiveType.Byte;
+            case ArmVectorData.F16: return PrimitiveType.Real16;
+            case ArmVectorData.I16: return PrimitiveType.Int16;
+            case ArmVectorData.S16: return PrimitiveType.Int16;
+            case ArmVectorData.U16: return PrimitiveType.UInt16;
+            case ArmVectorData.F32: return PrimitiveType.Real32;
+            case ArmVectorData.I32: return PrimitiveType.Int32;
+            case ArmVectorData.S32: return PrimitiveType.Int32;
+            case ArmVectorData.U32: return PrimitiveType.UInt32;
+            case ArmVectorData.F64: return PrimitiveType.Real64;
+            case ArmVectorData.I64: return PrimitiveType.Int64;
+            case ArmVectorData.S64: return PrimitiveType.Int64;
+            case ArmVectorData.U64: return PrimitiveType.UInt64;
+            default: throw new ArgumentException(nameof(elemType));
+            }
         }
+
 
 
         [DllImport("ArmNative", CallingConvention = System.Runtime.InteropServices.CallingConvention.Cdecl, EntryPoint = "CreateNativeArchitecture")]

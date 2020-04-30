@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,9 +31,11 @@ using Reko.Core.Lib;
 
 namespace Reko.Arch.SuperH
 {
+    using Decoder = Decoder<SuperHDisassembler, Mnemonic, SuperHInstruction>;
+
     // http://www.shared-ptr.com/sh_insns.html
 
-    public class SuperHDisassembler : DisassemblerBase<SuperHInstruction>
+    public class SuperHDisassembler : DisassemblerBase<SuperHInstruction, Mnemonic>
     {
         private readonly EndianImageReader rdr;
         private readonly DasmState state;
@@ -50,25 +52,38 @@ namespace Reko.Arch.SuperH
             this.addr = rdr.Address;
             if (!rdr.TryReadUInt16(out ushort uInstr))
                 return null;
-            var instr = decoders[uInstr >> 12].Decode(this, uInstr);
+            var instr = decoders[uInstr >> 12].Decode(uInstr, this);
             state.Clear();
             instr.Address = addr;
             instr.Length = 2;
             return instr;
         }
 
-        private SuperHInstruction Invalid()
+        public override SuperHInstruction MakeInstruction(InstrClass iclass, Mnemonic mnemonic)
+        {
+            var instr = new SuperHInstruction
+            {
+                Mnemonic = mnemonic,
+                InstructionClass = iclass,
+                Operands = state.ops.ToArray()
+            };
+            return instr;
+        }
+
+        public override SuperHInstruction CreateInvalidInstruction()
         {
             return new SuperHInstruction
             {
-                Opcode = Opcode.invalid
+                InstructionClass = InstrClass.Invalid,
+                Mnemonic = Mnemonic.invalid,
+                Operands = MachineInstruction.NoOperands
             };
         }
 
         public class DasmState
         {
             public List<MachineOperand> ops = new List<MachineOperand>();
-            public Opcode opcode;
+            public Mnemonic mnemonic;
             public InstrClass iclass;
             public RegisterStorage reg;
 
@@ -76,38 +91,16 @@ namespace Reko.Arch.SuperH
             {
                 ops.Clear();
             }
-
-            internal SuperHInstruction MakeInstruction()
-            {
-                var instr = new SuperHInstruction
-                {
-                    Opcode = this.opcode,
-                    InstructionClass = iclass,
-                };
-                if (ops.Count > 0)
-                {
-                    instr.op1 = ops[0];
-                    if (ops.Count > 1)
-                    {
-                        instr.op2 = ops[1];
-                        if (ops.Count > 2)
-                        {
-                            instr.op3 = ops[2];
-                        }
-                    }
-                }
-                return instr;
-            }
         }
 
-        private SuperHInstruction NotYetImplemented(ushort wInstr)
+        public override SuperHInstruction NotYetImplemented(uint wInstr, string message)
         {
             var instrHex = $"{wInstr & 0xFF:X2}{wInstr >> 8:X2}";
             base.EmitUnitTest("SuperH", instrHex, "", "ShDis", this.addr, w =>
             {
                 w.WriteLine($"    AssertCode(\"@@@\", \"{instrHex}\");");
             });
-            return Invalid();
+            return CreateInvalidInstruction();
         }
 
         // Mutators
@@ -152,12 +145,14 @@ namespace Reko.Arch.SuperH
             dasm.state.ops.Add(new RegisterOperand(Registers.fpregs[reg]));
             return true;
         }
+
         private static bool f2(uint uInstr, SuperHDisassembler dasm)
         {
             var reg = (uInstr >> 4) & 0xF;
             dasm.state.ops.Add(new RegisterOperand(Registers.fpregs[reg]));
             return true;
         }
+
         private static bool F0(uint uInstr, SuperHDisassembler dasm)
         {
             dasm.state.ops.Add(new RegisterOperand(Registers.fr0));
@@ -170,10 +165,19 @@ namespace Reko.Arch.SuperH
             dasm.state.ops.Add(new RegisterOperand(Registers.dfpregs[reg]));
             return true;
         }
+
         private static bool d2(uint uInstr, SuperHDisassembler dasm)
         {
             var reg = (uInstr >> (1 + 4)) & 0x7;
             dasm.state.ops.Add(new RegisterOperand(Registers.dfpregs[reg]));
+            return true;
+        }
+
+
+        private static bool xd2(uint uInstr, SuperHDisassembler dasm)
+        {
+            var reg = (uInstr >> (1 + 4)) & 0x7;
+            dasm.state.ops.Add(new RegisterOperand(Registers.XdRegisters[reg]));
             return true;
         }
 
@@ -183,6 +187,7 @@ namespace Reko.Arch.SuperH
             dasm.state.ops.Add(new RegisterOperand(Registers.vfpregs[reg]));
             return true;
         }
+
         private static bool v2(uint uInstr, SuperHDisassembler dasm)
         {
             var reg = (uInstr >> 8) & 0x3;
@@ -255,11 +260,13 @@ namespace Reko.Arch.SuperH
             dasm.state.ops.Add(new RegisterOperand(Registers.mach));
             return true;
         }
+
         private static bool ml(uint uInstr, SuperHDisassembler dasm)
         {
             dasm.state.ops.Add(new RegisterOperand(Registers.macl));
             return true;
         }
+
         private static bool fpul(uint uInstr, SuperHDisassembler dasm)
         {
             dasm.state.ops.Add(new RegisterOperand(Registers.fpul));
@@ -271,16 +278,19 @@ namespace Reko.Arch.SuperH
             dasm.state.ops.Add(new RegisterOperand(Registers.xmtrx));
             return true;
         }
+
         private static bool dsr(uint uInstr, SuperHDisassembler dasm)
         {
             dasm.state.ops.Add(new RegisterOperand(Registers.dsr));
             return true;
         }
+
         private static bool dbr(uint uInstr, SuperHDisassembler dasm)
         {
             dasm.state.ops.Add(new RegisterOperand(Registers.dbr));
             return true;
         }
+
         private static bool sgr(uint uInstr, SuperHDisassembler dasm)
         {
             dasm.state.ops.Add(new RegisterOperand(Registers.sgr));
@@ -299,6 +309,7 @@ namespace Reko.Arch.SuperH
             dasm.state.ops.Add(AddressOperand.Create(dasm.rdr.Address + (2 + 2 * (sbyte)uInstr)));
             return true;
         }
+
         private static bool J(uint uInstr, SuperHDisassembler dasm)
         {
             int offset = ((int)uInstr << 20) >> 19;
@@ -306,25 +317,27 @@ namespace Reko.Arch.SuperH
             return true;
         }
 
-
         private static bool Ind1b(uint uInstr, SuperHDisassembler dasm)
         {
             var reg = Registers.gpregs[(uInstr >> 8) & 0x0F];
             dasm.state.ops.Add(MemoryOperand.Indirect(PrimitiveType.Byte, reg));
             return true;
         }
+
         private static bool Ind1w(uint uInstr, SuperHDisassembler dasm)
         {
             var reg = Registers.gpregs[(uInstr >> 8) & 0x0F];
             dasm.state.ops.Add(MemoryOperand.Indirect(PrimitiveType.Word16, reg));
             return true;
         }
+
         private static bool Ind1l(uint uInstr, SuperHDisassembler dasm)
         {
             var reg = Registers.gpregs[(uInstr >> 8) & 0x0F];
             dasm.state.ops.Add(MemoryOperand.Indirect(PrimitiveType.Word32, reg));
             return true;
         }
+
         private static bool Ind1d(uint uInstr, SuperHDisassembler dasm)
         {
             var reg = Registers.gpregs[(uInstr >> 8) & 0x0F];
@@ -338,18 +351,21 @@ namespace Reko.Arch.SuperH
             dasm.state.ops.Add(MemoryOperand.Indirect(PrimitiveType.Byte, reg));
             return true;
         }
+
         private static bool Ind2w(uint uInstr, SuperHDisassembler dasm)
         {
             var reg = Registers.gpregs[(uInstr >> 4) & 0x0F];
             dasm.state.ops.Add(MemoryOperand.Indirect(PrimitiveType.Word16, reg));
             return true;
         }
+
         private static bool Ind2l(uint uInstr, SuperHDisassembler dasm)
         {
             var reg = Registers.gpregs[(uInstr >> 4) & 0x0F];
             dasm.state.ops.Add(MemoryOperand.Indirect(PrimitiveType.Word32, reg));
             return true;
         }
+
         private static bool Pre1b(uint uInstr, SuperHDisassembler dasm)
         {
             var reg = Registers.gpregs[(uInstr >> 8) & 0x0F];
@@ -371,6 +387,13 @@ namespace Reko.Arch.SuperH
             return true;
         }
 
+        private static bool Pre1d(uint uInstr, SuperHDisassembler dasm)
+        {
+            var reg = Registers.gpregs[(uInstr >> 8) & 0x0F];
+            dasm.state.ops.Add(MemoryOperand.IndirectPreDecr(PrimitiveType.Word64, reg));
+            return true;
+        }
+
         private static bool Pre15l(uint uInstr, SuperHDisassembler dasm)
         {
             var reg = Registers.r15;
@@ -384,36 +407,56 @@ namespace Reko.Arch.SuperH
             dasm.state.ops.Add(MemoryOperand.IndirectPostIncr(PrimitiveType.Word16, reg));
             return true;
         }
+
         private static bool Post1l(uint uInstr, SuperHDisassembler dasm)
         {
             var reg = Registers.gpregs[(uInstr >> 8) & 0x0F];
             dasm.state.ops.Add(MemoryOperand.IndirectPostIncr(PrimitiveType.Word32, reg));
             return true;
         }
+
+        private static bool Post1d(uint uInstr, SuperHDisassembler dasm)
+        {
+            var reg = Registers.gpregs[(uInstr >> 8) & 0x0F];
+            dasm.state.ops.Add(MemoryOperand.IndirectPostIncr(PrimitiveType.Word64, reg));
+            return true;
+        }
+
         private static bool Post2b(uint uInstr, SuperHDisassembler dasm)
         {
             var reg = Registers.gpregs[(uInstr >> 4) & 0x0F];
             dasm.state.ops.Add(MemoryOperand.IndirectPostIncr(PrimitiveType.Byte, reg));
             return true;
         }
+
         private static bool Post2w(uint uInstr, SuperHDisassembler dasm)
         {
             var reg = Registers.gpregs[(uInstr >> 4) & 0x0F];
             dasm.state.ops.Add(MemoryOperand.IndirectPostIncr(PrimitiveType.Word16, reg));
             return true;
         }
+
         private static bool Post2l(uint uInstr, SuperHDisassembler dasm)
         {
             var reg = Registers.gpregs[(uInstr >> 4) & 0x0F];
             dasm.state.ops.Add(MemoryOperand.IndirectPostIncr(PrimitiveType.Word32, reg));
             return true;
         }
+
+        private static bool Post2d(uint uInstr, SuperHDisassembler dasm)
+        {
+            var reg = Registers.gpregs[(uInstr >> 4) & 0x0F];
+            dasm.state.ops.Add(MemoryOperand.IndirectPostIncr(PrimitiveType.Word64, reg));
+            return true;
+        }
+
         private static bool Post15l(uint uInstr, SuperHDisassembler dasm)
         {
             var reg = Registers.r15;
             dasm.state.ops.Add(MemoryOperand.IndirectPostIncr(PrimitiveType.Word32, reg));
             return true;
         }
+
         // Indirect indexed
         private static bool X1b(uint uInstr, SuperHDisassembler dasm)
         {
@@ -421,36 +464,42 @@ namespace Reko.Arch.SuperH
             dasm.state.ops.Add(MemoryOperand.IndexedIndirect(PrimitiveType.Byte, Registers.gpregs[iReg]));
             return true;
         }
+
         private static bool X1w(uint uInstr, SuperHDisassembler dasm)
         {
             var iReg = (uInstr >> 8) & 0xF;
             dasm.state.ops.Add(MemoryOperand.IndexedIndirect(PrimitiveType.Word16, Registers.gpregs[iReg]));
             return true;
         }
+
         private static bool X1l(uint uInstr, SuperHDisassembler dasm)
         {
             var iReg = (uInstr >> 8) & 0xF;
             dasm.state.ops.Add(MemoryOperand.IndexedIndirect(PrimitiveType.Word32, Registers.gpregs[iReg]));
             return true;
         }
+
         private static bool X1d(uint uInstr, SuperHDisassembler dasm)
         {
             var iReg = (uInstr >> 8) & 0xF;
             dasm.state.ops.Add(MemoryOperand.IndexedIndirect(PrimitiveType.Word64, Registers.gpregs[iReg]));
             return true;
         }
+
         private static bool X2b(uint uInstr, SuperHDisassembler dasm)
         {
             var iReg = (uInstr >> 4) & 0xF;
             dasm.state.ops.Add(MemoryOperand.IndexedIndirect(PrimitiveType.Byte, Registers.gpregs[iReg]));
             return true;
         }
+
         private static bool X2w(uint uInstr, SuperHDisassembler dasm)
         {
             var iReg = (uInstr >> 4) & 0xF;
             dasm.state.ops.Add(MemoryOperand.IndexedIndirect(PrimitiveType.Word16, Registers.gpregs[iReg]));
             return true;
         }
+
         private static bool X2l(uint uInstr, SuperHDisassembler dasm)
         {
             var iReg = (uInstr >> 4) & 0xF;
@@ -467,6 +516,7 @@ namespace Reko.Arch.SuperH
             dasm.state.ops.Add(MemoryOperand.IndirectDisplacement(width, reg, (int)(uInstr & 0xF) * width.Size));
             return true;
         }
+
         private static bool D2b(uint uInstr, SuperHDisassembler dasm)
         {
             var reg = Registers.gpregs[(uInstr >> 4) & 0xF];
@@ -474,6 +524,7 @@ namespace Reko.Arch.SuperH
             dasm.state.ops.Add(MemoryOperand.IndirectDisplacement(width, reg, (int)(uInstr & 0xF) * width.Size));
             return true;
         }
+
         private static bool D2w(uint uInstr, SuperHDisassembler dasm)
         {
             var reg = Registers.gpregs[(uInstr >> 4) & 0xF];
@@ -481,6 +532,7 @@ namespace Reko.Arch.SuperH
             dasm.state.ops.Add(MemoryOperand.IndirectDisplacement(width, reg, (int)(uInstr & 0xF) * width.Size));
             return true;
         }
+
         private static bool D2l(uint uInstr, SuperHDisassembler dasm)
         {
             var reg = Registers.gpregs[(uInstr >> 4) & 0xF];
@@ -498,13 +550,13 @@ namespace Reko.Arch.SuperH
             dasm.state.ops.Add(MemoryOperand.PcRelativeDisplacement(width, width.Size * (byte)uInstr));
             return true;
         }
+
         private static bool Pl(uint uInstr, SuperHDisassembler dasm)
         {
             var width = PrimitiveType.Word32;
             dasm.state.ops.Add(MemoryOperand.PcRelativeDisplacement(width, width.Size * (byte)uInstr));
             return true;
         }
-
 
         private static bool Gb(uint uInstr, SuperHDisassembler dasm)
         {
@@ -514,53 +566,14 @@ namespace Reko.Arch.SuperH
 
         // Factory methods
 
-        private static InstrDecoder Instr(Opcode opcode, params Mutator<SuperHDisassembler>[] mutators)
+        private static Decoder Instr(Mnemonic mnemonic, params Mutator<SuperHDisassembler>[] mutators)
         {
-            return new InstrDecoder(opcode, InstrClass.Linear, mutators);
+            return new InstrDecoder<SuperHDisassembler, Mnemonic, SuperHInstruction>(InstrClass.Linear, mnemonic, mutators);
         }
 
-        private static InstrDecoder Instr(Opcode opcode, InstrClass iclass, params Mutator<SuperHDisassembler>[] mutators)
+        private static Decoder Instr(Mnemonic mnemonic, InstrClass iclass, params Mutator<SuperHDisassembler>[] mutators)
         {
-            return new InstrDecoder(opcode, iclass, mutators);
-        }
-
-
-        private static FieldDecoder Mask(int pos, int length, params Decoder[] decoders)
-        {
-            return new FieldDecoder(pos, length, decoders);
-        }
-
-        private static FieldDecoder Sparse(int pos, int length, params (int, Decoder)[] sparseDecoders)
-        {
-            var decoders = Enumerable.Range(0, 1 << length)
-                .Select(n => (Decoder)new NyiDecoder())
-                .ToArray();
-            foreach (var decoder in sparseDecoders)
-            {
-                decoders[decoder.Item1] = decoder.Item2;
-            }
-            return new FieldDecoder(pos, length, decoders);
-        }
-        private static ConditionalDecoder Cond(int pos, int length, Predicate<uint> pred, Decoder trueDecoder, Decoder falseDecoder)
-        {
-            return new ConditionalDecoder(pos, length, pred, trueDecoder, falseDecoder);
-        }
-
-        private static FieldDecoder Sparse(int pos, int length, Dictionary<int, Decoder> sparseDecoders)
-        {
-            var decoders = new Decoder[1 << length];
-            for (int i = 0; i < decoders.Length; ++i)
-            {
-                if (sparseDecoders.TryGetValue(i, out var decoder))
-                {
-                    decoders[i] = decoder;
-                }
-                else
-                {
-                    decoders[i] = new NyiDecoder();
-                }
-            }
-            return new FieldDecoder(pos, length, decoders);
+            return new InstrDecoder<SuperHDisassembler, Mnemonic, SuperHInstruction>(iclass, mnemonic, mutators);
         }
 
         // Predicates
@@ -572,201 +585,133 @@ namespace Reko.Arch.SuperH
 
         // Decoders
 
-        private abstract class Decoder
-        {
-            public abstract SuperHInstruction Decode(SuperHDisassembler dasm, ushort uInstr);
-        }
+        private static readonly Decoder invalid = Instr(Mnemonic.invalid);
 
-        private class InstrDecoder : Decoder
-        {
-            private readonly Opcode opcode;
-            private readonly InstrClass iclass;
-            private readonly Mutator<SuperHDisassembler>[] mutators;
+        /*
+1111101111111101 ~ FRCHG ~FPSCR.FR → SPFCR.FR 
+1111001111111101 ~ FSCHG ~FPSCR.SZ → SPFCR.SZ 
+1111nn0111111101 ~ FTRV XMTRX,FVn transform_vector [XMTRX, FVn] → FVn 
+*/
 
-            public InstrDecoder(Opcode opcode, InstrClass iclass, Mutator<SuperHDisassembler>[] mutators)
-            {
-                this.opcode = opcode;
-                this.iclass = iclass;
-                this.mutators = mutators;
-            }
+        private static readonly Decoder decode_FxFD = Mask(8, 4,
+            Instr(Mnemonic.fsca, fpul, f1),
+            Instr(Mnemonic.ftrv, xmtrx, v2),
+            Instr(Mnemonic.fsca, fpul, f1),
+            Instr(Mnemonic.fschg),
 
-            public override SuperHInstruction Decode(SuperHDisassembler dasm, ushort uInstr)
-            {
-                dasm.state.opcode = this.opcode;
-                dasm.state.iclass = this.iclass;
-                foreach (var mutator in this.mutators)
-                {
-                    if (!mutator(uInstr, dasm))
-                        return dasm.Invalid();
-                }
-                return dasm.state.MakeInstruction();
-            }
-        }
-
-        private class NyiDecoder : Decoder
-        {
-            public NyiDecoder()
-            {
-
-            }
-
-            public override SuperHInstruction Decode(SuperHDisassembler dasm, ushort uInstr)
-            {
-                return dasm.NotYetImplemented(uInstr);
-            }
-        }
-
-        private class Oprec4Bits : Decoder
-        {
-            private readonly int shift;
-            private readonly Decoder[] oprecs;
-
-            public Oprec4Bits(int shift, Decoder[] oprecs)
-            {
-                this.shift = shift;
-                this.oprecs = oprecs;
-            }
-
-            public override SuperHInstruction Decode(SuperHDisassembler dasm, ushort uInstr)
-            {
-                return oprecs[(uInstr >> shift) & 0xF].Decode(dasm, uInstr);
-            }
-        }
-
-        private class FieldDecoder : Decoder
-        {
-            private readonly int shift;
-            private readonly int bitcount;
-            private readonly Decoder[] decoders;
-
-            public FieldDecoder(int shift, int bitcount, Decoder[] decoders)
-            {
-                this.shift = shift;
-                this.bitcount = bitcount;
-                this.decoders = decoders;
-            }
-
-            public override SuperHInstruction Decode(SuperHDisassembler dasm, ushort uInstr)
-            {
-                var mask = (1 << bitcount) - 1;
-                var code = (uInstr >> shift) & mask;
-                return decoders[code].Decode(dasm, uInstr);
-            }
-        }
-
-        private class ConditionalDecoder : Decoder
-        {
-            private readonly int pos;
-            private readonly uint mask;
-            private readonly Predicate<uint> pred;
-            private readonly Decoder trueDecoder;
-            private readonly Decoder falseDecoder;
-
-            public ConditionalDecoder(int pos, int length, Predicate<uint> pred, Decoder trueDecoder, Decoder falseDecoder)
-            {
-                this.pos = pos;
-                this.mask = (1u << length) - 1u;
-                this.pred = pred;
-                this.trueDecoder = trueDecoder;
-                this.falseDecoder = falseDecoder;
-            }
-
-            public override SuperHInstruction Decode(SuperHDisassembler dasm, ushort uInstr)
-            {
-                var bits = (uInstr >> pos) & mask;
-                var decoder = (pred((uint)bits)) ? trueDecoder : falseDecoder;
-                return decoder.Decode(dasm, uInstr);
-            }
-        }
-
-        private static readonly Decoder invalid = Instr(Opcode.invalid);
-
-        private static readonly FieldDecoder decode_FxFD = Mask(8, 4,
-            Instr(Opcode.fsca, fpul, f1),
-            Instr(Opcode.ftrv, xmtrx, v2),
-            Instr(Opcode.fsca, fpul, f1),
-            Instr(Opcode.fschg),
-
-            Instr(Opcode.fsca, fpul, f1),
-            Instr(Opcode.ftrv, xmtrx, v2),
-            Instr(Opcode.fsca, fpul, f1),
+            Instr(Mnemonic.fsca, fpul, f1),
+            Instr(Mnemonic.ftrv, xmtrx, v2),
+            Instr(Mnemonic.fsca, fpul, f1),
             invalid,
 
-            Instr(Opcode.fsca, fpul, f1),
-            Instr(Opcode.ftrv, xmtrx, v2),
-            Instr(Opcode.fsca, fpul, f1),
-            Instr(Opcode.frchg),
+            Instr(Mnemonic.fsca, fpul, f1),
+            Instr(Mnemonic.ftrv, xmtrx, v2),
+            Instr(Mnemonic.fsca, fpul, f1),
+            Instr(Mnemonic.frchg),
 
-            Instr(Opcode.fsca, fpul, f1),
-            Instr(Opcode.ftrv, xmtrx, v2),
-            Instr(Opcode.fsca, fpul, f1),
+            Instr(Mnemonic.fsca, fpul, f1),
+            Instr(Mnemonic.ftrv, xmtrx, v2),
+            Instr(Mnemonic.fsca, fpul, f1),
             invalid);
 
-        private static readonly FieldDecoder decode_FxxD = Sparse(4, 5,
-            (0x01, Instr(Opcode.flds, d1, fpul)),
-            (0x02, Instr(Opcode.@float, fpul, d1)),
-            (0x03, Instr(Opcode.ftrc, d1, fpul)),
-            (0x04, Instr(Opcode.fneg, d1)),
-            (0x05, Instr(Opcode.fabs, d1)),
-            (0x06, Instr(Opcode.fsqrt, f1)),
-            (0x08, Instr(Opcode.fldi0, f1)),
-            (0x09, Instr(Opcode.fldi1, f1)),
-            (0x0A, Instr(Opcode.fcnvsd, fpul, d1)),
-            (0x0B, Instr(Opcode.fcnvds, d1, fpul)),
-            (0x0E, Instr(Opcode.fipr, v2, v1)),
-            (0x0F, decode_FxFD),
+        /*
+1111nnnn 0000 1101 ~ FSTS FPUL,FRn FPUL → FRn 
+1111mmmm 0001 1101 ~ FLDS FRm,FPUL FRm → FPUL 
+1111nnn0 0010 1101 ~ FLOAT FPUL,DRn (float)FPUL → DRn 
+1111nnnn 0100 1101 ~ FNEG FRn FRn ∧ 0x80000000 → FRn 
+1111nnn0 0100 1101 ~ FNEG DRn DRn ^ 0x8000 0000 0000 0000 → DRn 
+1111mmmm 0011 1101 ~ FTRC FRm,FPUL (long) FRm → FPUL 
+1111mmm0 0011 1101 ~ FTRC DRm,FPUL (long) DRm → FPUL 
+1111nnnn 0101 1101 ~ FABS FRn FRn & 0x7FFF FFFF → FRn 
+1111nnn0 0101 1101 ~ FABS DRn DRn & 0x7FFF FFFF FFFF FFFF → DRn 
+1111nnnn 0010 1101 ~ FLOAT FPUL,FRn (float) FPUL → FRn 
+1111nnnn 0110 1101 ~ FSQRT FRn √FRn → FRn 
+1111nnn0 0110 1101 ~ FSQRT DRn √DRn → DRn 
+1111nnnn 1000 1101 ~ FLDI0 FRn 0x00000000 → FRn 
+1111nnnn 1001 1101 ~ FLDI1 FRn 0x3F800000 → FRn 
+1111nnn0 1010 1101 ~ FCNVSD FPUL,DRn float_to_ double [FPUL] → DRn 
+1111mmm0 1011 1101 ~ FCNVDS DRm,FPUL double_to_ float[DRm] → FPUL 
+1111nnmm 1110 1101 ~ FIPR FVm,FVn inner_product [FVm, FVn] → FR[n+3] 
+*/
 
-            (0x11, Instr(Opcode.flds, f1, fpul)),
-            (0x15, Instr(Opcode.fabs, f1)),
-            (0x18, Instr(Opcode.fldi0, f1)),
-            (0x19, Instr(Opcode.fldi1, f1)),
-            (0x1E, Instr(Opcode.fipr, v2, v1)),
-            (0x1F, decode_FxFD));
+        private static readonly Decoder decode_FxxD = Sparse(4, 4, "  FxxD", invalid,
+            (0x00, Mask(8, 1, 
+                Instr(Mnemonic.fsts, fpul, d1),
+                Instr(Mnemonic.fsts, fpul, f1))),
+            (0x01, Mask(8, 1,
+                Instr(Mnemonic.flds, d1, fpul),
+                Instr(Mnemonic.flds, f1, fpul))),
+            (0x02, Mask(8, 1, 
+                Instr(Mnemonic.@float, fpul, d1),
+                Instr(Mnemonic.@float, fpul, f1))),
+            (0x03, Mask(8, 1,
+                Instr(Mnemonic.ftrc, d1, fpul),
+                Instr(Mnemonic.ftrc, f1, fpul))),
+            (0x04, Mask(8, 1,
+                Instr(Mnemonic.fneg, d1),
+                Instr(Mnemonic.fneg, f1))),
+            (0x05, Mask(8, 1,
+                Instr(Mnemonic.fabs, d1),
+                Instr(Mnemonic.fabs, f1))),
+            (0x06, Mask(8, 1,
+                Instr(Mnemonic.fsqrt, d1),
+                Instr(Mnemonic.fsqrt, f1))),
+            (0x08, Instr(Mnemonic.fldi0, f1)),
+            (0x09, Instr(Mnemonic.fldi1, f1)),
+            (0x0A, Instr(Mnemonic.fcnvsd, fpul, d1)),
+            (0x0B, Instr(Mnemonic.fcnvds, d1, fpul)),
+            (0x0E, Instr(Mnemonic.fipr, v2, v1)),
+            (0x0F, decode_FxFD));
+
+        private static readonly Bitfield[] bfFpuBinop = new[]
+        {
+            new Bitfield(8, 1),
+            new Bitfield(4, 1)
+        };
 
         private static readonly Decoder[] decoders = new Decoder[]
         {
             // 0...
-            Sparse(0, 4, new Dictionary<int, Decoder>
-            {
-                { 0x0, Instr(Opcode.invalid, InstrClass.Invalid|InstrClass.Zero) },
-                { 0x1, invalid },
-                { 0x02, Mask(7, 1,
+            Sparse(0, 4, "  0...", invalid,
+                (0x0, Instr(Mnemonic.invalid, InstrClass.Invalid|InstrClass.Zero) ),
+                (0x1, invalid ),
+                (0x02, Mask(7, 1,
                     Mask(4, 3,
-                        Instr(Opcode.stc, sr,r1),
-                        Instr(Opcode.stc, gbr,r1),
-                        Instr(Opcode.stc, gbr,r1),
-                        Instr(Opcode.stc, ssr,r1),
-                        Instr(Opcode.stc, RK,r1),
-                        Instr(Opcode.stc, mod,r1),
-                        Instr(Opcode.stc, rs,r1),
+                        Instr(Mnemonic.stc, sr,r1),
+                        Instr(Mnemonic.stc, gbr,r1),
+                        Instr(Mnemonic.stc, gbr,r1),
+                        Instr(Mnemonic.stc, ssr,r1),
+                        Instr(Mnemonic.stc, RK,r1),
+                        Instr(Mnemonic.stc, mod,r1),
+                        Instr(Mnemonic.stc, rs,r1),
                         invalid),
-                    Instr(Opcode.stc, RBank2_3bit,r1))
-                },
-                { 0x03, Sparse(4, 4,    // 0..3
-                        ( 0x0, Instr(Opcode.bsrf, r1)),
+                    Instr(Mnemonic.stc, RBank2_3bit,r1))
+                ),
+                (0x03, Sparse(4, 4,  "  0..3", invalid,
+                        ( 0x0, Instr(Mnemonic.bsrf, r1)),
                         ( 0x1, invalid),
-                        ( 0x2, Instr(Opcode.braf, r1)),
+                        ( 0x2, Instr(Mnemonic.braf, r1)),
                         ( 0x3, invalid),
-                        ( 0x7, Instr(Opcode.movco_l, R0,Ind1l)),
-                        ( 0x8, Instr(Opcode.pref, Ind1l)),
-                        ( 0x9, Instr(Opcode.ocbi, Ind1b)),
-                        ( 0xA, Instr(Opcode.ocbp, Ind1b)),
-                        ( 0xC, Instr(Opcode.movca_l, R0,Ind1l))
+                        ( 0x7, Instr(Mnemonic.movco_l, R0,Ind1l)),
+                        ( 0x8, Instr(Mnemonic.pref, Ind1l)),
+                        ( 0x9, Instr(Mnemonic.ocbi, Ind1b)),
+                        ( 0xA, Instr(Mnemonic.ocbp, Ind1b)),
+                        ( 0xC, Instr(Mnemonic.movca_l, R0,Ind1l))
                         )
-                },
-                { 0x4, Instr(Opcode.mov_b, r2,X1b) },
-                { 0x5, Instr(Opcode.mov_w, r2,X1w) },
-                { 0x6, Instr(Opcode.mov_l, r2,X1l) },
-                { 0x7, Instr(Opcode.mul_l, r2,r1) },
-                { 0x8, Cond(8, 4, Ne0,
+                ),
+                (0x4, Instr(Mnemonic.mov_b, r2,X1b) ),
+                (0x5, Instr(Mnemonic.mov_w, r2,X1w) ),
+                (0x6, Instr(Mnemonic.mov_l, r2,X1l) ),
+                (0x7, Instr(Mnemonic.mul_l, r2,r1) ),
+                (0x8, Select((8, 4), Ne0,
                     invalid,
                     Mask(4, 4,
-                        Instr(Opcode.clrt),
-                        Instr(Opcode.sett),
-                        Instr(Opcode.clrmac),
-                        Instr(Opcode.ldtlb),
+                        Instr(Mnemonic.clrt),
+                        Instr(Mnemonic.sett),
+                        Instr(Mnemonic.clrmac),
+                        Instr(Mnemonic.ldtlb),
 
-                        Instr(Opcode.clrs),
+                        Instr(Mnemonic.clrs),
                         invalid,
                         invalid,
                         invalid,
@@ -780,278 +725,277 @@ namespace Reko.Arch.SuperH
                         invalid,
                         invalid,
                         invalid))
-                },
-                { 0x9, Sparse(4, 4,
-                        ( 0x0, Cond(8,4,Ne0,invalid, Instr(Opcode.nop))),
-                        ( 0x1, Cond(8,4,Ne0,invalid, Instr(Opcode.div0u))),
-                        ( 0x2, Instr(Opcode.movt, r1)),
+                ),
+                (0x9, Sparse(4, 4, "  9", invalid,
+                        ( 0x0, Select((8,4),Ne0,invalid, Instr(Mnemonic.nop))),
+                        ( 0x1, Select((8,4),Ne0,invalid, Instr(Mnemonic.div0u))),
+                        ( 0x2, Instr(Mnemonic.movt, r1)),
                         ( 0x5, invalid),
                         ( 0xD, invalid),
                         ( 0xF, invalid))
-                },
-                { 0xA, Sparse(4, 4,
-                        ( 0x0, Instr(Opcode.sts, mh,r1) ),
-                        ( 0x1, Instr(Opcode.sts, ml,r1) ),
-                        ( 0x2, Instr(Opcode.sts, pr,r1) ),
-                        ( 0x4, Instr(Opcode.sts, tbr,r1) ),
-                        ( 0x5, Instr(Opcode.sts, fpul,r1) ),
-                        ( 0x6, Instr(Opcode.sts, dsr,r1) ),
+                ),
+                (0xA, Sparse(4, 4, "  A", invalid,
+                        ( 0x0, Instr(Mnemonic.sts, mh,r1) ),
+                        ( 0x1, Instr(Mnemonic.sts, ml,r1) ),
+                        ( 0x2, Instr(Mnemonic.sts, pr,r1) ),
+                        ( 0x4, Instr(Mnemonic.sts, tbr,r1) ),
+                        ( 0x5, Instr(Mnemonic.sts, fpul,r1) ),
+                        ( 0x6, Instr(Mnemonic.sts, dsr,r1) ),
                         ( 0x8, invalid ),   // DSP:sts X0,r1
                         ( 0x9, invalid ),   // DSP:sts X1,r1
                         ( 0xA, invalid ),   // DSP:lds	Rm,Y1
-                        ( 0xF, Instr(Opcode.stc, dbr,r1))
+                        ( 0xF, Instr(Mnemonic.stc, dbr,r1))
                     )
-                },
-                { 0xB, Cond(8, 4, Ne0,
+                ),
+                (0xB, Select((8, 4), Ne0,
                     invalid,
-                    Sparse(4, 4,
-                        (0x0, Instr(Opcode.rts)),
-                        (0x1, Instr(Opcode.sleep)),
-                        (0x2, Instr(Opcode.rte)),
-                        (0x3, Instr(Opcode.brk))))
-                },
-                { 0xC, Instr(Opcode.mov_b, X2b,r1) },
-                { 0xD, Instr(Opcode.mov_w, X2w,r1) },
-                { 0xE, Instr(Opcode.mov_l, X2l,r1) },
-                { 0xF, Instr(Opcode.mac_l, Post2l,Post1l) }
-            }),
-            Instr(Opcode.mov_l, r2,D1l),
+                    Sparse(4, 4, "  B", invalid,
+                        (0x0, Instr(Mnemonic.rts, InstrClass.Transfer|InstrClass.Delay)),
+                        (0x1, Instr(Mnemonic.sleep)),
+                        (0x2, Instr(Mnemonic.rte)),
+                        (0x3, Instr(Mnemonic.brk))))
+                ),
+                (0xC, Instr(Mnemonic.mov_b, X2b,r1) ),
+                (0xD, Instr(Mnemonic.mov_w, X2w,r1) ),
+                (0xE, Instr(Mnemonic.mov_l, X2l,r1) ),
+                (0xF, Instr(Mnemonic.mac_l, Post2l,Post1l))
+            ),
+            Instr(Mnemonic.mov_l, r2,D1l),
             // 2...
-            new Oprec4Bits(0, new Decoder[]
+            Mask(0, 4, new Decoder[]
             {
-                Instr(Opcode.mov_b, r2,Ind1b),
-                Instr(Opcode.mov_w, r2,Ind1w),
-                Instr(Opcode.mov_l, r2,Ind1l),
+                Instr(Mnemonic.mov_b, r2,Ind1b),
+                Instr(Mnemonic.mov_w, r2,Ind1w),
+                Instr(Mnemonic.mov_l, r2,Ind1l),
                 invalid,
 
-                Instr(Opcode.mov_b, r2,Pre1b),
-                Instr(Opcode.mov_w, r2,Pre1w),
-                Instr(Opcode.mov_l, r2,Pre1l),
-                Instr(Opcode.div0s, r2,r1),
+                Instr(Mnemonic.mov_b, r2,Pre1b),
+                Instr(Mnemonic.mov_w, r2,Pre1w),
+                Instr(Mnemonic.mov_l, r2,Pre1l),
+                Instr(Mnemonic.div0s, r2,r1),
 
-                Instr(Opcode.tst, r2,r1),
-                Instr(Opcode.and, r2,r1),
-                Instr(Opcode.xor, r2,r1),
-                Instr(Opcode.or, r2,r1),
+                Instr(Mnemonic.tst, r2,r1),
+                Instr(Mnemonic.and, r2,r1),
+                Instr(Mnemonic.xor, r2,r1),
+                Instr(Mnemonic.or, r2,r1),
 
-                Instr(Opcode.cmp_str, r2,r1),
-                Instr(Opcode.xtrct, r2,r1),
-                Instr(Opcode.mulu_w, r2,r1),
-                Instr(Opcode.muls_w, r2,r1),
+                Instr(Mnemonic.cmp_str, r2,r1),
+                Instr(Mnemonic.xtrct, r2,r1),
+                Instr(Mnemonic.mulu_w, r2,r1),
+                Instr(Mnemonic.muls_w, r2,r1),
             }),
             // 3...
-            new Oprec4Bits(0, new Decoder[]
+            Mask(0, 4, new Decoder[]
             {
-                Instr(Opcode.cmp_eq, r2,r1),
+                Instr(Mnemonic.cmp_eq, r2,r1),
                 invalid,
-                Instr(Opcode.cmp_hs, r2,r1),
-                Instr(Opcode.cmp_ge, r2,r1),
+                Instr(Mnemonic.cmp_hs, r2,r1),
+                Instr(Mnemonic.cmp_ge, r2,r1),
 
-                Instr(Opcode.div1, r2,r1),
-                Instr(Opcode.dmulu_l, r2,r1),
-                Instr(Opcode.cmp_hi, r2,r1),
-                Instr(Opcode.cmp_gt, r2,r1),
+                Instr(Mnemonic.div1, r2,r1),
+                Instr(Mnemonic.dmulu_l, r2,r1),
+                Instr(Mnemonic.cmp_hi, r2,r1),
+                Instr(Mnemonic.cmp_gt, r2,r1),
 
-                Instr(Opcode.sub, r2,r1),
+                Instr(Mnemonic.sub, r2,r1),
                 invalid,
-                Instr(Opcode.subc, r2,r1),
-                Instr(Opcode.subv, r2,r1),
+                Instr(Mnemonic.subc, r2,r1),
+                Instr(Mnemonic.subv, r2,r1),
 
-                Instr(Opcode.add, r2,r1),
-                Instr(Opcode.dmuls_l, r2,r1),
-                Instr(Opcode.addc, r2,r1),
-                Instr(Opcode.addv, r2,r1),
+                Instr(Mnemonic.add, r2,r1),
+                Instr(Mnemonic.dmuls_l, r2,r1),
+                Instr(Mnemonic.addc, r2,r1),
+                Instr(Mnemonic.addv, r2,r1),
             }),
 
             // 4...
-            Sparse(0, 8, new Dictionary<int, Decoder>
-            {
-                { 0x00, Instr(Opcode.shll, r1) },
-                { 0x01, Instr(Opcode.shlr, r1) },
-                { 0x04, Instr(Opcode.rotl, r1) },
-                { 0x05, Instr(Opcode.rotr, r1) },
-                { 0x06, Instr(Opcode.lds_l, Post1l,mh) },
-                { 0x08, Instr(Opcode.shll2, r1) },
-                { 0x09, Instr(Opcode.shlr, r1) },
-                { 0x0B, Instr(Opcode.jsr, Ind1l) },
-                { 0x0C, Instr(Opcode.shad, r2,r1) },
-                { 0x0E, Instr(Opcode.ldc, r1,sr) },
-                { 0x13, Instr(Opcode.stc_l, gbr,Pre1l) },
-                { 0x14, invalid },  // DSP setrc r1
-                { 0x1B, Instr(Opcode.tas_b, Ind1b) },
-                { 0x1C, Instr(Opcode.shad, r2,r1) },
-                { 0x20, Instr(Opcode.shal, r1) },
-                { 0x2A, Instr(Opcode.lds, r1,pr) },
-                { 0x2C, Instr(Opcode.shad, r2,r1) },
-                { 0x2E, Instr(Opcode.ldc, r1,RV) },
-                { 0x30, invalid },
-                { 0x34, invalid },
-                { 0x38, invalid },
-                { 0x36, Instr(Opcode.ldc_l, Post1l,sgr) },
-                { 0x3C, Instr(Opcode.shad, r2,r1) },
-                { 0x40, invalid },
-                { 0x41, invalid },
-                { 0x44, invalid },
-                { 0x48, invalid },
-                { 0x4A, Instr(Opcode.ldc, r1,tbr) },
-                { 0x4C, Instr(Opcode.shad, r2,r1) },
-                { 0x52, invalid },
-                { 0x59, invalid },
-                { 0x5A, Instr(Opcode.lds, r1,fpul) },
-                { 0x5C, Instr(Opcode.shad, r2,r1) },
-                { 0x64, invalid },
-                { 0x66, Instr(Opcode.lds_l, Post1l,dsr) },
-                { 0x68, invalid },
-                { 0x6A, Instr(Opcode.lds, r1,dsr) },
-                { 0x6C, Instr(Opcode.shad, r2,r1) },
-                { 0x70, invalid },
-                { 0x74, invalid },
-                { 0x7C, Instr(Opcode.shad, r2,r1) },
-                { 0x80, Instr(Opcode.mulr, R0,r1) },
-                { 0x88, invalid },
-                { 0x8C, Instr(Opcode.shad, r2,r1) },
-                { 0x90, invalid },
-                { 0x94, Instr(Opcode.divs, R0,r1) },
-                { 0x98, invalid },
-                { 0x9C, Instr(Opcode.shad, r2,r1) },
-                { 0xA0, invalid },
-                { 0xA4, invalid },
-                { 0xA8, invalid },
-                { 0xAC, Instr(Opcode.shad, r2,r1) },
-                { 0xB4, invalid },
-                { 0xB8, invalid },
-                { 0xBC, Instr(Opcode.shad, r2,r1) },
-                { 0xC4, invalid },
-                { 0xC8, invalid },
-                { 0xCC, Instr(Opcode.shad, r2,r1) },
-                { 0xD0, invalid },
-                { 0xD2, invalid },
-                { 0xD3, Instr(Opcode.stc_l, RBank2_3bit, r1) },
-                { 0xD8, invalid },
-                { 0xDC, Instr(Opcode.shad, r2,r1) },
-                { 0xE0, invalid },
-                { 0xE4, invalid },
-                { 0xE8, invalid },
-                { 0xEC, Instr(Opcode.shad, r2,r1) },
-                { 0xF0, Instr(Opcode.movmu_l, r1,Pre15l)},
-                { 0xF4, Instr(Opcode.movmu_l, Post15l,r1)},
-                { 0xF8, invalid },
-                { 0xFC, Instr(Opcode.shad, r2,r1) },
+            Sparse(0, 8, "  4", invalid,
+                ( 0x00, Instr(Mnemonic.shll, r1)),
+                ( 0x01, Instr(Mnemonic.shlr, r1)),
+                ( 0x04, Instr(Mnemonic.rotl, r1)),
+                ( 0x05, Instr(Mnemonic.rotr, r1)),
+                ( 0x06, Instr(Mnemonic.lds_l, Post1l,mh)),
+                ( 0x08, Instr(Mnemonic.shll2, r1)),
+                ( 0x09, Instr(Mnemonic.shlr, r1)),
+                ( 0x0B, Instr(Mnemonic.jsr, Ind1l)),
+                ( 0x0C, Instr(Mnemonic.shad, r2,r1)),
+                ( 0x0E, Instr(Mnemonic.ldc, r1,sr)),
+                ( 0x13, Instr(Mnemonic.stc_l, gbr,Pre1l)),
+                ( 0x14, invalid),  // DSP setrc r1
+                ( 0x1B, Instr(Mnemonic.tas_b, Ind1b)),
+                ( 0x1C, Instr(Mnemonic.shad, r2,r1)),
+                ( 0x20, Instr(Mnemonic.shal, r1)),
+                ( 0x2A, Instr(Mnemonic.lds, r1,pr)),
+                ( 0x2C, Instr(Mnemonic.shad, r2,r1)),
+                ( 0x2E, Instr(Mnemonic.ldc, r1,RV)),
+                ( 0x30, invalid),
+                ( 0x34, invalid),
+                ( 0x38, invalid),
+                ( 0x36, Instr(Mnemonic.ldc_l, Post1l,sgr)),
+                ( 0x3C, Instr(Mnemonic.shad, r2,r1)),
+                ( 0x40, invalid),
+                ( 0x41, invalid),
+                ( 0x44, invalid),
+                ( 0x48, invalid),
+                ( 0x4A, Instr(Mnemonic.ldc, r1,tbr)),
+                ( 0x4C, Instr(Mnemonic.shad, r2,r1)),
+                ( 0x52, invalid),
+                ( 0x59, invalid),
+                ( 0x5A, Instr(Mnemonic.lds, r1,fpul)),
+                ( 0x5C, Instr(Mnemonic.shad, r2,r1)),
+                ( 0x64, invalid),
+                ( 0x66, Instr(Mnemonic.lds_l, Post1l,dsr)),
+                ( 0x68, invalid),
+                ( 0x6A, Instr(Mnemonic.lds, r1,dsr)),
+                ( 0x6C, Instr(Mnemonic.shad, r2,r1)),
+                ( 0x70, invalid),
+                ( 0x74, invalid),
+                ( 0x7C, Instr(Mnemonic.shad, r2,r1)),
+                ( 0x80, Instr(Mnemonic.mulr, R0,r1)),
+                ( 0x88, invalid),
+                ( 0x8C, Instr(Mnemonic.shad, r2,r1)),
+                ( 0x90, invalid),
+                ( 0x94, Instr(Mnemonic.divs, R0,r1)),
+                ( 0x98, invalid),
+                ( 0x9C, Instr(Mnemonic.shad, r2,r1)),
+                ( 0xA0, invalid),
+                ( 0xA4, invalid),
+                ( 0xA8, invalid),
+                ( 0xAC, Instr(Mnemonic.shad, r2,r1)),
+                ( 0xB4, invalid),
+                ( 0xB8, invalid),
+                ( 0xBC, Instr(Mnemonic.shad, r2,r1)),
+                ( 0xC4, invalid),
+                ( 0xC8, invalid),
+                ( 0xCC, Instr(Mnemonic.shad, r2,r1)),
+                ( 0xD0, invalid),
+                ( 0xD2, invalid),
+                ( 0xD3, Instr(Mnemonic.stc_l, RBank2_3bit, r1)),
+                ( 0xD8, invalid),
+                ( 0xDC, Instr(Mnemonic.shad, r2,r1)),
+                ( 0xE0, invalid),
+                ( 0xE4, invalid),
+                ( 0xE8, invalid),
+                ( 0xEC, Instr(Mnemonic.shad, r2,r1)),
+                ( 0xF0, Instr(Mnemonic.movmu_l, r1,Pre15l)),
+                ( 0xF4, Instr(Mnemonic.movmu_l, Post15l,r1)),
+                ( 0xF8, invalid),
+                ( 0xFC, Instr(Mnemonic.shad, r2,r1)),
 
 
-                { 0x87, Instr(Opcode.ldc_l, Post1l,RBank2_3bit) },
-                { 0x97, Instr(Opcode.ldc_l, Post1l,RBank2_3bit) },
-                { 0xA7, Instr(Opcode.ldc_l, Post1l,RBank2_3bit) },
-                { 0xB7, Instr(Opcode.ldc_l, Post1l,RBank2_3bit) },
-                { 0xC7, Instr(Opcode.ldc_l, Post1l,RBank2_3bit) },
-                { 0xD7, Instr(Opcode.ldc_l, Post1l,RBank2_3bit) },
-                { 0xE7, Instr(Opcode.ldc_l, Post1l,RBank2_3bit) },
-                { 0xF7, Instr(Opcode.ldc_l, Post1l,RBank2_3bit) },
+                ( 0x87, Instr(Mnemonic.ldc_l, Post1l,RBank2_3bit)),
+                ( 0x97, Instr(Mnemonic.ldc_l, Post1l,RBank2_3bit)),
+                ( 0xA7, Instr(Mnemonic.ldc_l, Post1l,RBank2_3bit)),
+                ( 0xB7, Instr(Mnemonic.ldc_l, Post1l,RBank2_3bit)),
+                ( 0xC7, Instr(Mnemonic.ldc_l, Post1l,RBank2_3bit)),
+                ( 0xD7, Instr(Mnemonic.ldc_l, Post1l,RBank2_3bit)),
+                ( 0xE7, Instr(Mnemonic.ldc_l, Post1l,RBank2_3bit)),
+                ( 0xF7, Instr(Mnemonic.ldc_l, Post1l,RBank2_3bit)),
 
-                { 0x0D, Instr(Opcode.shld, r2,r1) },
-                { 0x1D, Instr(Opcode.shld, r2,r1) },
-                { 0x2D, Instr(Opcode.shld, r2,r1) },
-                { 0x3D, Instr(Opcode.shld, r2,r1) },
-                { 0x4D, Instr(Opcode.shld, r2,r1) },
-                { 0x5D, Instr(Opcode.shld, r2,r1) },
-                { 0x6D, Instr(Opcode.shld, r2,r1) },
-                { 0x7D, Instr(Opcode.shld, r2,r1) },
-                { 0x8D, Instr(Opcode.shld, r2,r1) },
-                { 0x9D, Instr(Opcode.shld, r2,r1) },
-                { 0xAD, Instr(Opcode.shld, r2,r1) },
-                { 0xBD, Instr(Opcode.shld, r2,r1) },
-                { 0xCD, Instr(Opcode.shld, r2,r1) },
-                { 0xDD, Instr(Opcode.shld, r2,r1) },
-                { 0xED, Instr(Opcode.shld, r2,r1) },
-                { 0xFD, Instr(Opcode.shld, r2,r1) },
+                ( 0x0D, Instr(Mnemonic.shld, r2,r1)),
+                ( 0x1D, Instr(Mnemonic.shld, r2,r1)),
+                ( 0x2D, Instr(Mnemonic.shld, r2,r1)),
+                ( 0x3D, Instr(Mnemonic.shld, r2,r1)),
+                ( 0x4D, Instr(Mnemonic.shld, r2,r1)),
+                ( 0x5D, Instr(Mnemonic.shld, r2,r1)),
+                ( 0x6D, Instr(Mnemonic.shld, r2,r1)),
+                ( 0x7D, Instr(Mnemonic.shld, r2,r1)),
+                ( 0x8D, Instr(Mnemonic.shld, r2,r1)),
+                ( 0x9D, Instr(Mnemonic.shld, r2,r1)),
+                ( 0xAD, Instr(Mnemonic.shld, r2,r1)),
+                ( 0xBD, Instr(Mnemonic.shld, r2,r1)),
+                ( 0xCD, Instr(Mnemonic.shld, r2,r1)),
+                ( 0xDD, Instr(Mnemonic.shld, r2,r1)),
+                ( 0xED, Instr(Mnemonic.shld, r2,r1)),
+                ( 0xFD, Instr(Mnemonic.shld, r2,r1)),
 
-                { 0x0F, Instr(Opcode.mac_w, Post2w,Post1w) },
-                { 0x1F, Instr(Opcode.mac_w, Post2w,Post1w) },
-                { 0x2F, Instr(Opcode.mac_w, Post2w,Post1w) },
-                { 0x3F, Instr(Opcode.mac_w, Post2w,Post1w) },
-                { 0x4F, Instr(Opcode.mac_w, Post2w,Post1w) },
-                { 0x5F, Instr(Opcode.mac_w, Post2w,Post1w) },
-                { 0x6F, Instr(Opcode.mac_w, Post2w,Post1w) },
-                { 0x7F, Instr(Opcode.mac_w, Post2w,Post1w) },
-                { 0x8F, Instr(Opcode.mac_w, Post2w,Post1w) },
-                { 0x9F, Instr(Opcode.mac_w, Post2w,Post1w) },
-                { 0xAF, Instr(Opcode.mac_w, Post2w,Post1w) },
-                { 0xBF, Instr(Opcode.mac_w, Post2w,Post1w) },
-                { 0xCF, Instr(Opcode.mac_w, Post2w,Post1w) },
-                { 0xDF, Instr(Opcode.mac_w, Post2w,Post1w) },
-                { 0xEF, Instr(Opcode.mac_w, Post2w,Post1w) },
-                { 0xFF, Instr(Opcode.mac_w, Post2w,Post1w) },
+                ( 0x0F, Instr(Mnemonic.mac_w, Post2w,Post1w)),
+                ( 0x1F, Instr(Mnemonic.mac_w, Post2w,Post1w)),
+                ( 0x2F, Instr(Mnemonic.mac_w, Post2w,Post1w)),
+                ( 0x3F, Instr(Mnemonic.mac_w, Post2w,Post1w)),
+                ( 0x4F, Instr(Mnemonic.mac_w, Post2w,Post1w)),
+                ( 0x5F, Instr(Mnemonic.mac_w, Post2w,Post1w)),
+                ( 0x6F, Instr(Mnemonic.mac_w, Post2w,Post1w)),
+                ( 0x7F, Instr(Mnemonic.mac_w, Post2w,Post1w)),
+                ( 0x8F, Instr(Mnemonic.mac_w, Post2w,Post1w)),
+                ( 0x9F, Instr(Mnemonic.mac_w, Post2w,Post1w)),
+                ( 0xAF, Instr(Mnemonic.mac_w, Post2w,Post1w)),
+                ( 0xBF, Instr(Mnemonic.mac_w, Post2w,Post1w)),
+                ( 0xCF, Instr(Mnemonic.mac_w, Post2w,Post1w)),
+                ( 0xDF, Instr(Mnemonic.mac_w, Post2w,Post1w)),
+                ( 0xEF, Instr(Mnemonic.mac_w, Post2w,Post1w)),
+                ( 0xFF, Instr(Mnemonic.mac_w, Post2w,Post1w)),
 
 
-                { 0x10, Instr(Opcode.dt, r1) },
-                { 0x11, Instr(Opcode.cmp_pz, r1) },
-                { 0x15, Instr(Opcode.cmp_pl, r1) },
-                { 0x18, Instr(Opcode.shll8, r1) },
-                { 0x19, Instr(Opcode.shlr8, r1) },
-                { 0x21, Instr(Opcode.shar, r1) },
-                { 0x22, Instr(Opcode.sts_l, pr,Pre1l) },
-                { 0x24, Instr(Opcode.rotcl, r1) },
-                { 0x25, Instr(Opcode.rotcr, r1) },
-                { 0x26, Instr(Opcode.lds_l, Post1l,pr) },
-                { 0x28, Instr(Opcode.shll16, r1) },
-                { 0x29, Instr(Opcode.shlr16, r1) },
-                { 0x2B, Instr(Opcode.jmp, Ind1l) },
-                { 0x43, Instr(Opcode.stc_l, spc,r1) }
-            }),
-            Instr(Opcode.mov_l, D2l,r1),
+                ( 0x10, Instr(Mnemonic.dt, r1)),
+                ( 0x11, Instr(Mnemonic.cmp_pz, r1)),
+                ( 0x15, Instr(Mnemonic.cmp_pl, r1)),
+                ( 0x18, Instr(Mnemonic.shll8, r1)),
+                ( 0x19, Instr(Mnemonic.shlr8, r1)),
+                ( 0x21, Instr(Mnemonic.shar, r1)),
+                ( 0x22, Instr(Mnemonic.sts_l, pr,Pre1l)),
+                ( 0x24, Instr(Mnemonic.rotcl, r1)),
+                ( 0x25, Instr(Mnemonic.rotcr, r1)),
+                ( 0x26, Instr(Mnemonic.lds_l, Post1l,pr)),
+                ( 0x28, Instr(Mnemonic.shll16, r1)),
+                ( 0x29, Instr(Mnemonic.shlr16, r1)),
+                ( 0x2B, Instr(Mnemonic.jmp, Ind1l)),
+                ( 0x43, Instr(Mnemonic.stc_l, spc,r1))
+            ),
+            Instr(Mnemonic.mov_l, D2l,r1),
             // 6...
-            new Oprec4Bits(0, new Decoder[]
+            Mask(0, 4, new Decoder[]
             {
-                Instr(Opcode.mov_b, Ind2b,r1),
-                Instr(Opcode.mov_w, Ind2w,r1),
-                Instr(Opcode.mov_l, Ind2l,r1),
-                Instr(Opcode.mov, r2,r1),
+                Instr(Mnemonic.mov_b, Ind2b,r1),
+                Instr(Mnemonic.mov_w, Ind2w,r1),
+                Instr(Mnemonic.mov_l, Ind2l,r1),
+                Instr(Mnemonic.mov, r2,r1),
 
-                Instr(Opcode.mov_b, Post2b,r1),
-                Instr(Opcode.mov_w, Post2w,r1),
-                Instr(Opcode.mov_l, Post2l,r1),
-                Instr(Opcode.not, r2,r1),
+                Instr(Mnemonic.mov_b, Post2b,r1),
+                Instr(Mnemonic.mov_w, Post2w,r1),
+                Instr(Mnemonic.mov_l, Post2l,r1),
+                Instr(Mnemonic.not, r2,r1),
 
                 invalid,
-                Instr(Opcode.swap_w, r2,r1),
-                Instr(Opcode.negc, r2,r1),
-                Instr(Opcode.neg, r2,r1),
+                Instr(Mnemonic.swap_w, r2,r1),
+                Instr(Mnemonic.negc, r2,r1),
+                Instr(Mnemonic.neg, r2,r1),
 
-                Instr(Opcode.extu_b, r2,r1),
-                Instr(Opcode.extu_w, r2,r1),
-                Instr(Opcode.exts_b, r2,r1),
-                Instr(Opcode.exts_w, r2,r1),
+                Instr(Mnemonic.extu_b, r2,r1),
+                Instr(Mnemonic.extu_w, r2,r1),
+                Instr(Mnemonic.exts_b, r2,r1),
+                Instr(Mnemonic.exts_w, r2,r1),
             }),
-            Instr(Opcode.add, I,r1),
+            Instr(Mnemonic.add, I,r1),
 
             // 8...
-            new Oprec4Bits(8, new Decoder[] {
-                Instr(Opcode.mov_b, R0,D2b),
-                Instr(Opcode.mov_w, R0,D2w),
+            Mask(8, 4, new Decoder[] {
+                Instr(Mnemonic.mov_b, R0,D2b),
+                Instr(Mnemonic.mov_w, R0,D2w),
                 invalid,
                 invalid,
 
-                Instr(Opcode.mov_b, D2b,R0),
-                Instr(Opcode.mov_w, D2w,R0),
+                Instr(Mnemonic.mov_b, D2b,R0),
+                Instr(Mnemonic.mov_w, D2w,R0),
                 invalid,
                 invalid,
 
-                Instr(Opcode.cmp_eq, I,R0),
-                Instr(Opcode.bt, j),
+                Instr(Mnemonic.cmp_eq, I,R0),
+                Instr(Mnemonic.bt, j),
                 invalid,
-                Instr(Opcode.bf, j),
+                Instr(Mnemonic.bf, j),
 
                 invalid,
-                Instr(Opcode.bt_s, j),
+                Instr(Mnemonic.bt_s, j),
                 invalid,
-                Instr(Opcode.bf_s, j),
+                Instr(Mnemonic.bf_s, j),
             }),
-            Instr(Opcode.mov_w, Pw,r1),
-            Instr(Opcode.bra, J),
-            Instr(Opcode.bsr, J),
+            Instr(Mnemonic.mov_w, Pw,r1),
+            Instr(Mnemonic.bra, J),
+            Instr(Mnemonic.bsr, J),
 
             // C...
-            new Oprec4Bits(8, new Decoder[]
+            Mask(8, 4, new Decoder[]
             {
                 invalid,
                 invalid,
@@ -1061,87 +1005,119 @@ namespace Reko.Arch.SuperH
                 invalid,
                 invalid,
                 invalid,
-                Instr(Opcode.mova, Pl,R0),
+                Instr(Mnemonic.mova, Pl,R0),
 
-                Instr(Opcode.tst, I,R0),
-                Instr(Opcode.and, I,R0),
-                Instr(Opcode.xor, I,R0),
-                Instr(Opcode.or, I,R0),
+                Instr(Mnemonic.tst, I,R0),
+                Instr(Mnemonic.and, I,R0),
+                Instr(Mnemonic.xor, I,R0),
+                Instr(Mnemonic.or, I,R0),
 
                 invalid,
-                Instr(Opcode.and_b, I,Gb),
+                Instr(Mnemonic.and_b, I,Gb),
                 invalid,
                 invalid,
             }),
-            Instr(Opcode.mov_l, Pl,r1),
-            Instr(Opcode.mov, I,r1),
+            Instr(Mnemonic.mov_l, Pl,r1),
+            Instr(Mnemonic.mov, I,r1),
             // F...
-            Sparse(0, 5, new Dictionary<int, Decoder>
-            {
-                { 0x0, Mask(8, 1,
-                        Instr(Opcode.fadd, d2,d1),
-                        Instr(Opcode.fadd, f2,f1))
-                },
-                { 0x10, Mask(8, 1,
-                        Instr(Opcode.fadd, d2,d1),
-                        Instr(Opcode.fadd, f2,f1))
-                },
-                { 0x01, Mask(8, 1,
-                        Instr(Opcode.fsub, d2,d1),
-                        Instr(Opcode.fsub, f2,f1))
-                },
-                { 0x11, Instr(Opcode.fsub, f2,f1) },
+            Mask(0, 4, "  F...", 
+                Select(bfFpuBinop, u => u == 0, "F..0",
+                        Instr(Mnemonic.fadd, d2,d1),
+                        Instr(Mnemonic.fadd, f2,f1)),
+                Select(bfFpuBinop, u => u == 0, "F..1",
+                        Instr(Mnemonic.fsub, d2,d1),
+                        Instr(Mnemonic.fsub, f2,f1)),
+                Select(bfFpuBinop, u => u == 0, "F..2",
+                        Instr(Mnemonic.fmul, d2,d1),
+                        Instr(Mnemonic.fmul, f2,f1)),
+                Select(bfFpuBinop, u => u == 0, "F..3",
+                        Instr(Mnemonic.fdiv, d2,d1),
+                        Instr(Mnemonic.fdiv, f2,f1)),
 
-                { 0x02, Mask(8, 1,
-                        Instr(Opcode.fmul, d2,d1),
-                        Instr(Opcode.fmul, f2,f1))
-                },
-                { 0x12, Instr(Opcode.fmul, f2,f1) },
+                Select(bfFpuBinop, u => u == 0, "F..4",
+                        Instr(Mnemonic.fcmp_eq, d2,d1),
+                        Instr(Mnemonic.fcmp_eq, f2,f1)),
+                Select(bfFpuBinop, u => u == 0, "F..5",
+                        Instr(Mnemonic.fcmp_gt, d2,d1),
+                        Instr(Mnemonic.fcmp_gt, f2,f1)),
+/*
+1111nnnnmmmm0110 ~ FMOV.S @(R0,Rm),FRn (R0 + Rm) → FRn 
+1111nnn0mmmm0110 ~ FMOV @(R0,Rm),DRn (R0 + Rm) → DRn 
+1111nnnnmmmm0111 ~ FMOV.S FRm,@(R0,Rn) FRm → (R0 + Rn) 
+1111nnnnmmm00111 ~ FMOV DRm,@(R0,Rn) DRm → (R0 + Rn) 
+*/
+                Mask(8, 1, "F..6",
+                    Instr(Mnemonic.fmov_d, X1d,d2),
+                    Instr(Mnemonic.fmov_s, X1l,f2)),
 
-                { 0x3, Mask(8, 1,
-                        Instr(Opcode.fdiv, d2,d1),
-                        Instr(Opcode.fdiv, f2,f1))
-                },
-                { 0x4, Mask(8, 1,
-                        Instr(Opcode.fcmp_eq, d2,d1),
-                        Instr(Opcode.fcmp_eq, f2,f1))
-                },
-                { 0x5, Mask(8, 1,
-                        Instr(Opcode.fcmp_gt, d2,d1),
-                        Instr(Opcode.fcmp_gt, f2,f1))
-                },
+                Mask(4, 1, "F..7",
+                    Instr(Mnemonic.fmov_d, d2,X1d),
+                    Instr(Mnemonic.fmov_s, f2,X1l)),
 
-                { 0x06, Instr(Opcode.fmov_d, X1d,d2) },
-                { 0x16, Instr(Opcode.fmov_s, X1l,f2) },
+/*
+1111nnnnmmmm1000 ~ FMOV.S @Rm,FRn (Rm) → FRn 
+1111nnn0mmmm1000 ~ FMOV @Rm,DRn (Rm) → DRn 
+1111nnnnmmmm1001 ~ FMOV.S @Rm+,FRn (Rm) → FRn, Rm + 4 → Rm 
+1111nnn0mmmm1001 ~ FMOV @Rm+,DRn (Rm) → DRn, Rm + 8 → Rm 
+1111nnnnmmmm1010 ~ FMOV.S FRm,@Rn FRm → (Rn) 
+1111nnnnmmm01010 ~ FMOV DRm,@Rn DRm → (Rn) 
+1111nnnnmmmm1011 ~ FMOV.S FRm,@-Rn Rn-4 → Rn, FRm → (Rn) 
+1111nnnnmmm01011 ~ FMOV DRm,@-Rn Rn-8 → Rn, DRm → (Rn) 
+*/
+                Mask(4, 1, "F..8",
+                    Instr(Mnemonic.fmov_d, Ind1d,d2),
+                    Instr(Mnemonic.fmov_s, Ind1l,f2)),
 
-                { 0x08, Instr(Opcode.fmov_d, Ind1d,d2) },
-                { 0x18, Instr(Opcode.fmov_s, Ind1l,f2) },
+                Mask(8, 1, "F..9",
+                    Instr(Mnemonic.fmov_d, Post2d,d1),
+                    Instr(Mnemonic.fmov_s, Post2l,f1)),
 
-                { 0x9, Mask(8, 1,
-                    Instr(Opcode.fcmp_gt, d2,d1),
-                    Instr(Opcode.fcmp_gt, f2,f1))
-                },
+                Mask(4, 1, "F..A",
+                    Instr(Mnemonic.fmov_d, d2, Ind1d),
+                    Instr(Mnemonic.fmov_s, f2, Ind1l)),
 
-                { 0x0A, Instr(Opcode.fmov_d, Ind1d,d2) },
-                { 0x1A, Instr(Opcode.fmov_s, Ind1l,f2) },
+                Mask(4, 1, "F..B",
+                    Instr(Mnemonic.fmov_d, d2, Pre1d),
+                    Instr(Mnemonic.fmov_s, f2, Pre1l)),
 
-                { 0xC, Mask(8, 1,
-                    Instr(Opcode.fmov, d2,d1),
-                    Instr(Opcode.fmov, f2,f1))
-                },
-                { 0x1C, Mask(8, 1,
-                    Instr(Opcode.fmov, d2,d1),
-                    Instr(Opcode.fmov, f2,f1))
-                },
-                { 0xD, decode_FxxD },
-                
-                { 0x0E, Instr(Opcode.fmac, F0,f2,f1) },
-                { 0x0F, invalid },
-                { 0x14, Instr(Opcode.fcmp_eq, f2,f1) },
-                { 0x1D, decode_FxxD },
-                { 0x1E, Instr(Opcode.fmac, F0,f2,f1) },
-                { 0x1F, invalid },
-            })
+/*
+1111nnnnmmmm1100 ~ FMOV FRm,FRn FRm → FRn 
+1111nnn0mmm01100 ~ FMOV DRm,DRn DRm → DRn 
+*/
+                // 
+                Select(bfFpuBinop, u => u == 0, "F..C",
+                    Instr(Mnemonic.fmov, d2,d1),
+                    Instr(Mnemonic.fmov, f2,f1)),
+                decode_FxxD,
+                Instr(Mnemonic.fmac, F0,f2,f1),
+                invalid
+            )
         };
+
+        /*
+        0100mmmm01101010 ~ LDS Rm,FPSCR Rm → FPSCR 
+        0100mmmm01011010 ~ LDS Rm,FPUL Rm → FPUL 
+        0100mmmm01100110 ~ LDS.L @Rm+,FPSCR (Rm) → FPSCR, Rm+4 → Rm 
+        0100mmmm01010110 ~ LDS.L @Rm+,FPUL (Rm) → FPUL, Rm+4 → Rm 
+        0000nnnn01101010 ~ STS FPSCR,Rn FPSCR → Rn 
+        0000nnnn01011010 ~ STS FPUL,Rn FPUL → Rn 
+        0100nnnn01100010 ~ STS.L FPSCR,@-Rn Rn – 4 → Rn, FPSCR → (Rn) 
+        0100nnnn01010010 ~ STS.L FPUL,@-Rn Rn – 4 → Rn, FPUL → (Rn) 
+
+        1111nnn1mmmm0110 ~ FMOV @(R0,Rm),XDn (R0 + Rm) → XDn 
+        1111nnnnmmm10111 ~ FMOV XDm,@(R0,Rn) XDm → (R0+Rn) 
+        1111nnn1mmmm1000 ~ FMOV @Rm,XDn (Rm) → XDn 
+        1111nnn1mmmm1001 ~ FMOV @Rm+,XDn (Rm) → XDn, Rm + 8 → Rm 
+        1111nnnnmmm11010 ~ FMOV XDm,@Rn XDm → (Rn) 
+        1111nnnnmmm11011 ~ FMOV XDm,@-Rn Rn – 8 → Rn, XDm → (Rn) 
+        1111nnn1mmm01100 ~ FMOV DRm,XDn DRm → XDn 
+        1111nnn0mmm11100 ~ FMOV XDm,DRn XDm → DRn 
+        1111nnn1mmm11100 ~ FMOV XDm,XDn XDm → XDn 
+
+                 */
+
+        /*
+        1111nnnnmmmm1110 ~ FMAC FR0,FRm,FRn FR0*FRm + FRn → FRn 
+        */
     }
 }

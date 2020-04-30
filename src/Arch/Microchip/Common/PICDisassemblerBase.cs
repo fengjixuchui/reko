@@ -1,8 +1,8 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 2017-2019 Christian Hostelet.
+ * Copyright (C) 2017-2020 Christian Hostelet.
  * inspired by work from:
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@
 #endregion
 
 using Reko.Core;
+using Reko.Core.Machine;
 using Reko.Libraries.Microchip;
 using System;
 
@@ -30,7 +31,7 @@ namespace Reko.Arch.MicrochipPIC.Common
     /// A Microchip 8-bit MCU disassembler frame. Must be inherited.
     /// Valid for most of program memory regions (code, eeprom, config, ...).
     /// </summary>
-    public abstract class PICDisassemblerBase : DisassemblerBase<PICInstruction>
+    public abstract class PICDisassemblerBase : DisassemblerBase<PICInstruction, Mnemonic>
     {
         public readonly PICArchitecture arch;
         public readonly EndianImageReader rdr;
@@ -44,7 +45,7 @@ namespace Reko.Arch.MicrochipPIC.Common
         /// Instantiates a base PIC disassembler.
         /// </summary>
         /// <param name="arch">The PIC architecture.</param>
-        /// <param name="rdr">The memory reader.</param>
+        /// <param name="rdr">The memory reader.</param, Mnemonic>
         protected PICDisassemblerBase(PICArchitecture arch, EndianImageReader rdr)
         {
             this.arch = arch;
@@ -81,7 +82,7 @@ namespace Reko.Arch.MicrochipPIC.Common
                 throw new InvalidOperationException($"Unable to retrieve program memory region for address {addrCur.ToString()}.");
             if ((addrCur.Offset % (regn.Trait?.LocSize ?? 1)) != 0)
             {
-                instrCur = new PICInstructionNoOpnd(Opcode.unaligned)
+                instrCur = new PICInstructionNoOpnd(Mnemonic.unaligned)
                 {
                     Address = addrCur,
                     Length = 1
@@ -125,7 +126,14 @@ namespace Reko.Arch.MicrochipPIC.Common
                 default:
                     throw new NotImplementedException($"Disassembly of '{regn.SubtypeOfMemory}' memory region is not yet implemented.");
             }
+        }
 
+        public override PICInstruction CreateInvalidInstruction()
+        {
+            return new PICInstructionNoOpnd(Mnemonic.invalid)
+            {
+                InstructionClass = InstrClass.Invalid
+            };
         }
 
         #region Classes/Methods defined for derived classes
@@ -171,11 +179,11 @@ namespace Reko.Arch.MicrochipPIC.Common
         /// <summary>
         /// Invalid instruction. Return <code>null</code> to indicate an invalid instruction.
         /// </summary>
-        protected class InvalidOpRec : Decoder
+        protected class InvalidDecoder : Decoder
         {
             public override PICInstruction Decode(ushort uInstr, PICDisassemblerBase dasm)
             {
-                return new PICInstructionNoOpnd(Opcode.invalid);
+                return new PICInstructionNoOpnd(Mnemonic.invalid);
             }
         }
 

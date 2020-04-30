@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,11 +35,6 @@ namespace Reko.UnitTests.Arch.Arm
         public override IProcessorArchitecture Architecture
         {
             get { return arch; }
-        }
-
-        protected override ImageWriter CreateImageWriter(byte[] bytes)
-        {
-            return new LeImageWriter(bytes);
         }
 
         public override Address LoadAddress
@@ -160,7 +155,7 @@ namespace Reko.UnitTests.Arch.Arm
         public void AArch64Dis_adrp()
         {
             Given_Instruction(0xF00000E2);
-            Expect_Code("adrp\tx2,#&1F000");
+            Expect_Code("adrp\tx2,#&11F000");
         }
 
         [Test]
@@ -181,7 +176,7 @@ namespace Reko.UnitTests.Arch.Arm
         public void AArch64Dis_adrp_00001()
         {
             Given_Instruction(0xB0000001);
-            Expect_Code("adrp\tx1,#&1000");
+            Expect_Code("adrp\tx1,#&101000");
         }
 
         [Test]
@@ -381,7 +376,7 @@ namespace Reko.UnitTests.Arch.Arm
         public void AArch64Dis_stp_preindex()
         {
             Given_Instruction(0xA9B87BFD);
-            Expect_Code("stp\tx29,x30,[sp,-#&80]!");
+            Expect_Code("stp\tx29,x30,[sp,#-&80]!");
         }
 
         [Test]
@@ -509,7 +504,7 @@ namespace Reko.UnitTests.Arch.Arm
         public void AArch64Dis_ldurb()
         {
             Given_Instruction(0x385F9019);
-            Expect_Code("ldurb\tw25,[x0,-#&7]");
+            Expect_Code("ldurb\tw25,[x0,#-&7]");
         }
 
         [Test]
@@ -586,7 +581,7 @@ namespace Reko.UnitTests.Arch.Arm
         public void AArch64Dis_ldur_64_negative_offset()
         {
             Given_Instruction(0xF85F8260);
-            Expect_Code("ldur\tx0,[x19,-#&8]");
+            Expect_Code("ldur\tx0,[x19,#-&8]");
         }
 
         [Test]
@@ -728,7 +723,7 @@ namespace Reko.UnitTests.Arch.Arm
         public void AArch64Dis_sturb_off()
         {
             Given_Instruction(0x381FF09F);
-            Expect_Code("sturb\tw31,[x4,-#&1]");
+            Expect_Code("sturb\tw31,[x4,#-&1]");
         }
 
         [Test]
@@ -819,7 +814,7 @@ namespace Reko.UnitTests.Arch.Arm
         public void AArch64Dis_stp_r64_pre()
         {
             Given_Instruction(0x6DB73BEF);
-            Expect_Code("stp\td15,d14,[sp,-#&90]!");
+            Expect_Code("stp\td15,d14,[sp,#-&90]!");
         }
 
         [Test]
@@ -854,7 +849,7 @@ namespace Reko.UnitTests.Arch.Arm
         public void AArch64Dis_ldp_w32()
         {
             Given_Instruction(0x296107A2);
-            Expect_Code("ldp\tw2,w1,[x29,-#&F8]");
+            Expect_Code("ldp\tw2,w1,[x29,#-&F8]");
         }
 
         [Test]
@@ -1233,10 +1228,17 @@ namespace Reko.UnitTests.Arch.Arm
         }
 
         [Test]
-        public void AArch64Dis_prfm()
+        public void AArch64Dis_prfm_imm()
         {
             Given_Instruction(0xD8545280);
             Expect_Code("prfm\t#0,#&1A8A50");
+        }
+
+        [Test]
+        public void AArch64Dis_prfm_reg()
+        {
+            Given_Instruction(0xF9800020);
+            Expect_Code("prfm\t#0,[x1]");
         }
 
         [Test]
@@ -1257,7 +1259,7 @@ namespace Reko.UnitTests.Arch.Arm
         public void AArch64Dis_ccmp_reg()
         {
             Given_Instruction(0x7A42D020);
-            Expect_Code("ccmp\tw1,w5,#0,LE");
+            Expect_Code("ccmp\tw1,w2,#0,LE");
         }
 
         [Test]
@@ -1285,7 +1287,7 @@ namespace Reko.UnitTests.Arch.Arm
         public void AArch64Dis_mrs()
         {
             Given_Instruction(0xD538D081);
-            Expect_Code("mrs\tx1,tpidr_el1");
+            Expect_Code("mrs\tx1,TPIDR_EL1");
         }
 
         [Test]
@@ -1299,21 +1301,21 @@ namespace Reko.UnitTests.Arch.Arm
         public void AArch64Dis_dmb()
         {
             Given_Instruction(0xD50339BF);
-            Expect_Code("dmb\t#9");
+            Expect_Code("dmb\tishld");
         }
 
         [Test]
         public void AArch64Dis_dsb()
         {
             Given_Instruction(0xD5033F9F);
-            Expect_Code("dsb\t#&F");
+            Expect_Code("dsb\tsy");
         }
 
         [Test]
         public void AArch64Dis_isb()
         {
             Given_Instruction(0xD5033FDF);
-            Expect_Code("isb\t#&F");
+            Expect_Code("isb\tsy");
         }
 
         [Test]
@@ -1595,7 +1597,7 @@ namespace Reko.UnitTests.Arch.Arm
         public void AArch64Dis_ldp()
         {
             Given_Instruction(0x2D646C2F);
-            Expect_Code("ldp\ts15,s27,[x1,-#&E0]");
+            Expect_Code("ldp\ts15,s27,[x1,#-&E0]");
         }
 
         [Test]
@@ -1603,6 +1605,20 @@ namespace Reko.UnitTests.Arch.Arm
         {
             Given_Instruction(0x085F7C13);
             Expect_Code("ldxrb\tw19,[x0]");
+        }
+
+        [Test]
+        public void AArch64Dis_ccmn()
+        {
+            Given_Instruction(0x3A4D09C0);
+            Expect_Code("ccmn\tw14,#&D,#0,EQ");
+        }
+
+        [Test]
+        public void AArch64Dis_ccmp_reg2()
+        {
+            Given_Instruction(0xFA482002);
+            Expect_Code("ccmp\tx0,x8,#2,HS");
         }
 
         /*

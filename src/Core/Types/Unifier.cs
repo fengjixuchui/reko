@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@ using Reko.Core.Expressions;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 
 namespace Reko.Core.Types
 {
@@ -32,17 +33,19 @@ namespace Reko.Core.Types
 	/// </summary>
 	public class Unifier
 	{
-		private TypeFactory factory;
-		private IDictionary<Tuple<DataType, DataType>, bool> cache = new Dictionary<Tuple<DataType, DataType>, bool>();
+		private readonly TypeFactory factory;
+        private readonly TraceSwitch trace;
+		private readonly IDictionary<Tuple<DataType, DataType>, bool> cache = new Dictionary<Tuple<DataType, DataType>, bool>();
 
         public Unifier()
-            : this(new TypeFactory())
+            : this(new TypeFactory(), null)
         {
         }
 
-		public Unifier(TypeFactory factory)
+		public Unifier(TypeFactory factory, TraceSwitch trace)
 		{
 			this.factory = factory;
+            this.trace = trace;
         }
 
 		public bool AreCompatible(DataType a, DataType b)
@@ -54,9 +57,7 @@ namespace Reko.Core.Types
 		{
 			var typePair = new Tuple<DataType, DataType>(a, b);
 
-			bool d;
-
-			if (cache.TryGetValue(typePair, out d))
+			if (cache.TryGetValue(typePair, out bool d))
 				return d;
 
 			d = DoAreCompatible(a, b, depth);
@@ -151,7 +152,17 @@ namespace Reko.Core.Types
             {
                 return true;
             }
-			return a is UnknownType || b is UnknownType;
+            if (a is UnknownType unkA)
+            {
+                if (unkA.Size == 0 || a.Size == b.Size)
+                    return true;
+            }
+            if (b is UnknownType unkB)
+            {
+                if (unkB.Size == 0 || a.Size == b.Size)
+                    return true;
+            }
+            return false;
 		}
 
 		private bool AreCompatible(StructureType a, StructureType b)
@@ -196,10 +207,12 @@ namespace Reko.Core.Types
                     AreCompatible(mpA.BasePointer, mpB.BasePointer, ++depth) && 
 				    AreCompatible(mpA.Pointee, mpB.Pointee, ++depth);
 			PrimitiveType pb = b as PrimitiveType;
-			if (pb != null)
+			if (pb != null && pb.BitSize == mpA.BitSize)
 			{
-				if (pb == PrimitiveType.Word16 || pb.Domain == Domain.Pointer ||
-                    pb.Domain == Domain.Selector || pb.Domain == Domain.Offset)
+				if (pb == PrimitiveType.Word16 || pb == PrimitiveType.Word32  ||
+                    pb.Domain == Domain.Pointer ||
+                    pb.Domain == Domain.Selector ||
+                    pb.Domain == Domain.Offset)
 					return true;
 			}
 			return false;
@@ -211,9 +224,14 @@ namespace Reko.Core.Types
 		{
             if (++recDepth > 100)
             {
-               //$BUG: should emit warning in the error log.
                 --recDepth;
-                Debug.Print("Exceeded stack depth, giving up");
+                DebugEx.Error(trace, "Unifier: exceeded stack depth, giving up");
+                if (a == null && b == null)
+                    return null;
+                if (a == null)
+                    return b;
+                if (b == null)
+                    return a;
                 return factory.CreateUnionType(null, null, new[] { a, b });
             }
             var u = UnifyInternal(a, b);
@@ -231,10 +249,16 @@ namespace Reko.Core.Types
 			if (a == b)
 				return a;
 
-			if (a is UnknownType)
-				return b;
-			if (b is UnknownType)
-				return a;
+            if (a is UnknownType)
+            {
+                if (a.Size == 0 || a.Size == b.Size)
+                    return b;
+            }
+            if (b is UnknownType)
+            {
+                if (b.Size == 0 || a.Size == b.Size)
+                    return a;
+            }
 
             if (a is VoidType)
                 return b;
@@ -731,11 +755,11 @@ namespace Reko.Core.Types
         public UnionType UnifyUnions(UnionType u1, UnionType u2)
 		{
 			UnionType u = new UnionType(null, null);
-			foreach (UnionAlternative a in u1.Alternatives.Values)
+			foreach (UnionAlternative a in u1.Alternatives.Values.ToList())
 			{
 				UnifyIntoUnion(u, a.DataType);
 			}
-			foreach (UnionAlternative a in u2.Alternatives.Values)
+			foreach (UnionAlternative a in u2.Alternatives.Values.ToList())
 			{
 				UnifyIntoUnion(u, a.DataType);
 			}
@@ -749,7 +773,7 @@ namespace Reko.Core.Types
 
 		private DataType Nyi(DataType a, DataType b)
 		{
-			throw new NotImplementedException(string.Format("Don't know how to unify {0} with {1}.", a, b));
+            throw new NotImplementedException($"Don't know how to unify {a} with {b}.");
 		}
 	}
 }

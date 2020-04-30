@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -102,7 +102,7 @@ namespace Reko.UnitTests.Typing
 			c.TypeVariable.DataType = PrimitiveType.Word32;
 			c.TypeVariable.OriginalDataType = PrimitiveType.Word32;
 			Expression e = tcr.Rewrite(c, false);
-			Assert.AreEqual("0x00131230" , e.ToString());
+			Assert.AreEqual("0x131230<32>" , e.ToString());
 		}
 
 		[Test]
@@ -150,7 +150,7 @@ namespace Reko.UnitTests.Typing
             c.TypeVariable.DataType = new Pointer(PrimitiveType.Word32, 32);
             c.TypeVariable.OriginalDataType = PrimitiveType.Word32;
             Expression e = tcr.Rewrite(c, false);
-            Assert.AreEqual("(word32 *) 0xFFFFFFFF", e.ToString());
+            Assert.AreEqual("(word32 *) 0xFFFFFFFF<32>", e.ToString());
         }
 
         private void Given_String(string str, uint addr)

@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,21 +36,19 @@ namespace Reko.Core
     /// </summary>
     public class TypeLibraryDeserializer : ISerializedTypeVisitor<DataType>
     {
-        private IPlatform platform;
-        private IDictionary<string, DataType> types;
-        private Dictionary<string, UnionType> unions;
-        private Dictionary<string, StructureType> structures;
+        private readonly IPlatform platform;
+        private readonly IDictionary<string, DataType> types;
+        private readonly Dictionary<string, UnionType> unions;
+        private readonly Dictionary<string, StructureType> structures;
+        private readonly TypeLibrary library;
         private string defaultConvention;
         private string moduleName;
-        private TypeLibrary library;
 
         public TypeLibraryDeserializer(IPlatform platform, bool caseInsensitive, TypeLibrary dstLib)
         {
-            if (dstLib == null)
-                throw new ArgumentNullException("dstLib");
+            this.library = dstLib ?? throw new ArgumentNullException(nameof(dstLib));
             this.platform = platform;
             var cmp = caseInsensitive ? StringComparer.InvariantCultureIgnoreCase : StringComparer.InvariantCulture;
-            this.library = dstLib;
             types = dstLib.Types;
             this.unions = new Dictionary<string, UnionType>(cmp);
             this.structures = new Dictionary<string, StructureType>(cmp);
@@ -162,7 +160,14 @@ namespace Reko.Core
             var mod = EnsureModule(svc.ModuleName, this.library);
             if (ordinal != Serialization.Procedure_v1.NoOrdinal)
             {
-                mod.ServicesByOrdinal.Add(ordinal, svc);
+                if (mod.ServicesByOrdinal.ContainsKey(ordinal))
+                {
+                    Debug.Print("{0}: Duplicated ordinal {1} used for {2}", svc.ModuleName, ordinal, svc.Name);
+                }
+                else
+                {
+                    mod.ServicesByOrdinal.Add(ordinal, svc);
+                }
             }
             if (svc.SyscallInfo != null)
             {
@@ -258,7 +263,11 @@ namespace Reko.Core
 
         public DataType VisitMemberPointer(MemberPointer_v1 memptr)
         {
-            var baseType = memptr.DeclaringClass.Accept(this);
+            DataType baseType;
+            if (memptr.DeclaringClass == null)
+                baseType = new UnknownType();
+            else 
+                baseType = memptr.DeclaringClass.Accept(this);
             DataType dt;
             if (memptr.MemberType == null)
                 dt = new UnknownType();
@@ -319,6 +328,7 @@ namespace Reko.Core
                     var fields = structure.Fields.Select(f => new StructureField(f.Offset, f.Type.Accept(this), f.Name));
                     str.Fields.AddRange(fields);
                 }
+                // str.Size = str.GetInferredSize();
                 return str;
             }
             else if (str.Fields.Count == 0 && structure.Fields != null)
@@ -330,6 +340,7 @@ namespace Reko.Core
                         f.Type.Accept(this),
                         f.Name));
                 str.Fields.AddRange(fields);
+                str.Size = structure.ByteSize;
                 return str;
             }
             else
@@ -341,14 +352,22 @@ namespace Reko.Core
         public DataType VisitTypedef(SerializedTypedef typedef)
         {
             var dt = typedef.DataType.Accept(this);
-            types[typedef.Name] = dt;       //$BUGBUG: check for type equality if already exists.
-            return null;
+            //$BUGBUG: check for type equality if already exists.
+            if (types.TryGetValue(typedef.Name, out var dtOld) &&
+                dtOld is TypeReference tr)
+            {
+                tr.Referent = dt;
+            }
+            else
+            {
+                types[typedef.Name] = dt;
+            }
+            return dt;
         }
 
         public DataType VisitTypeReference(TypeReference_v1 typeReference)
         {
-            DataType type;
-            if (types.TryGetValue(typeReference.TypeName, out type))
+            if (types.TryGetValue(typeReference.TypeName, out DataType type))
                 return new TypeReference(typeReference.TypeName, type);
             return new TypeReference(typeReference.TypeName, new UnknownType());
         }

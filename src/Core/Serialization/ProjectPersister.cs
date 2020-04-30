@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -41,9 +41,9 @@ namespace Reko.Core.Serialization
         /// <returns></returns>
         public string ConvertToAbsolutePath(string projectAbsPath, string projectRelative)
         {
-            if (string.IsNullOrEmpty(projectRelative))
-                return projectRelative;
             var dir = Path.GetDirectoryName(projectAbsPath);
+            if (string.IsNullOrEmpty(projectRelative))
+                return dir;
             var combined = Path.Combine(dir, projectRelative);
             return Path.GetFullPath(combined);
         }

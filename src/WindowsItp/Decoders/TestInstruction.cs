@@ -13,20 +13,24 @@ namespace Reko.WindowsItp.Decoders
         public TestInstruction()
         { }
 
-        public Opcode Opcode { get; set; }
+        public Mnemonic Mnemonic { get; set; }
 
-#if !ARRAY_OPERANDS
-        public MachineOperand[] Operands;
-#else
-        public MachineOperand Op1;
-        public MachineOperand Op2;
-        public MachineOperand Op3;
-#endif
-        public override int OpcodeAsInteger => (int) Opcode;
+        public override int MnemonicAsInteger => (int) Mnemonic;
+    }
 
-        public override MachineOperand GetOperand(int i)
-        {
-            return null;
-        }
+    public enum Mnemonic
+    {
+        Invalid,
+
+        add,
+        sub,
+        mul,
+        div,
+
+        and,
+        or,
+        xor,
+        not,
+
     }
 }

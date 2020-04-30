@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -104,9 +104,9 @@ namespace Reko.Typing
             return new SegmentedAccess(memId, basePtr, ea, access.DataType);
         }
 
-		public void Transform(Program prog)
+		public void Transform(Program program)
 		{
-			foreach (Procedure proc in prog.Procedures.Values)
+			foreach (Procedure proc in program.Procedures.Values)
 			{
                 foreach (var stm in proc.Statements)
                 {

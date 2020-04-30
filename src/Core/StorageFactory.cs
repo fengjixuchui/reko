@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,7 +34,13 @@ namespace Reko.Core
     {
         private int iReg;
 
+        public StorageFactory(StorageDomain domain = StorageDomain.Register)
+        {
+            this.iReg = (int) domain;
+        }
+
         public Dictionary<string, RegisterStorage> NamesToRegisters { get; } = new Dictionary<string, RegisterStorage>();
+        public Dictionary<StorageDomain, RegisterStorage> DomainsToRegisters { get; } = new Dictionary<StorageDomain, RegisterStorage>();
 
         /// <summary>
         /// Create a single register.
@@ -56,6 +62,7 @@ namespace Reko.Core
         {
             var reg = new RegisterStorage(name, iReg, 0, size);
             NamesToRegisters.Add(name, reg);
+            DomainsToRegisters.Add(reg.Domain, reg);
             ++iReg;
             return reg;
         }
@@ -76,14 +83,18 @@ namespace Reko.Core
             return Reg(format, PrimitiveType.Word32);
         }
 
+        /// <summary>
+        /// Create a 64-bit register.
+        /// </summary>
         public RegisterStorage Reg64(string format)
         {
             return Reg(format, PrimitiveType.Word64);
         }
 
         /// <summary>
-        /// Creates an array of <paramref name="count"/> registers of size
-        /// <paramref name="size"/>. 
+        /// Generate a range of <paramref name="count"/> registers of the given
+        /// <paramref name="size"/>. The name of each register is syntheiszed by
+        /// the <paramref name="formatter"/>. 
         /// </summary>
         public RegisterStorage[] RangeOfReg(int count, Func<int, string> formatter, PrimitiveType size)
         {

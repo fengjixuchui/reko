@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@ using System.Collections.Generic;
 using Reko.Core;
 using System.Linq;
 using System.Diagnostics;
+using Reko.Core.Configuration;
 
 namespace Reko.ImageLoaders.Elf.Relocators
 {
@@ -31,9 +32,39 @@ namespace Reko.ImageLoaders.Elf.Relocators
     public class MipsRelocator : ElfRelocator32
     {
         const int PointerByteSize = 4;
+        private IProcessorArchitecture archMips16e;
 
         public MipsRelocator(ElfLoader32 loader, SortedList<Address, ImageSymbol> imageSymbols) : base(loader, imageSymbols)
         {
+        }
+
+        public override ImageSymbol AdjustImageSymbol(ImageSymbol sym)
+        {
+            if (sym.Type != SymbolType.Code &&
+                sym.Type != SymbolType.ExternalProcedure &&
+                sym.Type != SymbolType.Procedure)
+                return sym;
+            if ((sym.Address.ToLinear() & 1) == 0)
+                return sym;
+            if (archMips16e == null)
+            {
+                var cfgSvc = loader.Services.RequireService<IConfigurationService>();
+                this.archMips16e = cfgSvc.GetArchitecture(loader.Architecture.Name);
+                archMips16e.LoadUserOptions(new Dictionary<string, object>
+                {
+                    { "decoder", "mips16e" }
+                });
+            }
+            var addrNew = sym.Address - 1;
+            var symNew = ImageSymbol.Create(
+                sym.Type,
+                archMips16e,
+                addrNew,
+                sym.Name,
+                sym.DataType,
+                !sym.NoDecompile);
+            symNew.ProcessorState = sym.ProcessorState;
+            return symNew;
         }
 
         public override void Relocate(Program program)
@@ -128,8 +159,9 @@ namespace Reko.ImageLoaders.Elf.Relocators
         private void LocateLocalGotEntries(Program program, SortedList<Address, ImageSymbol> symbols)
         {
             var dynamic = loader.DynamicEntries;
-
-            var numberoflocalPointers = (int)dynamic[ElfDynamicEntry.Mips.DT_MIPS_LOCAL_GOTNO].SValue;
+            if (!dynamic.TryGetValue(ElfDynamicEntry.Mips.DT_MIPS_LOCAL_GOTNO, out var dynEntry))
+                return;
+            var numberoflocalPointers = (int) dynEntry.SValue;
             var uAddrBeginningOfGot = (uint)dynamic[ElfDynamicEntry.DT_PLTGOT].UValue;
 
             var addrGot = Address.Ptr32(uAddrBeginningOfGot);
@@ -148,7 +180,9 @@ namespace Reko.ImageLoaders.Elf.Relocators
         private void LocateGlobalGotEntries(Program program, SortedList<Address, ImageSymbol> symbols)
         {
             var dynamic = loader.DynamicEntries;
-            var uAddrSymtab = (uint)dynamic[ElfDynamicEntry.DT_SYMTAB].UValue;
+            if (!dynamic.TryGetValue(ElfDynamicEntry.DT_SYMTAB, out var dynEntry))
+                return;
+            var uAddrSymtab = (uint) dynEntry.UValue;
             var allSymbols = loader.DynamicSymbols;
 
             var cLocalSymbols = (int)dynamic[ElfDynamicEntry.Mips.DT_MIPS_GOTSYM].SValue;
@@ -181,6 +215,8 @@ namespace Reko.ImageLoaders.Elf.Relocators
 
         public override ElfSymbol RelocateEntry(Program program, ElfSymbol symbol, ElfSection referringSection, ElfRelocation rel)
         {
+            if (symbol == null)
+                return symbol;
             if (loader.Sections.Count <= symbol.SectionIndex)
                 return symbol;
             if (symbol.SectionIndex == 0)
@@ -259,6 +295,23 @@ namespace Reko.ImageLoaders.Elf.Relocators
         {
             return ((MIPSrt)type).ToString();
         }
+    }
+
+    [Flags]
+    public enum MIPSflags
+    {
+        EF_MIPS_ARCH = unchecked((int)(0xF0000000)), /* MIPS architecture level mask  */
+
+        EF_MIPS_ARCH_1 = 0x00000000, /* -mips1 code.  */
+        EF_MIPS_ARCH_2 = 0x10000000, /* -mips2 code.  */
+        EF_MIPS_ARCH_3 = 0x20000000, /* -mips3 code.  */
+        EF_MIPS_ARCH_4 = 0x30000000, /* -mips4 code.  */
+        EF_MIPS_ARCH_5 = 0x40000000, /* -mips5 code.  */
+        EF_MIPS_ARCH_32 = 0x50000000, /* MIPS32 code.  */
+        //EF_MIPS_ARCH_6 = 0x50000000,
+        EF_MIPS_ARCH_64 = 0x60000000, /* MIPS64 code.  */
+        EF_MIPS_ARCH_32R2 = 0x70000000, /* MIPS32r2 code.  */
+        EF_MIPS_ARCH_64R2 = unchecked((int)0x80000000), /* MIPS64r2 code.  */
     }
 
     public enum MIPSrt

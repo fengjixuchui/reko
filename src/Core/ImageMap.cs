@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,12 +40,12 @@ namespace Reko.Core
         public ImageMap(Address addrBase)
         {
             this.BaseAddress = addrBase ?? throw new ArgumentNullException(nameof(addrBase));
-            this.Items = new BTreeDictionary<Address, ImageMapItem>(new ItemComparer());
+            this.Items = new ConcurrentBTreeDictionary<Address, ImageMapItem>(new ItemComparer());
         }
 
         public Address BaseAddress { get; }
 
-        public BTreeDictionary<Address, ImageMapItem> Items { get; }
+        public ConcurrentBTreeDictionary<Address, ImageMapItem> Items { get; }
 
         /// <summary>
         /// Adds an image map item at the specified address. 
@@ -158,13 +158,20 @@ namespace Reko.Core
                     }
                 }
                 Items.Remove(item.Address);
-                item.Address += itemNew.Size;
-                item.Size -= itemNew.Size;
-
-                Items.Add(addr, itemNew);
-                if (item.Size > 0 && !Items.ContainsKey(item.Address))
+                if (item.Size > 0)
                 {
-                    Items.Add(item.Address, item);
+                    item.Address += itemNew.Size;
+                    item.Size -= itemNew.Size;
+
+                    Items.Add(addr, itemNew);
+                    if (item.Size > 0 && !Items.ContainsKey(item.Address))
+                    {
+                        Items.Add(item.Address, item);
+                    }
+                }
+                else
+                { 
+                    Items.Add(addr, itemNew);
                 }
             }
             FireMapChanged();
@@ -195,9 +202,13 @@ namespace Reko.Core
             long delta = addr - item.Address;
             if (delta == 0)
                 return;
-            
+
             // Need to split the item.
-            var itemNew = new ImageMapItem { Address = addr, Size = (uint)(item.Size - delta) };
+            var itemNew = new ImageMapItem { Address = addr };
+            if (item.Size != 0)
+            {
+                itemNew.Size = (uint) (item.Size - delta);
+            }
             Items.Add(itemNew.Address, itemNew);
 
             item.Size = (uint)delta;
@@ -214,7 +225,8 @@ namespace Reko.Core
 
             // Merge with previous item
             if (Items.TryGetLowerBound((addr - 1), out ImageMapItem prevItem) &&
-                prevItem.DataType is UnknownType &&
+                prevItem.DataType is UnknownType ut &&
+                prevItem.DataType.Size == 0 &&
                 prevItem.EndAddress.Equals(item.Address))
             {
                 mergedItem = prevItem;
@@ -227,6 +239,7 @@ namespace Reko.Core
             
             if (Items.TryGetUpperBound((addr + 1), out ImageMapItem nextItem) &&
                 nextItem.DataType is UnknownType &&
+                nextItem.DataType.Size == 0 &&
                 mergedItem.EndAddress.Equals(nextItem.Address))
             {
                 mergedItem.Size = (uint)(nextItem.EndAddress - mergedItem.Address);
@@ -313,7 +326,7 @@ namespace Reko.Core
 	public class ImageMapItem
 	{
         private uint _size;
-        public uint Size { get { return _size; } set { if ((int)value < 0) throw new ArgumentException(); _size = value; } }
+        public uint Size { get { return _size; } set { if ((int) value < 0) throw new ArgumentException(); _size = value; } }
         public string Name;
         public DataType DataType;
 
@@ -329,6 +342,7 @@ namespace Reko.Core
 		}
 
         public Address Address { get; set; }
+
         public Address EndAddress { get { return Address + Size; } }
 
         public bool IsInRange(Address addr)

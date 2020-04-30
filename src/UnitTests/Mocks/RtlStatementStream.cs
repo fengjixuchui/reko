@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -90,11 +90,6 @@ namespace Reko.UnitTests.Mocks
             return Emit(g);
         }
 
-        public Identifier Register(int iReg)
-        {
-            return binder.EnsureRegister(arch.GetRegister(iReg));
-        }
-
         public RtlInstruction Return()
         {
             var ret = new RtlReturn(0, 0, InstrClass.Transfer);
@@ -107,9 +102,9 @@ namespace Reko.UnitTests.Mocks
             return Emit(ret);
         }
 
-        public RtlInstruction SideEffect(Expression exp)
+        public RtlInstruction SideEffect(Expression exp, InstrClass iclass = InstrClass.Linear)
         {
-            var side = new RtlSideEffect(exp);
+            var side = new RtlSideEffect(exp, iclass);
             return Emit(side);
         }
     }

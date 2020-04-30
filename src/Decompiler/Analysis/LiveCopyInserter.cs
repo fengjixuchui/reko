@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,17 +30,17 @@ namespace Reko.Analysis
 {
 	public class LiveCopyInserter
 	{
-		private Procedure proc;
+		private SsaState ssa;
 		private SsaIdentifierCollection ssaIds;
 		private SsaLivenessAnalysis sla;
 		private BlockDominatorGraph doms;
 
-		public LiveCopyInserter(Procedure proc, SsaIdentifierCollection ssaIds)
+		public LiveCopyInserter(SsaState ssa)
 		{
-			this.proc = proc;
-			this.ssaIds = ssaIds;
-			this.sla = new SsaLivenessAnalysis(proc, ssaIds);
-			this.doms = proc.CreateBlockDominatorGraph();
+			this.ssa = ssa;
+			this.ssaIds = ssa.Identifiers;
+			this.sla = new SsaLivenessAnalysis(ssa);
+			this.doms = ssa.Procedure.CreateBlockDominatorGraph();
 		}
 
 		public int IndexOfInsertedCopy(Block b)
@@ -118,7 +118,7 @@ namespace Reko.Analysis
 			{
                 Identifier id = phi.Src.Arguments[i].Value as Identifier;
                 Block pred = phi.Src.Arguments[i].Block;
-				if (id != null && idDst != id)
+				if (id != null && !(id is MemoryIdentifier) && idDst != id)
 				{
 					if (IsLiveAtCopyPoint(idDst, pred))
 					{

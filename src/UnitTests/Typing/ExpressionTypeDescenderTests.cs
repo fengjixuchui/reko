@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -237,7 +237,7 @@ namespace Reko.UnitTests.Typing
         [Test]
         public void ExdApplication()
         {
-            var sig = FunctionType.Action(new[] { Id("r", PrimitiveType.Real32) });
+            var sig = FunctionType.Action(Id("r", PrimitiveType.Real32));
             var ep = new ExternalProcedure("test", sig);
             RunTest(
                 "Typing/ExdApplication.txt",

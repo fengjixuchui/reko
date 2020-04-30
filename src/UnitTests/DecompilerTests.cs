@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,7 +39,7 @@ namespace Reko.UnitTests
     public class DecompilerTests
     {
         private Mock<ILoader>loader;
-        TestDecompiler decompiler;
+        Decompiler decompiler;
         private ServiceContainer sc;
         private Mock<IFileSystemService> fsSvc;
 
@@ -49,15 +49,15 @@ namespace Reko.UnitTests
             fsSvc = new Mock<IFileSystemService>();
             var cfgSvc = new Mock<IConfigurationService>();
             var tlSvc = new Mock<ITypeLibraryLoaderService>();
-            var host = new FakeDecompilerHost();
+            var host = new FakeDecompiledFileService();
             sc = new ServiceContainer();
             loader = new Mock<ILoader>();
             sc.AddService<DecompilerEventListener>(new FakeDecompilerEventListener());
             sc.AddService<IFileSystemService>(new FileSystemServiceImpl());
-            sc.AddService<DecompilerHost>(host);
+            sc.AddService<IDecompiledFileService>(host);
             sc.AddService<IConfigurationService>((IConfigurationService)cfgSvc.Object);
             sc.AddService<ITypeLibraryLoaderService>(tlSvc.Object);
-            decompiler = new TestDecompiler(loader.Object, sc);
+            decompiler = new Decompiler(loader.Object, sc);
         }
 
         [Test]
@@ -88,14 +88,6 @@ namespace Reko.UnitTests
 
             FunctionType ps = sigs[Address.SegPtr(0x0C32, 0x3200)];
             Assert.IsNotNull(ps, "Expected a call signature for address");
-        }
-    }
-
-    public class TestDecompiler : DecompilerDriver
-    {
-        public TestDecompiler(ILoader loader, IServiceProvider sp)
-            : base(loader, sp)
-        {
         }
     }
 }

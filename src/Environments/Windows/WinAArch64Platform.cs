@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,18 +31,30 @@ namespace Reko.Environments.Windows
 {
     public class WinAArch64Platform : Platform
     {
+        private RegisterStorage framePointer;
+        private RegisterStorage linkRegister;
+
         public WinAArch64Platform(IServiceProvider services, IProcessorArchitecture arch) :
             base(services, arch, "winArm64")
         {
+            this.framePointer = arch.GetRegister("x29");
+            this.linkRegister = arch.GetRegister("x30");
         }
 
         public override string DefaultCallingConvention => "";
 
-
-
-        public override HashSet<RegisterStorage> CreateImplicitArgumentRegisters()
+        public override IPlatformEmulator CreateEmulator(SegmentMap segmentMap, Dictionary<Address, ImportReference> importReferences)
         {
             throw new NotImplementedException();
+        }
+
+        // https://docs.microsoft.com/en-us/cpp/build/arm64-windows-abi-conventions?view=vs-2020
+        public override HashSet<RegisterStorage> CreateImplicitArgumentRegisters()
+        {
+            return new HashSet<RegisterStorage>
+            {
+                framePointer, linkRegister
+            };
         }
 
         public override HashSet<RegisterStorage> CreateTrashedRegisters()
@@ -60,7 +72,7 @@ namespace Reko.Environments.Windows
             }
         }
 
-        public override SystemService FindService(int vector, ProcessorState state)
+        public override SystemService FindService(int vector, ProcessorState state, SegmentMap segmentMap)
         {
             throw new NotImplementedException();
         }

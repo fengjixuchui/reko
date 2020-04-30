@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -41,6 +41,8 @@ namespace Reko.ImageLoaders.MzExe
     /// </summary>
 	public class PeImageLoader : ImageLoader
 	{
+        internal static TraceSwitch trace = new TraceSwitch(nameof(PeImageLoader), "Traces the progress of loading PE binary images") { Level = TraceLevel.Verbose };
+
         private const ushort MACHINE_x86_64 = (ushort) 0x8664u;
 		private const ushort MACHINE_m68k = (ushort)0x0268;
         private const ushort MACHINE_UNKNOWN = 0x0;         // The contents of this field are assumed to be applicable to any machine type
@@ -134,7 +136,7 @@ namespace Reko.ImageLoaders.MzExe
 			uint timestamp = rdr.ReadLeUInt32();
 			uint version = rdr.ReadLeUInt32();
 			uint binaryNameAddr = rdr.ReadLeUInt32();
-			uint baseOrdinal = rdr.ReadLeUInt32();
+			int baseOrdinal = rdr.ReadLeInt32();
 
 			int nExports = rdr.ReadLeInt32();
 			int nNames = rdr.ReadLeInt32();
@@ -145,12 +147,15 @@ namespace Reko.ImageLoaders.MzExe
             EndianImageReader rdrNames = nNames != 0
                 ? imgLoaded.CreateLeReader(rvaNames)
                 : null;
+            trace.Verbose("== Exports");
 			for (int i = 0; i < nExports; ++i)
 			{
-                ImageSymbol ep = LoadEntryPoint(addrLoad, rdrAddrs, rdrNames);
+                ImageSymbol ep = LoadEntryPoint(addrLoad, rdrAddrs, i < nNames ? rdrNames : null);
 				if (imageMap.IsExecutableAddress(ep.Address))
 				{
+                    ep.Ordinal = baseOrdinal + i;
                     ImageSymbols[ep.Address] = ep;
+                    trace.Verbose("  {0,-8} {1} {2}", ep.Ordinal, ep.Address, ep.Name);
 					entryPoints.Add(ep);
 				}
 			}
@@ -248,7 +253,7 @@ namespace Reko.ImageLoaders.MzExe
             {
             case MACHINE_ALPHA: return new AlphaRelocator(Services, program);
             case MACHINE_ARM: return new ArmRelocator(program);
-            case MACHINE_ARM64: return new Arm64Relocator(program);
+            case MACHINE_ARM64: return new Arm64Relocator(Services, program);
             case MACHINE_ARMNT: return new ArmRelocator(program);
             case MACHINE_I386: return new i386Relocator(Services, program);
             case MACHINE_R4000: return new MipsRelocator(Services, program);
@@ -746,6 +751,7 @@ void applyRelX86(uint8_t* Off, uint16_t Type, Defined* Sym,
 #endif
         public void ApplyRelocations(uint rvaReloc, uint size, Address baseOfImage, RelocationDictionary relocations)
 		{
+            trace.Inform("PELdr: applying relocations {0:X8}", rvaReloc);
 			EndianImageReader rdr = new LeImageReader(RawImage, rvaReloc);
 			uint rvaStop = rvaReloc + size;
 			while (rdr.Offset < rvaStop)

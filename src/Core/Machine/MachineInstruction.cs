@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,6 +29,8 @@ namespace Reko.Core.Machine
     /// </summary>
     public abstract class MachineInstruction
     {
+        public static readonly MachineOperand[] NoOperands = new MachineOperand[0];
+
         /// <summary>
         /// The address at which the instruction begins.
         /// </summary>
@@ -44,6 +46,11 @@ namespace Reko.Core.Machine
         /// The kind of instruction.
         /// </summary>
         public InstrClass InstructionClass;
+
+        /// <summary>
+        /// 0 or more operands of the instruction.
+        /// </summary>
+        public MachineOperand[] Operands;
 
         /// <summary>
         /// Returns true if the instruction is valid.
@@ -66,16 +73,9 @@ namespace Reko.Core.Machine
         }
 
         /// <summary>
-        /// Retrieves the i'th operand, or null if there is none at that position.
+        /// Each different supported mnemonic should have a different numerical value, exposed here.
         /// </summary>
-        /// <param name="i"></param>
-        /// <returns></returns>
-        public abstract MachineOperand GetOperand(int i);
-        
-        /// <summary>
-        /// Each different supported opcode should have a different numerical value, exposed here.
-        /// </summary>
-        public abstract int OpcodeAsInteger { get; }
+        public abstract int MnemonicAsInteger { get; }
 
         public sealed override string ToString()
         {
@@ -91,6 +91,29 @@ namespace Reko.Core.Machine
             renderer.Address = Address;
             this.Render(renderer, MachineInstructionWriterOptions.None);
             return renderer.ToString();
+        }
+
+        /// <summary>
+        /// Utility function to render the operands, separated by commas.
+        /// </summary>
+        /// <param name="writer"></param>
+        /// <param name="options"></param>
+        protected void RenderOperands(MachineInstructionWriter writer, MachineInstructionWriterOptions options)
+        {
+            if (Operands.Length == 0)
+                return;
+            writer.Tab();
+            RenderOperand(Operands[0], writer, options);
+            for (int i = 1; i < Operands.Length; ++i)
+            {
+                writer.WriteChar(',');
+                RenderOperand(Operands[i], writer, options);
+            }
+        }
+
+        protected virtual void RenderOperand(MachineOperand operand, MachineInstructionWriter writer, MachineInstructionWriterOptions options)
+        {
+            operand.Write(writer, options);
         }
     }
 }

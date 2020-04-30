@@ -1,6 +1,6 @@
 ﻿#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -65,7 +65,7 @@ namespace Reko.Core.Machine
 
         public virtual bool Equals(MachineInstruction x, MachineInstruction y)
         {
-            if (x.OpcodeAsInteger != y.OpcodeAsInteger)
+            if (x.MnemonicAsInteger != y.MnemonicAsInteger)
                 return false;
             return CompareOperands(x, y);
         }
@@ -86,7 +86,7 @@ namespace Reko.Core.Machine
 
         public int GetHashCode(MachineInstruction instr)
         {
-            int h = instr.OpcodeAsInteger.GetHashCode();
+            int h = instr.MnemonicAsInteger.GetHashCode();
             return h ^ GetOperandsHash(instr);
         }
 

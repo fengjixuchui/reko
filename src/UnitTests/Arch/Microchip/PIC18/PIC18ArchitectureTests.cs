@@ -1,8 +1,8 @@
 ﻿#region License
 /* 
- * Copyright (C) 2017-2019 Christian Hostelet.
+ * Copyright (C) 2017-2020 Christian Hostelet.
  * inspired by work of:
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -178,11 +178,11 @@ namespace Reko.UnitTests.Arch.Microchip.PIC18
             PICMemoryDescriptor.ExecMode = PICExecMode.Traditional;
             Assert.AreEqual(
                 "__CONFIG,__IDLOCS,ADDFSR,ADDLW,ADDULNK,ADDWF",
-                string.Join(",", arch.GetOpcodeNames().Keys.Take(6)));
+                string.Join(",", arch.GetMnemonicNames().Keys.Take(6)));
             PICMemoryDescriptor.ExecMode = PICExecMode.Extended;
             Assert.AreEqual(
                 "__CONFIG,__IDLOCS,ADDFSR,ADDLW,ADDULNK,ADDWF",
-                string.Join(",", arch.GetOpcodeNames().Keys.Take(6)));
+                string.Join(",", arch.GetMnemonicNames().Keys.Take(6)));
         }
 
         [Test]
@@ -190,11 +190,11 @@ namespace Reko.UnitTests.Arch.Microchip.PIC18
         {
             var arch = GetArch(PIC18EggName);
             PICMemoryDescriptor.ExecMode = PICExecMode.Traditional;
-            Assert.AreEqual(Opcode.MOVWF, (Opcode)arch.GetOpcodeNumber("MOVWF"));
-            Assert.AreEqual(Opcode.LFSR, (Opcode)arch.GetOpcodeNumber("LFSR"));
+            Assert.AreEqual(Mnemonic.MOVWF, (Mnemonic)arch.GetMnemonicNumber("MOVWF"));
+            Assert.AreEqual(Mnemonic.LFSR, (Mnemonic)arch.GetMnemonicNumber("LFSR"));
             PICMemoryDescriptor.ExecMode = PICExecMode.Extended;
-            Assert.AreEqual(Opcode.MOVWF, (Opcode)arch.GetOpcodeNumber("MOVWF"));
-            Assert.AreEqual(Opcode.LFSR, (Opcode)arch.GetOpcodeNumber("LFSR"));
+            Assert.AreEqual(Mnemonic.MOVWF, (Mnemonic)arch.GetMnemonicNumber("MOVWF"));
+            Assert.AreEqual(Mnemonic.LFSR, (Mnemonic)arch.GetMnemonicNumber("LFSR"));
         }
 
         [Test]

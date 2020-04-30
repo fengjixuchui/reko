@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -55,9 +55,9 @@ namespace Reko.Environments.Cpm
             set { base.MemoryMap = value; OnMemoryMapChanged(); }
         }
 
-        public override HashSet<RegisterStorage> CreateImplicitArgumentRegisters()
+        public override IPlatformEmulator CreateEmulator(SegmentMap segmentMap, Dictionary<Address, ImportReference> importReferences)
         {
-            return new HashSet<RegisterStorage>();
+            throw new NotImplementedException();
         }
 
         public override HashSet<RegisterStorage> CreateTrashedRegisters()
@@ -70,7 +70,7 @@ namespace Reko.Environments.Cpm
             throw new NotImplementedException();
         }
 
-        public override SystemService FindService(int vector, ProcessorState state)
+        public override SystemService FindService(int vector, ProcessorState state, SegmentMap segmentMap)
         {
             throw new NotImplementedException();
         }
@@ -98,12 +98,12 @@ namespace Reko.Environments.Cpm
             throw new NotImplementedException();
         }
 
-        public override ProcedureBase GetTrampolineDestination(IEnumerable<RtlInstructionCluster> instrs, IRewriterHost host)
+        public override ProcedureBase GetTrampolineDestination(Address addrInstr, IEnumerable<RtlInstruction> instrs, IRewriterHost host)
         {
             var e = instrs.GetEnumerator();
             if (!e.MoveNext())
                 return null;
-            if (e.Current.Instructions[0] is RtlGoto g &&
+            if (e.Current is RtlGoto g &&
                 g.Target is Address addr &&
                 this.dispatchProcedures.TryGetValue(addr, out var disp))
             {

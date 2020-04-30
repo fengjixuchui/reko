@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -41,7 +41,7 @@ namespace Reko.Scanning
             this.DataType = dt;
         }
 
-        public static ValueSet Any = new ConcreteValueSet(new UnknownType());
+        public static readonly ValueSet Any = new ConcreteValueSet(new UnknownType());
         public DataType DataType { get; }
 
         /// <summary>

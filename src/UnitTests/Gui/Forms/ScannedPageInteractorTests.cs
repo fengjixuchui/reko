@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -72,7 +72,7 @@ namespace Reko.UnitTests.Gui.Forms
             sc.AddService<IWorkerDialogService>(new FakeWorkerDialogService());
             sc.AddService<DecompilerEventListener>(new FakeDecompilerEventListener());
             sc.AddService<IStatusBarService>(new FakeStatusBarService());
-            sc.AddService<DecompilerHost>(new FakeDecompilerHost());
+            sc.AddService<IDecompiledFileService>(new FakeDecompiledFileService());
             uiSvc = AddService<IDecompilerShellUiService>();
             memSvc = AddService<ILowLevelViewService>();
 
@@ -87,7 +87,7 @@ namespace Reko.UnitTests.Gui.Forms
                 {
                     program.ToString();
                 });
-            decSvc.Decompiler = new DecompilerDriver(ldr.Object, sc);
+            decSvc.Decompiler = new Decompiler(ldr.Object, sc);
             decSvc.Decompiler.Load("test.exe");
 
             interactor = new ScannedPageInteractor(sc);
@@ -148,12 +148,12 @@ namespace Reko.UnitTests.Gui.Forms
         {
             var decSvc = AddService<IDecompilerService>();
             var decompiler = new Mock<IDecompiler>();
-            var prog = new Program();
+            var program = new Program();
             var mem = new MemoryArea(Address.Ptr32(0x3000), new byte[10]);
-            prog.SegmentMap = new SegmentMap(
+            program.SegmentMap = new SegmentMap(
                 mem.BaseAddress,
                 new ImageSegment(".text", mem, AccessMode.ReadWriteExecute));
-            var project = new Project { Programs = { prog } };
+            var project = new Project { Programs = { program } };
             decompiler.Setup(x => x.Project).Returns(project);
             decSvc.Setup(x => x.Decompiler).Returns(decompiler.Object);
             AddService<IDecompilerShellUiService>();

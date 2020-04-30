@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,6 +39,7 @@ namespace Reko.UnitTests.Scanning
     {
         private StorageBinder binder;
         private IProcessorArchitecture arch;
+        private FakeArchitecture fakeArch;
         private RtlBackwalkHost host;
         private Program program;
         private DirectedGraph<RtlBlock> graph;
@@ -47,7 +48,8 @@ namespace Reko.UnitTests.Scanning
         [SetUp]
         public void Setup()
         {
-            arch = new FakeArchitecture();
+            fakeArch = new FakeArchitecture();
+            arch = fakeArch;
             program = new Program {
                 Architecture = arch,
                 SegmentMap = new SegmentMap(
@@ -61,12 +63,6 @@ namespace Reko.UnitTests.Scanning
             graph = new DiGraph<RtlBlock>();
             host = new RtlBackwalkHost(program, graph);
             processorState = arch.CreateProcessorState();
-        }
-
-        private Identifier Reg(int rn)
-        {
-            var reg = arch.GetRegister(rn);
-            return binder.EnsureRegister(reg);
         }
 
         private Identifier Reg(string name)
@@ -114,7 +110,7 @@ namespace Reko.UnitTests.Scanning
         [Test]
         public void Bwslc_DetectRegister()
         {
-            var r1 = Reg(1);
+            var r1 = Reg("r1");
             var b = Given_Block(0x10);
             Given_Instrs(b, m => m.Goto(r1));
 
@@ -126,7 +122,7 @@ namespace Reko.UnitTests.Scanning
         [Test]
         public void Bwslc_DetectNoRegister()
         {
-            var r1 = Reg(1);
+            var r1 = Reg("r1");
             var b = Given_Block(0x10);
             Given_Instrs(b, m => m.Goto(Address.Ptr32(0x00123400)));
 
@@ -138,7 +134,7 @@ namespace Reko.UnitTests.Scanning
         [Test]
         public void Bwslc_SeedSlicer()
         {
-            var r1 = Reg(1);
+            var r1 = Reg("r1");
             var b = Given_Block(0x10);
             Given_Instrs(b, m => m.Goto(r1));
 
@@ -150,7 +146,7 @@ namespace Reko.UnitTests.Scanning
         [Test]
         public void Bwslc_DetectAddition()
         {
-            var r1 = Reg(1);
+            var r1 = Reg("r1");
             var b = Given_Block(0x100);
             Given_Instrs(b, m => m.Goto(m.IAdd(r1, 0x00123400)));
 
@@ -164,8 +160,8 @@ namespace Reko.UnitTests.Scanning
         [Test]
         public void Bwslc_KillLiveness()
         {
-            var r1 = Reg(1);
-            var r2 = Reg(2);
+            var r1 = Reg("r1");
+            var r2 = Reg("r2");
             var b = Given_Block(0x100);
             Given_Instrs(b, m => { m.Assign(r1, m.Shl(r2, 2)); });
             Given_Instrs(b, m => { m.Goto(m.IAdd(r1, 0x00123400)); });
@@ -180,8 +176,8 @@ namespace Reko.UnitTests.Scanning
         [Test(Description = "Trace across a jump")]
         public void Bwslc_AcrossJump()
         {
-            var r1 = Reg(1);
-            var r2 = Reg(2);
+            var r1 = Reg("r1");
+            var r2 = Reg("r2");
 
             var b = Given_Block(0x100);
             Given_Instrs(b, m => { m.Assign(r1, m.Shl(r2, 2)); });
@@ -205,8 +201,8 @@ namespace Reko.UnitTests.Scanning
         [Test(Description = "Trace across a branch where the branch was taken.")]
         public void Bwslc_BranchTaken()
         {
-            var r1 = Reg(1);
-            var r2 = Reg(2);
+            var r1 = Reg("r1");
+            var r2 = Reg("r2");
             var cz = Cc("CZ");
 
             var b = Given_Block(0x100);
@@ -232,8 +228,8 @@ namespace Reko.UnitTests.Scanning
         [Test(Description = "Trace until the comparison that gates the jump is encountered.")]
         public void Bwslc_RangeCheck()
         {
-            var r1 = Reg(1);
-            var r2 = Reg(2);
+            var r1 = Reg("r1");
+            var r2 = Reg("r2");
             var cz = Cc("CZ");
 
             var b = Given_Block(0x100);
@@ -255,7 +251,7 @@ namespace Reko.UnitTests.Scanning
             Assert.IsFalse(bwslc.Step());   // test
             Assert.AreEqual("r2",
                 string.Join(",", bwslc.Live.Select(l => l.Key.ToString()).OrderBy(n => n)));
-            Assert.AreEqual("(r2 << 0x02) + 0x00123400", bwslc.JumpTableFormat.ToString());
+            Assert.AreEqual("(r2 << 2<8>) + 0x123400<32>", bwslc.JumpTableFormat.ToString());
             Assert.AreEqual("1[0,4]", bwslc.JumpTableIndexInterval.ToString());
         }
 
@@ -263,8 +259,8 @@ namespace Reko.UnitTests.Scanning
         [Category(Categories.UnitTests)]
         public void Bwslc_BoundIndexWithAnd()
         {
-            var r1 = Reg(1);
-            var r2 = Reg(2);
+            var r1 = Reg("r1");
+            var r2 = Reg("r2");
             var cz = Cc("CZ");
 
             var b = Given_Block(0x100);
@@ -277,7 +273,7 @@ namespace Reko.UnitTests.Scanning
             Assert.IsTrue(bwslc.Start(b, 1, Target(b)));   // indirect jump
             Assert.IsTrue(bwslc.Step());    // assign flags
             Assert.IsFalse(bwslc.Step());    // and
-            Assert.AreEqual("Mem0[(r1 & 0x00000007) * 0x00000004 + 0x00123400:word32]", bwslc.JumpTableFormat.ToString());
+            Assert.AreEqual("Mem0[(r1 & 7<32>) * 4<32> + 0x123400<32>:word32]", bwslc.JumpTableFormat.ToString());
             Assert.AreEqual("1[0,7]", bwslc.JumpTableIndexInterval.ToString());
         }
 
@@ -337,7 +333,7 @@ namespace Reko.UnitTests.Scanning
             Assert.IsTrue(bwslc.Step());    // branch.
             Assert.IsFalse(bwslc.Step());    // cmp.
 
-            Assert.AreEqual("Mem0[(word16) (byte) bx * 0x0002 + 0x8400:word16]", bwslc.JumpTableFormat.ToString());
+            Assert.AreEqual("Mem0[(word16) (byte) bx * 2<16> + 0x8400<16>:word16]", bwslc.JumpTableFormat.ToString());
             Assert.AreEqual("1[0,2]", bwslc.JumpTableIndexInterval.ToString());
         }
 
@@ -406,7 +402,7 @@ namespace Reko.UnitTests.Scanning
             Assert.IsTrue(bwslc.Step());
             Assert.IsTrue(bwslc.Step());       
             Assert.False(bwslc.Step());     // edx &= 3
-            Assert.AreEqual("Mem0[(edx & 0x00000003) * 0x00000004 + 0x00123400:word32]", bwslc.JumpTableFormat.ToString());
+            Assert.AreEqual("Mem0[(edx & 3<32>) * 4<32> + 0x123400<32>:word32]", bwslc.JumpTableFormat.ToString());
             Assert.AreEqual("1[0,3]", bwslc.JumpTableIndexInterval.ToString());
         }
 
@@ -441,7 +437,7 @@ namespace Reko.UnitTests.Scanning
             Assert.IsTrue(bwslc.Step());
             Assert.IsFalse(bwslc.Step());
 
-            Assert.AreEqual("Mem0[ds:bx * 0x0002 + 0x0022:ptr32]", bwslc.JumpTableFormat.ToString());
+            Assert.AreEqual("Mem0[ds:bx * 2<16> + 0x22<16>:ptr32]", bwslc.JumpTableFormat.ToString());
             Assert.AreEqual("1[0,F]", bwslc.JumpTableIndexInterval.ToString());
 
         }
@@ -481,14 +477,14 @@ namespace Reko.UnitTests.Scanning
             Assert.IsTrue(bwslc.Step());
             Assert.IsFalse(bwslc.Step());
 
-            Assert.AreEqual("Mem0[Mem0[eax + 0x00123500:byte] * 0x00000004 + 0x00123400:word32]", bwslc.JumpTableFormat.ToString());
+            Assert.AreEqual("Mem0[Mem0[eax + 0x123500<32>:byte] * 4<32> + 0x123400<32>:word32]", bwslc.JumpTableFormat.ToString());
             Assert.AreEqual("1[0,3]", bwslc.JumpTableIndexInterval.ToString());
         }
 
         [Test]
         public void Bwslc_SimplifySum()
         {
-            var r1 = Reg(1);
+            var r1 = Reg("r1");
             var b = Given_Block(0x100);
             Given_Instrs(b, m => m.Assign(r1, m.IAdd(r1, r1)));
             Given_Instrs(b, m => m.Goto(m.IAdd(r1, 0x00123400)));
@@ -498,13 +494,13 @@ namespace Reko.UnitTests.Scanning
             Assert.IsTrue(bwslc.Step());
             Assert.AreEqual(1, bwslc.Live.Count);
             Assert.AreEqual("r1", bwslc.Live.First().Key.ToString());
-            Assert.AreEqual("r1 * 0x00000002 + 0x00123400", bwslc.JumpTableFormat.ToString());
+            Assert.AreEqual("r1 * 2<32> + 0x123400<32>", bwslc.JumpTableFormat.ToString());
         }
 
         [Test]
         public void Bwslc_SimplifySumAndProduct()
         {
-            var r1 = Reg(1);
+            var r1 = Reg("r1");
             var b = Given_Block(0x100);
             Given_Instrs(b, m => m.Assign(r1, m.IAdd(r1, r1)));
             Given_Instrs(b, m => m.Assign(r1, m.IAdd(r1, r1)));
@@ -516,7 +512,7 @@ namespace Reko.UnitTests.Scanning
             Assert.IsTrue(bwslc.Step());
             Assert.AreEqual(1, bwslc.Live.Count);
             Assert.AreEqual("r1", bwslc.Live.First().Key.ToString());
-            Assert.AreEqual("r1 * 0x00000004 + 0x00123400", bwslc.JumpTableFormat.ToString());
+            Assert.AreEqual("r1 * 4<32> + 0x123400<32>", bwslc.JumpTableFormat.ToString());
         }
 
         [Test]
@@ -598,17 +594,102 @@ namespace Reko.UnitTests.Scanning
             while (bwslc.Step())
                 ;
             Assert.AreEqual(2, bwslc.Live.Count);
-            Assert.AreEqual("(int32) (int16) Mem0[(word32) (word16) ((word32) d0 * 0x00000002) + 0x0010EC32:word16] + 0x0010EC30", bwslc.JumpTableFormat.ToString());
+            Assert.AreEqual("(int32) (int16) Mem0[(word32) (word16) (d0 * 2<32>) + 0x10EC32<32>:word16] + 0x10EC30<32>", bwslc.JumpTableFormat.ToString());
             Assert.AreEqual("d0", bwslc.JumpTableIndex.ToString());
             Assert.AreEqual("(byte) d0", bwslc.JumpTableIndexToUse.ToString(), "Expression to use when indexing");
             Assert.AreEqual("1[0,17]", bwslc.JumpTableIndexInterval.ToString());
         }
 
         [Test]
+        public void Bwslc_Slices()
+        {
+            // This test is derived from a m68k binary which originally looked like this:
+
+            //  cmpi.b #$17,d0
+            //  bhi $0010F010
+            //  
+            //  moveq #$00,d1
+            //  move.b d0,d1
+            //  add.w d1,d1
+            //  move.w (06,pc,d1),d1
+            //  jmp.l (pc,d1)
+
+            // The code introduces a lot of SLICEs, which must be dealt with appropriately.
+
+            var W8 = PrimitiveType.Byte;
+            var W16 = PrimitiveType.Word16;
+            var W32 = PrimitiveType.Word32;
+            var I16 = PrimitiveType.Int16;
+            var I32 = PrimitiveType.Int32;
+            arch = new Reko.Arch.M68k.M68kArchitecture("m68k");
+            var d0 = Reg("d0");
+            var d1 = Reg("d1");
+            var v2 = binder.CreateTemporary("v2", W8);
+            var v3 = binder.CreateTemporary("v3", W8);
+            var v4 = binder.CreateTemporary("v4", W16);
+            var v5 = binder.CreateTemporary("v5", PrimitiveType.Word16);
+            var CVZNX = Cc("CVZNX");
+            var CVZN = Cc("CVZN");
+            var CZ = Cc("CZ");
+
+            var b = Given_Block(0x00100000);
+            Given_Instrs(b, m =>
+            {
+                m.Assign(v2, m.ISub(m.Slice(PrimitiveType.Byte, d0, 0), 0x17));
+                m.Assign(CVZN, m.Cond(v2));
+            });
+            Given_Instrs(b, m =>
+            {
+                m.Branch(m.Test(ConditionCode.UGT, CZ), Address.Ptr32(0x00100040), InstrClass.ConditionalTransfer);
+            });
+
+            var b2 = Given_Block(0x00100008);
+            Given_Instrs(b2, m => {
+                m.Assign(d1, m.Word32(0));
+                m.Assign(CVZN, m.Cond(d1));
+            });
+            Given_Instrs(b2, m =>
+            {
+                m.Assign(v3, m.Slice(v3.DataType, d0, 0));
+                m.Assign(d1, m.Dpb(d1, v3, 0));
+                m.Assign(CVZN, m.Cond(v3));
+            });
+            Given_Instrs(b2, m =>
+            {
+                m.Assign(v4, m.IAdd(m.Slice(v4.DataType, d1, 0), m.Slice(v4.DataType, d1, 0)));
+                m.Assign(d1, m.Dpb(d1, v4, 0));
+                m.Assign(CVZNX, m.Cond(v4));
+            });
+            Given_Instrs(b2, m =>
+            {
+                m.Assign(v5, m.Mem16(m.IAdd(m.Word32(0x0010EC32), m.Cast(W32, m.Slice(W16, d1, 0)))));
+                m.Assign(d1, m.Dpb(d1, v5, 0));
+                m.Assign(CVZN, m.Cond(v5));
+            });
+            Given_Instrs(b2, m => {
+                m.Goto(m.IAdd(m.Word32(0x0010EC30), m.Cast(I32, m.Slice(I16, d1, 0))));
+            });
+
+            graph.Nodes.Add(b);
+            graph.Nodes.Add(b2);
+            graph.AddEdge(b, b2);
+
+            var bwslc = new BackwardSlicer(host, b2, processorState);
+            Assert.IsTrue(bwslc.Start(b2, 10, Target(b2)));
+            while (bwslc.Step())
+                ;
+            Assert.AreEqual(2, bwslc.Live.Count);
+            Assert.AreEqual("(int32) Mem0[(word32) SLICE(d0 * 2<32>, word16, 0) + 0x10EC32<32>:word16] + 0x10EC30<32>", bwslc.JumpTableFormat.ToString());
+            Assert.AreEqual("d0", bwslc.JumpTableIndex.ToString());
+            Assert.AreEqual("SLICE(d0, byte, 0)", bwslc.JumpTableIndexToUse.ToString(), "Expression to use when indexing");
+            Assert.AreEqual("1[0,17]", bwslc.JumpTableIndexInterval.ToString());
+        }
+
+        [Test]
         public void Bwslc_DetectUsingExpression()
         {
-            var r1 = Reg(1);
-            var r2 = Reg(2);
+            var r1 = Reg("r1");
+            var r2 = Reg("r2");
             var b = Given_Block(0x10);
             Given_Instrs(b, m => m.Assign(r1, m.Mem32(m.IAdd(r2, 8))));
             Given_Instrs(b, m => m.Goto(r1));
@@ -622,11 +703,66 @@ namespace Reko.UnitTests.Scanning
             Assert.AreEqual(new BitRange(0, 32), bwslc.Live.First().Value.BitRange);
         }
 
+
+        [Test(Description = "Handle m68k-style sign extensions.")]
+        [Category(Categories.UnitTests)]
+        [Ignore(Categories.FailedTests)]
+        public void Bwslc_SignExtension()
+        {
+            var CVZNX = Cc("CVZNX");
+            var CVZN = Cc("CVZN");
+            var VZN = Cc("VZN");
+            var r1 = Reg("r1");
+            var v80 = binder.CreateTemporary("v80", PrimitiveType.Word32);
+            var v82 = binder.CreateTemporary("v82", PrimitiveType.Word32);
+
+            var b1 = Given_Block(0x1000);
+            Given_Instrs(b1, m =>
+            {
+                m.Assign(v80, m.ISub(r1, 0x28));
+                m.Assign(CVZN, m.Cond(v80));
+                m.Branch(m.Test(ConditionCode.GT, VZN), Address.Ptr16(0x1020), InstrClass.ConditionalTransfer);
+            });
+
+            var b2 = Given_Block(0x1010);
+            Given_Instrs(b2, m =>
+            {
+                m.Assign(r1, m.IAdd(r1, r1));
+                m.Assign(CVZNX, m.Cond(r1));
+                m.Assign(v82, m.Mem16(m.IAdd(m.Word32(0x001066A4), r1)));
+                m.Assign(r1, m.Dpb(r1, v82, 0));
+                m.Assign(CVZN, m.Cond(v82));
+                m.Goto(
+                    m.IAdd(
+                        m.Word32(0x001066A2),
+                        m.Cast(PrimitiveType.Int32, m.Cast(PrimitiveType.Int16, r1))),
+                    InstrClass.Transfer);
+            });
+
+            //m.Label("default_case");
+            //m.Return();
+
+            graph.Nodes.Add(b1);
+            graph.Nodes.Add(b2);
+            graph.AddEdge(b1, b2);
+
+            var bwslc = new BackwardSlicer(host, b2, processorState);
+            Assert.IsTrue(bwslc.Start(b2, 5, Target(b2)));
+            while (bwslc.Step())
+                ;
+
+            Assert.AreEqual(2, bwslc.Live.Count);
+            Assert.AreEqual("(int32) (int16) DPB(r1 * 0x00000002<32>, Mem0[r1 * 0x00000002<32> + 0x001066A4<32>:word16], 0) + 0x001066A2<32>", bwslc.JumpTableFormat.ToString());
+            Assert.AreEqual("v80", bwslc.JumpTableIndex.ToString());
+            Assert.AreEqual("v80", bwslc.JumpTableIndexToUse.ToString(), "Expression to use when indexing");
+            Assert.AreEqual("1[0,17]", bwslc.JumpTableIndexInterval.ToString());
+        }
+
         [Test]
         public void Bwslc_Issue_691()
         {
             arch = new Reko.Arch.M68k.M68kArchitecture("m68k");
-            var d0 = Reg(0);
+            var d0 = Reg("d0");
             var CVZN = Cc("CVZN");
             var C = Cc("C");
             var v3 = binder.CreateTemporary(PrimitiveType.Word16);
@@ -669,11 +805,54 @@ namespace Reko.UnitTests.Scanning
             Assert.IsTrue(bwslc.Start(b2, 6, Target(b2)));
             while (bwslc.Step())
                 ;
-            Assert.AreEqual("(int32) (int16) (word16) ((word16) (v3 * 0x00000002) * 0x00000002) + 0x0000A8B4", bwslc.JumpTableFormat.ToString());
+            Assert.AreEqual("(int32) (int16) (word16) ((word16) (v3 * 2<32>) * 2<32>) + 0xA8B4<32>", bwslc.JumpTableFormat.ToString());
             Assert.AreEqual("v3", bwslc.JumpTableIndex.ToString());
             Assert.AreEqual("v3", bwslc.JumpTableIndexToUse.ToString(), "Expression to use when indexing");
             Assert.AreEqual("1[20,7FFFFFFFFFFFFFFF]", bwslc.JumpTableIndexInterval.ToString());
         }
+
+        /// <summary>
+        /// Handle 8051 switch statements.
+        /// </summary>
+        [Test]
+        public void Bwslc_Issue_826()
+        {
+            var A = binder.EnsureRegister(new RegisterStorage("A", 0, 0, PrimitiveType.Byte));
+            var R7 = binder.EnsureRegister(new RegisterStorage("R7", 7, 0, PrimitiveType.Byte));
+            var DPTR = binder.EnsureRegister(new RegisterStorage("DPTR", 8, 0, PrimitiveType.Word16));
+            var C = Cc("C");
+            var b0082 = Given_Block(0x0082);
+            Given_Instrs(b0082, m =>
+            {
+                m.Assign(A, m.Mem(A.DataType, DPTR));
+                m.Assign(R7, A);
+                m.Assign(A, m.IAdd(A, 0xFC));   // A >= 4 will cause a carry.
+                m.Assign(C, m.Cond(A));
+                m.Branch(m.Test(ConditionCode.ULT, C), Address.Ptr16(0x00C0));
+            });
+
+            var b0088 = Given_Block(0x0088);
+            Given_Instrs(b0088, m =>
+            {
+                m.Assign(A, R7);
+                m.Assign(A, m.IAdd(A, R7));
+                m.Assign(DPTR, m.Word16(0x008E));
+                m.Goto(m.IAdd(DPTR, m.Cast(PrimitiveType.UInt16, A)));
+            });
+            graph.Nodes.Add(b0082);
+            graph.Nodes.Add(b0088);
+            graph.AddEdge(b0082, b0088);
+
+            var bwslc = new BackwardSlicer(host, b0088, processorState);
+            Assert.IsTrue(bwslc.Start(b0088, 3, Target(b0088)));
+            while (bwslc.Step())
+                ;
+            Assert.AreEqual("(uint16) (R7 * 2<8>) + 0x8E<16>", bwslc.JumpTableFormat.ToString());
+            Assert.AreEqual("A", bwslc.JumpTableIndex.ToString());
+            Assert.AreEqual("A", bwslc.JumpTableIndexToUse.ToString(), "Expression to use when indexing");
+            Assert.AreEqual("1[0,3]", bwslc.JumpTableIndexInterval.ToString());
+        }
+
 
         // Test cases
         // A one-level jump table from MySQL. JTT represents the jump table.
@@ -709,7 +888,7 @@ namespace Reko.UnitTests.Scanning
         // ja default                   :                                           : [ebp + 8], CZ
         // movzx edx, byte ptr[ebp + 8] : edx = ZEX([(ebp + 8)], 8)                 : [ebp + 8]
         //                              : JTT = [0x023450 + ZEX([ebp + 8)], 8) * 4] :
-        // jmp [0x00234500 + edx * 4]   : JTT = [0x0023450 + edx * 4]               : edx
+        // jmp [0x00234500<32> + edx * 4]   : JTT = [0x0023450 + edx * 4]               : edx
 
         // M68k relative jump code.
         //  corresponds to

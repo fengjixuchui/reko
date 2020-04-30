@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 Pavel Tomin.
+ * Copyright (C) 1999-2020 Pavel Tomin.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -94,7 +94,7 @@ namespace Reko.UnitTests.Gui.Windows
 
         private void EmitSpanWrapper(TextSpan span, StringBuilder sb)
         {
-            if (span.Style == "kw")
+            if (span.Style == "code-kw")
                 sb.Append("'");
             if (span.Style == "cmt")
                 sb.Append("rem ");
@@ -169,11 +169,11 @@ namespace Reko.UnitTests.Gui.Windows
             interactor.DisplayProcedure(this.program, this.proc);
 
             var sExp =
-@"void fnTest()
+@"'define' fnTest
 {
 fnTest_entry:
 l1:
-    return
+    'return'
 fnTest_exit:
 }
 

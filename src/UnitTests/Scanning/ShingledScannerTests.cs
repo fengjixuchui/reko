@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,13 +22,14 @@ using Moq;
 using NUnit.Framework;
 using Reko.Arch.Mips;
 using Reko.Arch.X86;
-using Reko.Assemblers.x86;
+using Reko.Arch.X86.Assembler;
 using Reko.Core;
 using Reko.Core.Expressions;
 using Reko.Core.Lib;
 using Reko.Core.Rtl;
 using Reko.Core.Services;
 using Reko.Core.Types;
+using Reko.Environments.Windows;
 using Reko.Scanning;
 using System;
 using System.Collections.Generic;
@@ -128,9 +129,10 @@ namespace Reko.UnitTests.Scanning
             var addrBase = Address.Ptr32(0x100000);
             var arch = new X86ArchitectureFlat32("x86-protected-32");
             var entry = ImageSymbol.Procedure(arch, addrBase);
-            var m = new X86Assembler(null, new DefaultPlatform(null, arch), addrBase, new List<ImageSymbol> { entry });
+            var m = new X86Assembler(arch, addrBase, new List<ImageSymbol> { entry });
             asm(m);
             this.program = m.GetImage();
+            this.program.Platform = new Win32Platform(null, arch);
         }
 
         private void Given_x86_64_Image(params byte[] bytes)
@@ -201,32 +203,35 @@ namespace Reko.UnitTests.Scanning
             Given_Mips_Image(0x00001403);
             Given_Scanner();
             var seg = program.SegmentMap.Segments.Values.First();
-            var scseg = sh.ScanRange(seg.MemoryArea, seg.Address, seg.Size, 0);
+            var scseg = sh.ScanRange(program.Architecture, seg.MemoryArea, seg.Address, seg.Size, 0);
             Assert.AreEqual(new byte[] { 0 }, TakeEach(scseg, 4));
         }
 
         [Test]
         public void Shsc_Return_DelaySlot()
         {
-            Given_Mips_Image(0x03E00008, 0);
+            Given_Mips_Image(
+                0x03E00008,     // jr ra
+                0,              // nop is in the delay slot, so it's safe
+                0);             // this nop falls off the end of the segment, it's unsafe.
             Given_Scanner();
             var seg = program.SegmentMap.Segments.Values.First();
-            var scseg = sh.ScanRange(seg.MemoryArea, seg.Address, seg.Size, 0);
-            Assert.AreEqual(new byte[] { 1, 0 }, TakeEach(scseg, 4));
+            var scseg = sh.ScanRange(program.Architecture, seg.MemoryArea, seg.Address, seg.Size, 0);
+            Assert.AreEqual(new byte[] { 1, 1, 0 }, TakeEach(scseg, 4));
         }
 
         [Test]
         public void Shsc_CondJump()
         {
             Given_Mips_Image(
-                0x1C60FFFF,     // 
-                0,
+                0x1C60FFFF,     // branch
+                0,              // nop
                 0x03e00008,     // jr ra
-                0);             // nop
+                0);             // nop is in delay slot, so it's safe.
             Given_Scanner();
             var seg = program.SegmentMap.Segments.Values.First();
-            var scseg = sh.ScanRange(seg.MemoryArea, seg.Address, seg.Size, 0);
-            Assert.AreEqual(new byte[] { 1, 1, 1, 0, }, TakeEach(scseg, 4));
+            var scseg = sh.ScanRange(program.Architecture, seg.MemoryArea, seg.Address, seg.Size, 0);
+            Assert.AreEqual(new byte[] { 1, 1, 1, 1, }, TakeEach(scseg, 4));
         }
 
         [Test]
@@ -315,7 +320,7 @@ namespace Reko.UnitTests.Scanning
             Given_Scanner();
 
             var seg = program.SegmentMap.Segments.Values.First();
-            var scseg = this.sh.ScanRange(seg.MemoryArea, seg.Address, seg.Size, 0);
+            var scseg = this.sh.ScanRange(program.Architecture, seg.MemoryArea, seg.Address, seg.Size, 0);
             Assert.AreEqual(new byte[]
                 {
                     0, 0, 0, 0, 0

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -43,14 +43,15 @@ namespace Reko.Core.Output
 		private int precedenceCur = PrecedenceLeast;
         private bool forceParensIfSamePrecedence = false;
         private Formatter writer;
+        private TypeGraphWriter typeWriter;
 
         //$TODO: move this to a language-specific class.
-		private static Dictionary<Operator,int> precedences;
+        private static Dictionary<Operator,int> precedences;
         private static HashSet<Type> singleStatements;
         /// <summary>
         /// Maps # of nybbles to an appropriate format string.
         /// </summary>
-        private static string[] unsignedConstantFormatStrings; 
+        private static readonly string[] unsignedConstantFormatStrings; 
 
         private const int PrecedenceApplication = 1;
 		private const int PrecedenceArrayAccess = 1;
@@ -60,8 +61,6 @@ namespace Reko.Core.Output
 		private const int PrecedenceCase = 2;
         private const int PrecedenceConditional = 14;
         private const int PrecedenceLeast = 20;
-
-        private TypeGraphWriter typeWriter;
 
 		public CodeFormatter(Formatter writer)
 		{
@@ -134,7 +133,7 @@ namespace Reko.Core.Output
             };
 
             unsignedConstantFormatStrings = Enumerable.Range(0, 17)
-                .Select(n => $"0x{{0:X{n}}}")
+                .Select(n => $"0x{{0:X{n*2}}}")
                 .ToArray();
         }
 
@@ -172,7 +171,9 @@ namespace Reko.Core.Output
             {
                 var s = addr.ToString();
                 if (!s.Contains(':'))
-                    s = string.Format("0x{0}", s);
+                {
+                    s = string.Format("0x{0}<p{1}>", s, addr.DataType.BitSize);
+                }
                 writer.Write(s);
             }
         }
@@ -244,6 +245,43 @@ namespace Reko.Core.Output
                 writer.Write("<invalid>");
                 return;
             }
+            if (c is StringConstant s)
+            {
+                writer.Write('"');
+                foreach (var ch in (string) s.GetValue())
+                {
+                    switch (ch)
+                    {
+                    case '\0': writer.Write("\\0"); break;
+                    case '\a': writer.Write("\\a"); break;
+                    case '\b': writer.Write("\\b"); break;
+                    case '\f': writer.Write("\\f"); break;
+                    case '\n': writer.Write("\\n"); break;
+                    case '\r': writer.Write("\\r"); break;
+                    case '\t': writer.Write("\\t"); break;
+                    case '\v': writer.Write("\\v"); break;
+                    case '\"': writer.Write("\\\""); break;
+                    case '\\': writer.Write("\\\\"); break;
+                    default:
+                        // The awful hack allows us to reuse .NET encodings
+                        // while encoding the original untranslateable 
+                        // code points into the Private use area.
+                        //$TODO: Clearly if the string was UTF8 or 
+                        // UTF-16 to begin with, we want to preserve the
+                        // private use area points.
+                        if (0xE000 <= ch && ch <= 0xE100)
+                            writer.Write("\\x{0:X2}", (ch - 0xE000));
+                        else if (0 <= ch && ch < ' ' || ch >= 0x7F)
+                            writer.Write("\\x{0:X2}", (int) ch);
+                        else
+                            writer.Write(ch);
+                        break;
+                    }
+                }
+                writer.Write('"');
+                return;
+            }
+
             var pt = c.DataType.ResolveAs<PrimitiveType>();
             if (pt != null)
             {
@@ -276,44 +314,11 @@ namespace Reko.Core.Output
                 else 
                 {
                     object v = c.GetValue();
-                    writer.Write(FormatString(pt, v), v);
+                    var (fmtNumber, fmtSigil) = FormatStrings(pt, v);
+                    writer.Write(fmtNumber, v);
+                    writer.Write(fmtSigil, pt.BitSize);
                 }
                 return;
-            }
-            if (c is StringConstant s)
-            {
-                writer.Write('"');
-                foreach (var ch in (string)s.GetValue())
-                {
-                    switch (ch)
-                    {
-                    case '\0': writer.Write("\\0"); break;
-                    case '\a': writer.Write("\\a"); break;
-                    case '\b': writer.Write("\\b"); break;
-                    case '\f': writer.Write("\\f"); break;
-                    case '\n': writer.Write("\\n"); break;
-                    case '\r': writer.Write("\\r"); break;
-                    case '\t': writer.Write("\\t"); break;
-                    case '\v': writer.Write("\\v"); break;
-                    case '\"': writer.Write("\\\""); break;
-                    case '\\': writer.Write("\\\\"); break;
-                    default:
-                        // The awful hack allows us to reuse .NET encodings
-                        // while encoding the original untranslateable 
-                        // code points into the Private use area.
-                        //$TODO: Clearly if the string was UTF8 or 
-                        // UTF-16 to begin with, we want to preserve the
-                        // private use area points.
-                        if (0xE000 <= ch && ch <= 0xE100)
-                            writer.Write("\\x{0:X2}", (ch - 0xE000));
-                        else if (0 <= ch && ch < ' ' || ch >= 0x7F)
-                            writer.Write("\\x{0:X2}", (int)ch);
-                        else
-                            writer.Write(ch);
-                        break;
-                    }
-                }
-                writer.Write('"');
             }
         }
 
@@ -526,7 +531,7 @@ namespace Reko.Core.Output
                 writer.Indentation += writer.TabSize;
                 writer.Indent();
                 writer.Write("uses: ");
-                writer.Write(string.Join(",", ci.Uses.OrderBy(u => ((Identifier)(u.Expression)).Name).Select(u => u.Expression)));
+                WriteCallBindings(ci.Uses);
                 writer.Terminate();
                 writer.Indentation -= writer.TabSize;
             }
@@ -535,12 +540,24 @@ namespace Reko.Core.Output
                 writer.Indentation += writer.TabSize;
                 writer.Indent();
                 writer.Write("defs: ");
-                writer.Write(string.Join(",", ci.Definitions.OrderBy(d => ((Identifier)d.Identifier).Name).Select(d => d.Identifier)));
+                WriteCallBindings(ci.Definitions);
                 writer.Terminate();
                 writer.Indentation -= writer.TabSize;
             }
 		}
 
+        private void WriteCallBindings(IEnumerable<CallBinding> bindings)
+        {
+            var sep = "";
+            foreach (var binding in bindings.OrderBy(b => b.Storage.ToString()))
+            {
+                writer.Write(sep);
+                sep = ",";
+                writer.Write(binding.Storage.ToString());
+                writer.Write(":");
+                binding.Expression.Accept(this);
+            }
+        }
         public void VisitComment(CodeComment comment)
         {
             foreach (var line in Lines(comment.Text))
@@ -858,11 +875,13 @@ namespace Reko.Core.Output
 
         protected virtual string UnsignedFormatString(PrimitiveType type, ulong value)
         {
+            if (value < 10)
+                return "{0}";
             var nybbles = Nybbles(type.BitSize);
             if (nybbles < unsignedConstantFormatStrings.Length)
                 return unsignedConstantFormatStrings[nybbles];
             else
-                return "0x{0:X16}";
+                return "0x{0}_";
         }
 
         private static int Nybbles(int bitSize)
@@ -870,13 +889,13 @@ namespace Reko.Core.Output
             return (bitSize + 3) / 4;
         }
 
-        private string FormatString(PrimitiveType type, object value)
+        private (string,string) FormatStrings(PrimitiveType type, object value)
         {
             string format;
             switch (type.Domain)
             {
             case Domain.SignedInt:
-                return "{0}";
+                return ("{0}","<i{0}>");
             case Domain.Character:
                 switch (type.Size)
                 {
@@ -886,12 +905,39 @@ namespace Reko.Core.Output
                 }
                 var ch = Convert.ToChar(value);
                 if (Char.IsControl(ch))
-                    return string.Format(format, string.Format("\\x{0:X2}", (int) ch));
+                    return (string.Format(format, string.Format("\\x{0:X2}", (int) ch)), "");
                 else if (ch == '\'' || ch == '\\')
-                    return string.Format(format, string.Format("\\{0}", ch));
-                return format;
+                    return (string.Format(format, string.Format("\\{0}", ch)), "");
+                return (format, "");
+            case Domain.UnsignedInt:
+                if (!(value is ulong n))
+                    n = Convert.ToUInt64(value);
+                if (n > 9)
+                {
+                    format = "0x{0:X}";
+                }
+                else
+                {
+                    format = "{0}";
+                }
+                return(format, "<u{0}>");
+            case Domain.Pointer:
+            case Domain.Offset:
+                return (unsignedConstantFormatStrings[type.Size], "<p{0}>");
+            case Domain.SegPointer:
+                 return ("{0:X}", "p{0}");
             default:
-                return UnsignedFormatString(type, Convert.ToUInt64(value));
+                if (!(value is ulong w))
+                    w = Convert.ToUInt64(value);
+                if (w > 9)
+                {
+                    format = "0x{0:X}";
+                }
+                else
+                {
+                    format = "{0}";
+                }
+                return (format, "<{0}>");
             }
         }
 
@@ -964,7 +1010,7 @@ namespace Reko.Core.Output
 
 		public void Write(Procedure proc)
 		{
-			proc.Signature.Emit(proc.QualifiedName(), FunctionType.EmitFlags.None, writer, this, new TypeFormatter(writer));
+			proc.Signature.Emit(proc.QualifiedName(), FunctionType.EmitFlags.None, writer, this, new TypeReferenceFormatter(writer));
 			writer.WriteLine();
 			writer.Write("{");
             writer.WriteLine();
@@ -1004,13 +1050,18 @@ namespace Reko.Core.Output
 		/// <param name="expr"></param>
 		public void WriteExpression(Expression expr)
 		{
+            if (expr == null)
+            {
+                writer.Write("<NULL>");
+                return;
+            }
 			int prec = precedenceCur;
 			precedenceCur = PrecedenceLeast;
 			expr.Accept(this);
 			precedenceCur = prec;
 		}
 
-        public void WriteFormalArgument(Identifier arg, bool writeStorage, TypeFormatter t)
+        public void WriteFormalArgument(Identifier arg, bool writeStorage, TypeReferenceFormatter t)
         {
             if (writeStorage)
             {
@@ -1022,11 +1073,11 @@ namespace Reko.Core.Output
             {
                 if (arg.Storage is OutArgumentStorage)
                 {
-                    t.Write(new ReferenceTo(arg.DataType), arg.Name);
+                    t.WriteDeclaration(new ReferenceTo(arg.DataType), arg.Name);
                 }
                 else
                 {
-                    t.Write(arg.DataType, arg.Name);
+                    t.WriteDeclaration(arg.DataType, arg.Name);
                 }
             }
         }

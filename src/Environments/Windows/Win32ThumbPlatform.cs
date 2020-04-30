@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -120,17 +120,22 @@ namespace Reko.Environments.Windows
             return Address.Ptr32((uint)addr.ToLinear() & ~1u);
         }
 
+        public override IPlatformEmulator CreateEmulator(SegmentMap segmentMap, Dictionary<Address, ImportReference> importReferences)
+        {
+            throw new NotImplementedException();
+        }
+
         public override HashSet<RegisterStorage> CreateImplicitArgumentRegisters()
         {
             return new[] { "r11", "sp", "lr", "pc" }
-                .Select(r => Architecture.GetRegister(r)).ToHashSet();
+                .Select(r => Architecture.GetRegister(r)).ToSet();
         }
 
         public override HashSet<RegisterStorage> CreateTrashedRegisters()
         {
             // https://msdn.microsoft.com/en-us/library/dn736986.aspx 
             return new[] { "r0", "r1", "r2", "r3", "ip" }
-                .Select(r => Architecture.GetRegister(r)).ToHashSet();
+                .Select(r => Architecture.GetRegister(r)).ToSet();
         }
 
         public override CallingConvention GetCallingConvention(string ccName)
@@ -145,7 +150,7 @@ namespace Reko.Environments.Windows
             return null;
         }
 
-        public override SystemService FindService(int vector, ProcessorState state)
+        public override SystemService FindService(int vector, ProcessorState state, SegmentMap segmentMap)
         {
             SystemService svc;
             systemServices.TryGetValue(vector, out svc);

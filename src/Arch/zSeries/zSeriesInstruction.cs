@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,24 +26,18 @@ namespace Reko.Arch.zSeries
 {
     public class zSeriesInstruction : MachineInstruction
     {
-        internal Opcode Opcode;
-        internal MachineOperand[] Ops;
+        internal Mnemonic Mnemonic;
 
-        public override int OpcodeAsInteger => (int) Opcode;
-
-        public override MachineOperand GetOperand(int i)
-        {
-            throw new System.NotImplementedException();
-        }
+        public override int MnemonicAsInteger => (int) Mnemonic;
 
         public override void Render(MachineInstructionWriter writer, MachineInstructionWriterOptions options)
         {
-            writer.WriteOpcode(this.Opcode.ToString());
-            if (Ops.Length == 0)
+            writer.WriteMnemonic(this.Mnemonic.ToString());
+            if (Operands.Length == 0)
                 return;
             writer.Tab();
             var sep = "";
-            foreach (var op in Ops)
+            foreach (var op in Operands)
             {
                 writer.WriteString(sep);
                 sep = ",";

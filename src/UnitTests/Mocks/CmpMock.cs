@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John KÃ¤llÃ©n.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,11 +28,12 @@ namespace Reko.UnitTests.Mocks
 	{
 		protected override void BuildBody()
 		{
-			Identifier r0 = Register(0);
-			Identifier r1 = Register(1);
+			Identifier r0 = Register("r0");
+			Identifier r1 = Register("r1");
 
+            Assign(Frame.EnsureRegister(Architecture.StackRegister), Frame.FramePointer);
 			Compare("Z", r0, Int32(0));
-			BranchCc(ConditionCode.EQ, "skip");
+			BranchIf(Test(ConditionCode.EQ, Flags("Z")), "skip");
 
 			Assign(r0, IAdd(r0, r1));
 			Label("skip");

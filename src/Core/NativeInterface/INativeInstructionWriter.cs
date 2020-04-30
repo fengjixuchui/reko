@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,7 +40,7 @@ namespace Reko.Core.NativeInterface
         /// <param name="a"></param>
         [PreserveSig] void AddAnnotation([MarshalAs(UnmanagedType.LPStr)] string a);
 
-        [PreserveSig] void WriteOpcode([MarshalAs(UnmanagedType.LPStr)]string opcode);
+        [PreserveSig] void WriteMnemonic([MarshalAs(UnmanagedType.LPStr)]string sMnemonic);
         [PreserveSig] void WriteAddress([MarshalAs(UnmanagedType.LPStr)]string formattedAddress, ulong uAddr);
         [PreserveSig] void Tab();
         [PreserveSig] void WriteString([MarshalAs(UnmanagedType.LPStr)] string s);

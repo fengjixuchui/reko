@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@ using Reko.Core.Code;
 using Reko.Core.Expressions;
 using Reko.Core.Operators;
 using Reko.Core.Output;
+using Reko.Core.Services;
 using Reko.Core.Types;
 using System;
 using System.Collections.Generic;
@@ -49,21 +50,21 @@ namespace Reko.Analysis
 	/// </remarks>
 	public class ConditionCodeEliminator : InstructionTransformer
 	{
-        private SsaState ssa;
-		private SsaIdentifierCollection ssaIds;
+        private static TraceSwitch trace = new TraceSwitch("CcodeEliminator", "Traces the progress of the condition code eliminator", "Verbose");
+        
+        private readonly SsaState ssa;
+		private readonly SsaIdentifierCollection ssaIds;
+        private readonly IPlatform platform;
+        private readonly ExpressionEmitter m;
+        private HashSet<Identifier> aliases;
 		private SsaIdentifier sidGrf;
-        private HashSet<SsaIdentifier> aliases;     // aliases of sidGrf
         private Statement useStm;
-        private IPlatform platform;
-        private ExpressionEmitter m;
 
-        private static TraceSwitch trace = new TraceSwitch("CcodeEliminator", "Traces the progress of the condition code eliminator");
-
-        public ConditionCodeEliminator(SsaState ssa, IPlatform arch)
+        public ConditionCodeEliminator(SsaState ssa, IPlatform platform, DecompilerEventListener listener)
 		{
-            this.ssa=ssa;
+            this.ssa = ssa;
 			this.ssaIds = ssa.Identifiers;
-            this.platform = arch;
+            this.platform = platform;
             this.m = new ExpressionEmitter();
 		}
 
@@ -74,36 +75,35 @@ namespace Reko.Analysis
                 sidGrf = s;
                 if (!IsLocallyDefinedFlagGroup(sidGrf))
                     continue;
-
+                if (sidGrf.DefStatement.Instruction is AliasAssignment)
+                    continue;
                 var uses = new HashSet<Statement>();
-                aliases = new HashSet<SsaIdentifier>();
-                ClosureOfUsingStatements(sidGrf, sidGrf.DefExpression, uses, aliases);
-
-                if (trace.TraceInfo) Debug.WriteLine(string.Format("Tracing {0}", sidGrf.DefStatement.Instruction));
+                this.aliases = new HashSet<Identifier>();
+                ClosureOfUsingStatements(sidGrf, uses, aliases);
+                trace.Inform("Tracing {0}", sidGrf.DefStatement.Instruction);
 
                 foreach (var u in uses)
                 {
                     useStm = u;
 
-                    if (trace.TraceInfo) Debug.WriteLine(string.Format("   used {0}", useStm.Instruction));
+                    trace.Inform("   used {0}", useStm.Instruction);
                     useStm.Instruction.Accept(this);
-                    if (trace.TraceInfo) Debug.WriteLine(string.Format("    now {0}", useStm.Instruction));
+                    trace.Inform("    now {0}", useStm.Instruction);
                 }
             }
         }
 
         /// <summary>
-        /// Computes the close of a web of using statements. The <paramref name="uses"/> hash set 
+        /// Computes the closure of a web of using statements. The <paramref name="uses"/> hash set 
         /// will contain all non-trivial uses of the expression.
         /// </summary>
-        /// <param name="sid"></param>
-        /// <param name="expr"></param>
-        /// <param name="uses"></param>
+        /// <param name="sid">The SSA identifier whose use-closure we're calculating</param>
+        /// <param name="uses">Uses we've seen so far.</param>
+        /// <param name="aliases">Aliases of sid we've seen so far.</param>
         public HashSet<Statement> ClosureOfUsingStatements(
             SsaIdentifier sid,
-            Expression expr,
             HashSet<Statement> uses,
-            HashSet<SsaIdentifier> aliases)
+            HashSet<Identifier> aliases)
         {
             foreach (var use in sid.Uses)
             {
@@ -112,16 +112,19 @@ namespace Reko.Analysis
                 uses.Add(use);
                 if (IsCopyWithOptionalCast(sid.Identifier, use))
                 {
+                    // Bypass copies (C_4 = C_3) and casts
+                    // (C_4 = SLICE(SZC_3, bool, 0)
                     var ass = (Assignment)use.Instruction;
                     var sidAlias = ssaIds[ass.Dst];
-                    aliases.Add(sidAlias);
-                    ClosureOfUsingStatements(sidAlias, expr, uses, aliases);
+                    aliases.Add(sidAlias.Identifier);
+                    ClosureOfUsingStatements(sidAlias, uses, aliases);
                 }
                 if (use.Instruction is PhiAssignment phiAss)
                 {
+                    // Bypass PHI nodes.
                     var sidPhi = ssaIds[phiAss.Dst];
-                    aliases.Add(sidPhi);
-                    ClosureOfUsingStatements(sidPhi, expr, uses, aliases);
+                    aliases.Add(sidPhi.Identifier);
+                    ClosureOfUsingStatements(sidPhi, uses,aliases);
                 }
             }
             return uses;
@@ -129,8 +132,12 @@ namespace Reko.Analysis
 
         private bool IsLocallyDefinedFlagGroup(SsaIdentifier sid)
         {
+            if (sid.DefStatement == null)
+                return false;
             var stg = sid.OriginalIdentifier.Storage;
-            return (stg is FlagGroupStorage && sid.DefStatement != null);
+            if (stg is FlagGroupStorage)
+                return true;
+            return (sid.DefExpression is ConditionOf);
 		}
 
         /// <summary>
@@ -138,6 +145,8 @@ namespace Reko.Analysis
         ///     grf = src
         /// or
         ///     grf = (foo) src 
+        /// or 
+        ///     grf = SLICE(src, x, y)
         /// </summary>
         /// <param name="grf"></param>
         /// <param name="stm"></param>
@@ -148,10 +157,14 @@ namespace Reko.Analysis
                 return false;
             Expression e = ass.Src;
             if (e is Cast cast)
+                return grf == cast.Expression;
+            else if (e is Slice s)
+                return grf == s.Expression;
+            else if (e is BinaryExpression bin && bin.Operator == Operator.Or)
             {
-                e = cast.Expression;
+                return bin.Left == grf || bin.Right == grf;
             }
-            return (e == grf);
+            return false;
         }
 
 		private BinaryExpression CmpExpressionToZero(Expression e)
@@ -171,7 +184,7 @@ namespace Reko.Analysis
 			}
 
             switch (e)
-            {
+			{
             case BinaryExpression binDef:
 				if (gf.IsNegated)
 					e = e.Invert();
@@ -187,7 +200,7 @@ namespace Reko.Analysis
 				return sid.Identifier;
             default:
 			throw new NotImplementedException("NYI: e: " + e.ToString());
-            }
+		}
 		}
 
 		public override Instruction TransformAssignment(Assignment a)
@@ -216,26 +229,22 @@ namespace Reko.Analysis
         {
             Expression u = binUse.Right;
             Cast c = null;
-            if (u != sidGrf.Identifier)
+            if (u != sidGrf.Identifier && !this.aliases.Contains(u))
             {
                 c = binUse.Right as Cast;
                 if (c != null)
                     u = c.Expression;
             }
-            if (u != sidGrf.Identifier)
+            if (u != sidGrf.Identifier && !this.aliases.Contains(u))
                 return a;
 
-            //var law = new LongAddRewriter(arch, useStm.Block.Procedure.Frame);
-            //if (law.Match(u, a))
-            //{
-            //    InsertLongAdd(sidGrf, u, a);
-            //}
+            var oldSid = ssaIds[(Identifier)u];
             u = UseGrfConditionally(sidGrf, ConditionCode.ULT);
             if (c != null)
                 binUse.Right = new Cast(c.DataType, u);
             else
                 binUse.Right = u;
-            sidGrf.Uses.Remove(useStm);
+            oldSid.Uses.Remove(useStm);
             Use(u, useStm);
             return a;
         }
@@ -427,7 +436,7 @@ namespace Reko.Analysis
 				cc = cc.Invert();
 			}
             bool isReal = (bin.DataType is PrimitiveType p && p.Domain == Domain.Real);
-            switch (cc)
+			switch (cc)
 			{
 			case ConditionCode.UGT: cmpOp = Operator.Ugt; break;
 			case ConditionCode.UGE: cmpOp = Operator.Uge; break;
@@ -450,6 +459,10 @@ namespace Reko.Analysis
             case ConditionCode.NOT_NAN:
                 return OrderedComparison(bin, true);
 
+            case ConditionCode.PE:
+                return ComparisonFromParity(bin, isNegated);
+            case ConditionCode.PO:
+                return ComparisonFromParity(bin, !isNegated);
             default: throw new NotImplementedException(string.Format("Case {0} not handled.", cc));
 			}
 
@@ -495,13 +508,31 @@ namespace Reko.Analysis
 			}
 			return e;
 		}
-		
+
+        public Expression ComparisonFromParity(BinaryExpression bin, bool isNegated)
+        {
+            var sig = new FunctionType(
+                new Identifier("", PrimitiveType.Bool, null),
+                new Identifier("", bin.DataType, null));
+            Expression e = new Application(
+                new ProcedureConstant(
+                    platform.PointerType,
+                    new PseudoProcedure("PARITY_EVEN", sig)),
+                PrimitiveType.Bool,
+                bin);
+            if (isNegated)
+            {
+                e = m.Not(e);
+            }
+            return e;
+        }
+
         /// <summary>
         /// Generate a comparison using the standard C
         /// "isunordered" function. 
         /// </summary>
         public Expression OrderedComparison(BinaryExpression bin, bool isNegated)
-        {
+		{
             var sig = new FunctionType(
                 new Identifier("", PrimitiveType.Bool, null),
                 new Identifier("x", bin.DataType, null),
@@ -513,11 +544,11 @@ namespace Reko.Analysis
                 bin.Left,
                 bin.Right);
             if (isNegated)
-            {
+			{
                 e = m.Not(e);
-            }
+			}
             return e;
-        }
+		}
 
 		private void Use(Expression expr, Statement stm)
 		{

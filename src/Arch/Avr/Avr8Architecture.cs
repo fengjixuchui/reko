@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,6 +39,7 @@ namespace Reko.Arch.Avr
 
         public Avr8Architecture(string archId) : base(archId)
         {
+            this.Endianness = EndianServices.Little;
             this.PointerType = PrimitiveType.Ptr16;
             this.WordWidth = PrimitiveType.Word16;
             this.FramePointerType = PrimitiveType.UInt8;
@@ -91,27 +92,7 @@ namespace Reko.Arch.Avr
             return new Avr8Disassembler(this, rdr);
         }
 
-        public override EndianImageReader CreateImageReader(MemoryArea img, ulong off)
-        {
-            return new LeImageReader(img, off);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea img, Address addr)
-        {
-            return new LeImageReader(img, addr);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea img, Address addrBegin, Address addrEnd)
-        {
-            return new LeImageReader(img, addrBegin, addrEnd);
-        }
-
-        public override ImageWriter CreateImageWriter()
-        {
-            throw new NotImplementedException();
-        }
-
-        public override ImageWriter CreateImageWriter(MemoryArea img, Address addr)
+        public override IProcessorEmulator CreateEmulator(SegmentMap segmentMap, IPlatformEmulator envEmulator)
         {
             throw new NotImplementedException();
         }
@@ -141,23 +122,23 @@ namespace Reko.Arch.Avr
             throw new NotImplementedException();
         }
 
-        public override FlagGroupStorage GetFlagGroup(uint grf)
+        public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)
         {
             if (!grfs.TryGetValue(grf, out FlagGroupStorage fl))
             {
                 PrimitiveType dt = Bits.IsSingleBitSet(grf) ? PrimitiveType.Bool : PrimitiveType.Byte;
-                fl = new FlagGroupStorage(this.sreg, grf, GrfToString(grf), dt);
+                fl = new FlagGroupStorage(this.sreg, grf, GrfToString(flagRegister, "", grf), dt);
                 grfs.Add(grf, fl);
             }
             return fl;
         }
 
-        public override SortedList<string, int> GetOpcodeNames()
+        public override SortedList<string, int> GetMnemonicNames()
         {
             throw new NotImplementedException();
         }
 
-        public override int? GetOpcodeNumber(string name)
+        public override int? GetMnemonicNumber(string name)
         {
             throw new NotImplementedException();
         }
@@ -167,7 +148,12 @@ namespace Reko.Arch.Avr
             throw new NotImplementedException();
         }
 
-        public override RegisterStorage GetRegister(int i)
+        public override RegisterStorage GetRegister(StorageDomain domain, BitRange range)
+        {
+            return regs[domain - StorageDomain.Register];
+        }
+
+        public RegisterStorage GetRegister(int i)
         {
             return regs[i];
         }
@@ -189,7 +175,7 @@ namespace Reko.Arch.Avr
             return reg;
         }
 
-        public override string GrfToString(uint grf)
+        public override string GrfToString(RegisterStorage flagRegister, string prefix, uint grf)
         {
             var s = new StringBuilder();
             foreach (var tpl in this.grfToString)
@@ -202,9 +188,12 @@ namespace Reko.Arch.Avr
             return s.ToString();
         }
 
-        public override Address MakeAddressFromConstant(Constant c)
+        public override Address MakeAddressFromConstant(Constant c, bool codeAlign)
         {
-            return Address.Ptr16((ushort)c.ToUInt32());
+            var uAddr = c.ToUInt32();
+            if (codeAlign)
+                uAddr &= ~1u;
+            return Address.Ptr16((ushort)uAddr);
         }
 
         public override Address ReadCodeAddress(int size, EndianImageReader rdr, ProcessorState state)
@@ -221,12 +210,6 @@ namespace Reko.Arch.Avr
         {
             return Address.TryParse16(txtAddr, out addr);
         }
-
-        public override bool TryRead(MemoryArea mem, Address addr, PrimitiveType dt, out Constant value)
-        {
-            return mem.TryReadLe(addr, dt, out value);
-        }
-
 
         /* I/O registers
          * 0x08 ACSR

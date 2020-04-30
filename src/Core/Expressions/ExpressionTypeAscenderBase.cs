@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -65,9 +65,20 @@ namespace Reko.Core.Expressions
                 RecordDataType(a.Accept(this), a);
             }
             RecordDataType(appl.Procedure.Accept(this), appl.Procedure);
-            return RecordDataType(appl.DataType, appl);
+            var dt = RecordApplicationReturnType(appl.Procedure, appl);
+            return dt;
         }
 
+        private DataType RecordApplicationReturnType(Expression pfn, Application appl)
+        {
+            var dt = RecordDataType(appl.DataType, appl);
+            if (pfn is ProcedureConstant pc && 
+                pc.Procedure.Signature.ParametersValid)
+            {
+                dt = RecordDataType(pc.Procedure.Signature.ReturnValue.DataType, appl);
+            }
+            return dt;
+        }
         public DataType VisitArrayAccess(ArrayAccess acc)
         {
             acc.Array.Accept(this);

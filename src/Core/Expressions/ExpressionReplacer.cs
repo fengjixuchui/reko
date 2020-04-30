@@ -1,6 +1,7 @@
-﻿#region License
+
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -47,7 +48,7 @@ namespace Reko.Core.Expressions
         public static Expression Replace(Expression original, Expression replacement, Expression root)
         {
             var rep = new ExpressionReplacer(original, replacement);
-            return root.Accept(rep);
+            return root?.Accept(rep);
         }
 
         public Expression VisitAddress(Address addr)
@@ -199,7 +200,10 @@ namespace Reko.Core.Expressions
 
         public Expression VisitSlice(Slice slice)
         {
-            throw new NotImplementedException();
+            if (cmp.Equals(slice, original))
+                return replacement;
+            var exp = slice.Expression.Accept(this);
+            return new Slice(slice.DataType, exp, slice.Offset);
         }
 
         public Expression VisitTestCondition(TestCondition tc)

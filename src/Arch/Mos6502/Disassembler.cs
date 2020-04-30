@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,12 +29,13 @@ using System.Text;
 
 namespace Reko.Arch.Mos6502
 {
+    using Decoder = Decoder<Disassembler, Mnemonic, Instruction>;
+
     // http://www.e-tradition.net/bytes/6502/6502_instruction_set.html
     // 65816 = http://www.zophar.net/fileuploads/2/10538ivwiu/65816info.txt
-    public class Disassembler : DisassemblerBase<Instruction>
+    public class Disassembler : DisassemblerBase<Instruction, Mnemonic>
     {
         private readonly EndianImageReader rdr;
-        private Instruction instr;
         private readonly List<Operand> ops;
 
         public Disassembler(EndianImageReader rdr)
@@ -49,29 +50,31 @@ namespace Reko.Arch.Mos6502
             if (!rdr.TryReadByte(out byte op))
                 return null;
             ops.Clear();
-            var decoder = decoders[op];
-            var mutators = decoder.Mutators;
-            var iclass = decoder.IClass;
-            var opcode = decoder.Code;
-            for (int i = 0; i < mutators.Length; ++i)
-            {
-                if (!mutators[i](op, this))
-                {
-                    iclass = InstrClass.Invalid;
-                    opcode = Opcode.illegal;
-                    break;
-                }
-            }
+            var instr = decoders[op].Decode(op, this);
+            instr.Address = addr;
+            instr.Length = (int) (rdr.Address - addr);
+            return instr;
+        }
 
-            this.instr = new Instruction
+        public override Instruction MakeInstruction(InstrClass iclass, Mnemonic mnemonic)
+        {
+            var instr = new Instruction
             {
-                Code = opcode,
                 InstructionClass = iclass,
-                Operand = ops.Count > 0 ? ops[0] : null,
-                Address = addr,
-                Length = (int)(rdr.Address - addr),
+                Mnemonic = mnemonic,
+                Operands = this.ops.ToArray(),
             };
             return instr;
+        }
+
+        public override Instruction CreateInvalidInstruction()
+        {
+            return new Instruction
+            {
+                InstructionClass = InstrClass.Invalid,
+                Mnemonic = Mnemonic.illegal,
+                Operands = MachineInstruction.NoOperands
+            };
         }
 
         private static bool Imm(uint uInstr, Disassembler dasm)
@@ -128,7 +131,7 @@ namespace Reko.Arch.Mos6502
                 return false;
             dasm.ops.Add(new Operand(PrimitiveType.Byte)
             {
-                Mode = AddressMode.ZeroPage,
+                Mode = AddressMode.ZeroPageX,
                 Register = Registers.x,
                 Offset = offset
             });
@@ -141,8 +144,8 @@ namespace Reko.Arch.Mos6502
                 return false;
             dasm.ops.Add(new Operand(PrimitiveType.Byte)
             {
-                Mode = AddressMode.ZeroPage,
-                Register = Registers.x,
+                Mode = AddressMode.ZeroPageY,
+                Register = Registers.y,
                 Offset = offset
             });
             return true;
@@ -272,306 +275,297 @@ namespace Reko.Arch.Mos6502
             };
         }
 
-        private class Decoder
+        private static Decoder Instr(Mnemonic mnemonic, params Mutator<Disassembler> [] mutators)
         {
-            public readonly InstrClass IClass;
-            public readonly Opcode Code;
-            public readonly Mutator<Disassembler> [] Mutators;
-
-            public Decoder(Opcode code, params Mutator<Disassembler>[] mutators)
-            {
-                this.IClass = InstrClass.Linear;
-                this.Code = code;
-                this.Mutators = mutators;
-            }
-
-            public Decoder(InstrClass iclass, Opcode code, params Mutator<Disassembler>[] mutators)
-            {
-                this.IClass = iclass;
-                this.Code = code;
-                this.Mutators = mutators;
-            }
+            return new InstrDecoder<Disassembler, Mnemonic, Instruction>(InstrClass.Linear, mnemonic, mutators);
         }
+
+        private static Decoder Instr(InstrClass iclass, Mnemonic mnemonic, params Mutator<Disassembler>[] mutators)
+        {
+            return new InstrDecoder<Disassembler, Mnemonic, Instruction>(iclass, mnemonic, mutators);
+        }
+
+        private static readonly Decoder invalid = Instr(InstrClass.Invalid, Mnemonic.illegal);
 
         private static readonly Decoder[] decoders = new Decoder[] {
             // 00
-new Decoder(InstrClass.Padding|InstrClass.Zero, Opcode.brk),
-    new Decoder(Opcode.ora, Ix),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.ora, z),
-    new Decoder(Opcode.asl, z),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.php),
-    new Decoder(Opcode.ora, Imm),
-    new Decoder(Opcode.asl, a),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.ora, A),
-    new Decoder(Opcode.asl, A),
-    new Decoder(Opcode.illegal),
+Instr(InstrClass.Padding|InstrClass.Zero, Mnemonic.brk),
+    Instr(Mnemonic.ora, Ix),
+    invalid,
+    invalid,
+    invalid,
+    Instr(Mnemonic.ora, z),
+    Instr(Mnemonic.asl, z),
+    invalid,
+    Instr(Mnemonic.php),
+    Instr(Mnemonic.ora, Imm),
+    Instr(Mnemonic.asl, a),
+    invalid,
+    invalid,
+    Instr(Mnemonic.ora, A),
+    Instr(Mnemonic.asl, A),
+    invalid,
 
             // 10
-new Decoder(InstrClass.ConditionalTransfer, Opcode.bpl, j),
-    new Decoder(Opcode.ora, Iy),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.ora, zx),
-    new Decoder(Opcode.asl, zx),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.clc),
-    new Decoder(Opcode.ora, Ay),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.ora, Ax),
-    new Decoder(Opcode.asl, Ax),
-    new Decoder(Opcode.illegal),
+Instr(InstrClass.ConditionalTransfer, Mnemonic.bpl, j),
+    Instr(Mnemonic.ora, Iy),
+    invalid,
+    invalid,
+    invalid,
+    Instr(Mnemonic.ora, zx),
+    Instr(Mnemonic.asl, zx),
+    invalid,
+    Instr(Mnemonic.clc),
+    Instr(Mnemonic.ora, Ay),
+    invalid,
+    invalid,
+    invalid,
+    Instr(Mnemonic.ora, Ax),
+    Instr(Mnemonic.asl, Ax),
+    invalid,
             // 20
-new Decoder(InstrClass.Transfer|InstrClass.Call, Opcode.jsr, A),
-    new Decoder(Opcode.and, Ix),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.bit, z),
-    new Decoder(Opcode.and, z),
-    new Decoder(Opcode.rol, z),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.plp),
-    new Decoder(Opcode.and, Imm),
-    new Decoder(Opcode.rol, a),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.bit, A),
-    new Decoder(Opcode.and, A),
-    new Decoder(Opcode.rol, A),
-    new Decoder(Opcode.illegal),
+Instr(InstrClass.Transfer|InstrClass.Call, Mnemonic.jsr, A),
+    Instr(Mnemonic.and, Ix),
+    invalid,
+    invalid,
+    Instr(Mnemonic.bit, z),
+    Instr(Mnemonic.and, z),
+    Instr(Mnemonic.rol, z),
+    invalid,
+    Instr(Mnemonic.plp),
+    Instr(Mnemonic.and, Imm),
+    Instr(Mnemonic.rol, a),
+    invalid,
+    Instr(Mnemonic.bit, A),
+    Instr(Mnemonic.and, A),
+    Instr(Mnemonic.rol, A),
+    invalid,
         // 30
-new Decoder(InstrClass.ConditionalTransfer, Opcode.bmi, j),
-    new Decoder(Opcode.and, Iy),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.and, zx),
-    new Decoder(Opcode.rol, zx),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.sec),
-    new Decoder(Opcode.and, Ay),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.and, Ax),
-    new Decoder(Opcode.rol, Ax),
-    new Decoder(Opcode.illegal),
+Instr(InstrClass.ConditionalTransfer, Mnemonic.bmi, j),
+    Instr(Mnemonic.and, Iy),
+    invalid,
+    invalid,
+    invalid,
+    Instr(Mnemonic.and, zx),
+    Instr(Mnemonic.rol, zx),
+    invalid,
+    Instr(Mnemonic.sec),
+    Instr(Mnemonic.and, Ay),
+    invalid,
+    invalid,
+    invalid,
+    Instr(Mnemonic.and, Ax),
+    Instr(Mnemonic.rol, Ax),
+    invalid,
  // 40
-new Decoder(InstrClass.Transfer, Opcode.rti),
-    new Decoder(Opcode.eor, Ix),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.eor, z),
-    new Decoder(Opcode.lsr, z),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.pha),
-    new Decoder(Opcode.eor, Imm),
-    new Decoder(Opcode.lsr, a),
-    new Decoder(Opcode.illegal),
-    new Decoder(InstrClass.Transfer, Opcode.jmp, A),
-    new Decoder(Opcode.eor, A),
-    new Decoder(Opcode.lsr, A),
-    new Decoder(Opcode.illegal),
+Instr(InstrClass.Transfer, Mnemonic.rti),
+    Instr(Mnemonic.eor, Ix),
+    invalid,
+    invalid,
+    invalid,
+    Instr(Mnemonic.eor, z),
+    Instr(Mnemonic.lsr, z),
+    invalid,
+    Instr(Mnemonic.pha),
+    Instr(Mnemonic.eor, Imm),
+    Instr(Mnemonic.lsr, a),
+    invalid,
+    Instr(InstrClass.Transfer, Mnemonic.jmp, A),
+    Instr(Mnemonic.eor, A),
+    Instr(Mnemonic.lsr, A),
+    invalid,
  // 50
-new Decoder(InstrClass.ConditionalTransfer, Opcode.bvc, j),
-    new Decoder(Opcode.eor, Iy),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.eor, zx),
-    new Decoder(Opcode.lsr, zx),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.cli),
-    new Decoder(Opcode.eor, Ay),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.eor, Ax),
-    new Decoder(Opcode.lsr, Ax),
-    new Decoder(Opcode.illegal),
+Instr(InstrClass.ConditionalTransfer, Mnemonic.bvc, j),
+    Instr(Mnemonic.eor, Iy),
+    invalid,
+    invalid,
+    invalid,
+    Instr(Mnemonic.eor, zx),
+    Instr(Mnemonic.lsr, zx),
+    invalid,
+    Instr(Mnemonic.cli),
+    Instr(Mnemonic.eor, Ay),
+    invalid,
+    invalid,
+    invalid,
+    Instr(Mnemonic.eor, Ax),
+    Instr(Mnemonic.lsr, Ax),
+    invalid,
  	// 60
-new Decoder(InstrClass.Transfer, Opcode.rts),
-    new Decoder(Opcode.adc, Ix),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.adc, z),
-    new Decoder(Opcode.ror, z),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.pla),
-    new Decoder(Opcode.adc, Imm),
-    new Decoder(Opcode.ror, a),
-    new Decoder(Opcode.illegal),
-    new Decoder(InstrClass.Transfer, Opcode.jmp, i),	
-    new Decoder(Opcode.adc, A),
-    new Decoder(Opcode.ror, A),
-    new Decoder(Opcode.illegal),
+Instr(InstrClass.Transfer, Mnemonic.rts),
+    Instr(Mnemonic.adc, Ix),
+    invalid,
+    invalid,
+    invalid,
+    Instr(Mnemonic.adc, z),
+    Instr(Mnemonic.ror, z),
+    invalid,
+    Instr(Mnemonic.pla),
+    Instr(Mnemonic.adc, Imm),
+    Instr(Mnemonic.ror, a),
+    invalid,
+    Instr(InstrClass.Transfer, Mnemonic.jmp, i),	
+    Instr(Mnemonic.adc, A),
+    Instr(Mnemonic.ror, A),
+    invalid,
  	// 70
-new Decoder(InstrClass.ConditionalTransfer, Opcode.bvs, j),
-    new Decoder(Opcode.adc, Iy),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.adc, zx),
-    new Decoder(Opcode.ror, zx),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.sei),
-    new Decoder(Opcode.adc, Ay),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.adc, Ax),
-    new Decoder(Opcode.ror, Ax),
-    new Decoder(Opcode.illegal),
+Instr(InstrClass.ConditionalTransfer, Mnemonic.bvs, j),
+    Instr(Mnemonic.adc, Iy),
+    invalid,
+    invalid,
+    invalid,
+    Instr(Mnemonic.adc, zx),
+    Instr(Mnemonic.ror, zx),
+    invalid,
+    Instr(Mnemonic.sei),
+    Instr(Mnemonic.adc, Ay),
+    invalid,
+    invalid,
+    invalid,
+    Instr(Mnemonic.adc, Ax),
+    Instr(Mnemonic.ror, Ax),
+    invalid,
  	// 80
-new Decoder(Opcode.illegal),
-    new Decoder(Opcode.sta, Ix),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.sty, z),
-    new Decoder(Opcode.sta, z),
-    new Decoder(Opcode.stx, z),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.dey),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.txa),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.sty, A),
-    new Decoder(Opcode.sta, A),
-    new Decoder(Opcode.stx, A),
-    new Decoder(Opcode.illegal),
+invalid,
+    Instr(Mnemonic.sta, Ix),
+    invalid,
+    invalid,
+    Instr(Mnemonic.sty, z),
+    Instr(Mnemonic.sta, z),
+    Instr(Mnemonic.stx, z),
+    invalid,
+    Instr(Mnemonic.dey),
+    invalid,
+    Instr(Mnemonic.txa),
+    invalid,
+    Instr(Mnemonic.sty, A),
+    Instr(Mnemonic.sta, A),
+    Instr(Mnemonic.stx, A),
+    invalid,
  	// 90
-new Decoder(InstrClass.ConditionalTransfer, Opcode.bcc, j),
- 	new Decoder(Opcode.sta, Iy),
- 	new Decoder(Opcode.illegal),
- 	new Decoder(Opcode.illegal),
- 	new Decoder(Opcode.sty, zx),
- 	new Decoder(Opcode.sta, zx),
- 	new Decoder(Opcode.stx, zy),
- 	new Decoder(Opcode.illegal),
- 	new Decoder(Opcode.tya),
- 	new Decoder(Opcode.sta, Ay),
- 	new Decoder(Opcode.txs),
- 	new Decoder(Opcode.illegal),
- 	new Decoder(Opcode.illegal),
-  	new Decoder(Opcode.sta, Ax),
- 	new Decoder(Opcode.illegal),
- 	new Decoder(Opcode.illegal),
+Instr(InstrClass.ConditionalTransfer, Mnemonic.bcc, j),
+ 	Instr(Mnemonic.sta, Iy),
+ 	invalid,
+ 	invalid,
+ 	Instr(Mnemonic.sty, zx),
+ 	Instr(Mnemonic.sta, zx),
+ 	Instr(Mnemonic.stx, zy),
+ 	invalid,
+ 	Instr(Mnemonic.tya),
+ 	Instr(Mnemonic.sta, Ay),
+ 	Instr(Mnemonic.txs),
+ 	invalid,
+ 	invalid,
+  	Instr(Mnemonic.sta, Ax),
+ 	invalid,
+ 	invalid,
 
 // A0
-new Decoder(Opcode.ldy, Imm),
-    new Decoder(Opcode.lda, Ix),
-    new Decoder(Opcode.ldx, Imm),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.ldy, z),
-    new Decoder(Opcode.lda, z),
-    new Decoder(Opcode.ldx, z),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.tay),
-    new Decoder(Opcode.lda, Imm),
-    new Decoder(Opcode.tax),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.ldy, A),
-    new Decoder(Opcode.lda, A),
-    new Decoder(Opcode.ldx, A),
-    new Decoder(Opcode.illegal),
+Instr(Mnemonic.ldy, Imm),
+    Instr(Mnemonic.lda, Ix),
+    Instr(Mnemonic.ldx, Imm),
+    invalid,
+    Instr(Mnemonic.ldy, z),
+    Instr(Mnemonic.lda, z),
+    Instr(Mnemonic.ldx, z),
+    invalid,
+    Instr(Mnemonic.tay),
+    Instr(Mnemonic.lda, Imm),
+    Instr(Mnemonic.tax),
+    invalid,
+    Instr(Mnemonic.ldy, A),
+    Instr(Mnemonic.lda, A),
+    Instr(Mnemonic.ldx, A),
+    invalid,
  	// B0
-new Decoder(InstrClass.ConditionalTransfer, Opcode.bcs, j),
-    new Decoder(Opcode.lda, Iy),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.ldy, zx),
-    new Decoder(Opcode.lda, zx),
-    new Decoder(Opcode.ldx, zy),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.clv),
-    new Decoder(Opcode.lda, Ay),
-    new Decoder(Opcode.tsx),
-    new Decoder(Opcode.illegal),
-    new Decoder(Opcode.ldy, Ax),
-    new Decoder(Opcode.lda, Ax),
-    new Decoder(Opcode.ldx, Ay),
-    new Decoder(Opcode.illegal),
+Instr(InstrClass.ConditionalTransfer, Mnemonic.bcs, j),
+    Instr(Mnemonic.lda, Iy),
+    invalid,
+    invalid,
+    Instr(Mnemonic.ldy, zx),
+    Instr(Mnemonic.lda, zx),
+    Instr(Mnemonic.ldx, zy),
+    invalid,
+    Instr(Mnemonic.clv),
+    Instr(Mnemonic.lda, Ay),
+    Instr(Mnemonic.tsx),
+    invalid,
+    Instr(Mnemonic.ldy, Ax),
+    Instr(Mnemonic.lda, Ax),
+    Instr(Mnemonic.ldx, Ay),
+    invalid,
     
     // C0
-    new Decoder(Opcode.cpy, Imm),
-        new Decoder(Opcode.cmp, Ix),
-        new Decoder(Opcode.illegal),
-        new Decoder(Opcode.illegal),
-        new Decoder(Opcode.cpy, z),
-        new Decoder(Opcode.cmp, z),
-        new Decoder(Opcode.dec, z),
-        new Decoder(Opcode.illegal),
-        new Decoder(Opcode.iny),
-        new Decoder(Opcode.cmp, Imm),
-        new Decoder(Opcode.dex),
-        new Decoder(Opcode.illegal),
-        new Decoder(Opcode.cpy, A),
-        new Decoder(Opcode.cmp, A),
-        new Decoder(Opcode.dec, A),
-        new Decoder(Opcode.illegal),
+    Instr(Mnemonic.cpy, Imm),
+        Instr(Mnemonic.cmp, Ix),
+        invalid,
+        invalid,
+        Instr(Mnemonic.cpy, z),
+        Instr(Mnemonic.cmp, z),
+        Instr(Mnemonic.dec, z),
+        invalid,
+        Instr(Mnemonic.iny),
+        Instr(Mnemonic.cmp, Imm),
+        Instr(Mnemonic.dex),
+        invalid,
+        Instr(Mnemonic.cpy, A),
+        Instr(Mnemonic.cmp, A),
+        Instr(Mnemonic.dec, A),
+        invalid,
  
         // D0
-        new Decoder(InstrClass.ConditionalTransfer, Opcode.bne, j),
-        new Decoder(Opcode.cmp, Iy),
-        new Decoder(Opcode.illegal),
-        new Decoder(Opcode.illegal),
-        new Decoder(Opcode.illegal),
-        new Decoder(Opcode.cmp, zx),
-        new Decoder(Opcode.dec, zx),
-        new Decoder(Opcode.illegal),
-        new Decoder(Opcode.cld),
-        new Decoder(Opcode.cmp, Ay),
-        new Decoder(Opcode.illegal),
-        new Decoder(Opcode.illegal),
-        new Decoder(Opcode.illegal),
-        new Decoder(Opcode.cmp, Ax),
-        new Decoder(Opcode.dec, Ax),
-        new Decoder(Opcode.illegal),
+        Instr(InstrClass.ConditionalTransfer, Mnemonic.bne, j),
+        Instr(Mnemonic.cmp, Iy),
+        invalid,
+        invalid,
+        invalid,
+        Instr(Mnemonic.cmp, zx),
+        Instr(Mnemonic.dec, zx),
+        invalid,
+        Instr(Mnemonic.cld),
+        Instr(Mnemonic.cmp, Ay),
+        invalid,
+        invalid,
+        invalid,
+        Instr(Mnemonic.cmp, Ax),
+        Instr(Mnemonic.dec, Ax),
+        invalid,
 
         // E0
-        new Decoder(Opcode.cpx, Imm),
-        new Decoder(Opcode.sbc, Ix),
-        new Decoder(Opcode.illegal),
-        new Decoder(Opcode.illegal),
-        new Decoder(Opcode.cpx, z),
-        new Decoder(Opcode.sbc, z),
-        new Decoder(Opcode.inc, z),
-        new Decoder(Opcode.illegal),
-        new Decoder(Opcode.inx),
-        new Decoder(Opcode.sbc, Imm),
-        new Decoder(Opcode.nop),
-        new Decoder(Opcode.illegal),
-        new Decoder(Opcode.cpx, A),
-        new Decoder(Opcode.sbc, A),
-        new Decoder(Opcode.inc, A),
-        new Decoder(Opcode.illegal),
+        Instr(Mnemonic.cpx, Imm),
+        Instr(Mnemonic.sbc, Ix),
+        invalid,
+        invalid,
+        Instr(Mnemonic.cpx, z),
+        Instr(Mnemonic.sbc, z),
+        Instr(Mnemonic.inc, z),
+        invalid,
+        Instr(Mnemonic.inx),
+        Instr(Mnemonic.sbc, Imm),
+        Instr(Mnemonic.nop),
+        invalid,
+        Instr(Mnemonic.cpx, A),
+        Instr(Mnemonic.sbc, A),
+        Instr(Mnemonic.inc, A),
+        invalid,
  
         // F0
-        new Decoder(InstrClass.ConditionalTransfer, Opcode.beq, j),
-        new Decoder(Opcode.sbc, Iy),
-        new Decoder(Opcode.illegal),
-        new Decoder(Opcode.illegal),
-        new Decoder(Opcode.illegal),
-        new Decoder(Opcode.sbc, zx),
-        new Decoder(Opcode.inc, zx),
-        new Decoder(Opcode.illegal),
-        new Decoder(Opcode.sed),
-        new Decoder(Opcode.sbc, Ay),
-        new Decoder(Opcode.illegal),
-        new Decoder(Opcode.illegal),
-        new Decoder(Opcode.illegal),
-        new Decoder(Opcode.sbc, Ax),
-        new Decoder(Opcode.inc, Ax),
-        new Decoder(Opcode.illegal),
+        Instr(InstrClass.ConditionalTransfer, Mnemonic.beq, j),
+        Instr(Mnemonic.sbc, Iy),
+        invalid,
+        invalid,
+        invalid,
+        Instr(Mnemonic.sbc, zx),
+        Instr(Mnemonic.inc, zx),
+        invalid,
+        Instr(Mnemonic.sed),
+        Instr(Mnemonic.sbc, Ay),
+        invalid,
+        invalid,
+        invalid,
+        Instr(Mnemonic.sbc, Ax),
+        Instr(Mnemonic.inc, Ax),
+        invalid,
         };
     }
 }

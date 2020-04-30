@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,7 +31,7 @@ using System.ComponentModel.Design;
 
 namespace Reko.UnitTests.Loading
 {
-    [TestFixture]
+	[TestFixture]
 	public class LoaderTests
 	{
         private IServiceContainer sc;
@@ -58,7 +58,7 @@ namespace Reko.UnitTests.Loading
         public void Ldr_Match()
         {
             Loader ldr = new Loader(sc);
-            Assert.IsTrue(ldr.ImageHasMagicNumber(new byte[] { 0x47, 0x11 }, "4711", "0"));
+            Assert.IsTrue(ldr.ImageHasMagicNumber(new byte[] { 0x47, 0x11 }, "4711", 0));
         }
 
         [Test(Description="Unless otherwise specified, fail loading unknown file formats.")]
@@ -69,7 +69,7 @@ namespace Reko.UnitTests.Loading
             var testImage = new byte[] { 42, 42, 42, 42, };
             var ldr = new Mock<Loader>(sc);
 
-            Program program = ldr.Object.LoadExecutable("", testImage,  null, null);
+            Program program = ldr.Object.LoadExecutable("", testImage, null, null);
 
             Assert.IsNull(program);
         }
@@ -128,7 +128,7 @@ namespace Reko.UnitTests.Loading
             cfgSvc.Setup(d => d.GetImageLoaders()).Returns(new List<LoaderDefinition>
             {
                 new LoaderDefinition {
-                    Offset = "0002",
+                    Offset = 0x0002,
                     MagicNumber = "A0A0",
                     TypeName = typeof(TestImageLoader).AssemblyQualifiedName,
                 }
@@ -177,7 +177,7 @@ namespace Reko.UnitTests.Loading
                     TypeName = typeof(FakeImageLoader).AssemblyQualifiedName,
                 }
             };
-            cfgSvc.Expect(c => c.GetImageLoaders()).Returns(ldrs);
+            cfgSvc.Setup(c => c.GetImageLoaders()).Returns(ldrs).Verifiable();
         }
 
         [Test]
@@ -247,6 +247,6 @@ namespace Reko.UnitTests.Loading
 
             Assert.AreEqual(1, program.EntryPoints.Count);
             Assert.AreEqual(SymbolType.Procedure, program.EntryPoints[Address.Ptr32(0x00123500)].Type);
-        }
+	}
 	}
 }

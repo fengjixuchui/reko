@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@
  */
 #endregion
 
+using Reko.Core.Operators;
 using Reko.Core.Types;
 using System;
 using System.Collections.Generic;
@@ -30,16 +31,13 @@ namespace Reko.Core.Expressions
 	/// </summary>
 	public class Slice : Expression
 	{
-		private byte offset;			// Bit-offset of value
-
-		public Slice(DataType dt, Expression i, int bitOffset) : base(dt)
-		{
-			if (bitOffset > 255)
-				throw new ArgumentOutOfRangeException("bitOffset", "Offset is too large.");
+        public Slice(DataType dt, Expression i, int bitOffset) : base(dt)
+        {
             if (bitOffset < 0)
-                throw new ArgumentOutOfRangeException("bitOffset", "Offset must be non-negative.");
-			Expression = i; offset = (byte) bitOffset;
-		}
+                throw new ArgumentOutOfRangeException(nameof(bitOffset), "Offset must be non-negative.");
+            Expression = i;
+            Offset = bitOffset;
+        }
 
         /// <summary>
         /// The expression being sliced.
@@ -49,7 +47,7 @@ namespace Reko.Core.Expressions
         /// <summary>
         /// Bit offset of the slice.
         /// </summary>
-        public int Offset { get { return offset; } }
+        public int Offset { get; }
 
         public override IEnumerable<Expression> Children
         {
@@ -73,7 +71,12 @@ namespace Reko.Core.Expressions
 
 		public override Expression CloneExpression()
 		{
-			return new Slice(DataType, Expression, offset);
+			return new Slice(DataType, Expression, Offset);
 		}
-	}
+
+        public override Expression Invert()
+        {
+            return new UnaryExpression(Operator.Not, PrimitiveType.Bool, this);
+        }
+    }
 }

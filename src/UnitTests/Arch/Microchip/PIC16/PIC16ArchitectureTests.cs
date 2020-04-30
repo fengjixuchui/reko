@@ -1,8 +1,8 @@
 ﻿#region License
 /* 
- * Copyright (C) 2017-2019 Christian Hostelet.
+ * Copyright (C) 2017-2020 Christian Hostelet.
  * inspired by work of:
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -109,36 +109,36 @@ namespace Reko.UnitTests.Arch.Microchip.PIC16
             var arch = GetArch(PIC16BasicName);
             Assert.AreEqual(
                 "__CONFIG,__IDLOCS,ADDFSR,ADDLW,ADDULNK,ADDWF",
-                string.Join(",", arch.GetOpcodeNames().Keys.Take(6)));
+                string.Join(",", arch.GetMnemonicNames().Keys.Take(6)));
 
             arch = GetArch(PIC16EnhancedName);
             Assert.AreEqual(
                 "__CONFIG,__IDLOCS,ADDFSR,ADDLW,ADDULNK,ADDWF",
-                string.Join(",", arch.GetOpcodeNames().Keys.Take(6)));
+                string.Join(",", arch.GetMnemonicNames().Keys.Take(6)));
 
             arch = GetArch(PIC16FullFeaturedName);
             Assert.AreEqual(
                 "__CONFIG,__IDLOCS,ADDFSR,ADDLW,ADDULNK,ADDWF",
-                string.Join(",", arch.GetOpcodeNames().Keys.Take(6)));
+                string.Join(",", arch.GetMnemonicNames().Keys.Take(6)));
         }
 
         [Test]
         public void PIC16arch_GetOpcodeNumberTests()
         {
             var arch = GetArch(PIC16BasicName);
-            Assert.AreEqual(Opcode.MOVWF, (Opcode)arch.GetOpcodeNumber("MOVWF"));
-            Assert.AreEqual(Opcode.ADDWF, (Opcode)arch.GetOpcodeNumber("ADDWF"));
+            Assert.AreEqual(Mnemonic.MOVWF, (Mnemonic)arch.GetMnemonicNumber("MOVWF"));
+            Assert.AreEqual(Mnemonic.ADDWF, (Mnemonic)arch.GetMnemonicNumber("ADDWF"));
 
             arch = GetArch(PIC16EnhancedName);
-            Assert.AreEqual(Opcode.MOVWF, (Opcode)arch.GetOpcodeNumber("MOVWF"));
-            Assert.AreEqual(Opcode.ADDWF, (Opcode)arch.GetOpcodeNumber("ADDWF"));
-            Assert.AreEqual(Opcode.BRW, (Opcode)arch.GetOpcodeNumber("BRW"));
+            Assert.AreEqual(Mnemonic.MOVWF, (Mnemonic)arch.GetMnemonicNumber("MOVWF"));
+            Assert.AreEqual(Mnemonic.ADDWF, (Mnemonic)arch.GetMnemonicNumber("ADDWF"));
+            Assert.AreEqual(Mnemonic.BRW, (Mnemonic)arch.GetMnemonicNumber("BRW"));
 
             arch = GetArch(PIC16FullFeaturedName);
-            Assert.AreEqual(Opcode.MOVWF, (Opcode)arch.GetOpcodeNumber("MOVWF"));
-            Assert.AreEqual(Opcode.ADDWF, (Opcode)arch.GetOpcodeNumber("ADDWF"));
-            Assert.AreEqual(Opcode.BRW, (Opcode)arch.GetOpcodeNumber("BRW"));
-            Assert.AreEqual(Opcode.RESET, (Opcode)arch.GetOpcodeNumber("RESET"));
+            Assert.AreEqual(Mnemonic.MOVWF, (Mnemonic)arch.GetMnemonicNumber("MOVWF"));
+            Assert.AreEqual(Mnemonic.ADDWF, (Mnemonic)arch.GetMnemonicNumber("ADDWF"));
+            Assert.AreEqual(Mnemonic.BRW, (Mnemonic)arch.GetMnemonicNumber("BRW"));
+            Assert.AreEqual(Mnemonic.RESET, (Mnemonic)arch.GetMnemonicNumber("RESET"));
 
         }
 

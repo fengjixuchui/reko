@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,7 +27,7 @@ namespace Reko.Arch.PaRisc
 {
     public class PaRiscInstruction : MachineInstruction
     {
-        public Opcode Opcode { get; set; }
+        public Mnemonic Mnemonic { get; set; }
         
         // Completers
         public int Coprocessor { get; set; }
@@ -40,16 +40,8 @@ namespace Reko.Arch.PaRisc
         public CacheHint CacheHint { get; set; }
 
         public ConditionOperand Condition { get; set; }
-        public MachineOperand[] Operands { get; set; }
 
-        public override int OpcodeAsInteger => (int) Opcode;
-
-        public override MachineOperand GetOperand(int i)
-        {
-            return (0 <= i && i < Operands.Length)
-                ? Operands[i]
-                : null;
-        }
+        public override int MnemonicAsInteger => (int) Mnemonic;
 
         public override void Render(MachineInstructionWriter writer, MachineInstructionWriterOptions options)
         {
@@ -68,7 +60,7 @@ namespace Reko.Arch.PaRisc
         private void WriteMnemonic(MachineInstructionWriter writer)
         {
             var sb = new StringBuilder();
-            sb.Append(Opcode.ToString().Replace('_',','));
+            sb.Append(Mnemonic.ToString().Replace('_',','));
             if (Coprocessor != -1)
                 sb.AppendFormat(",{0}", Coprocessor);
             if (FpFmt != FpFormat.None)
@@ -87,7 +79,7 @@ namespace Reko.Arch.PaRisc
                 sb.AppendFormat(",{0}", CacheHint);
             if (Annul)
                 sb.Append(",n");
-            writer.WriteOpcode(sb.ToString());
+            writer.WriteMnemonic(sb.ToString());
         }
     }
 

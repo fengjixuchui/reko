@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,43 +29,21 @@ namespace Reko.Arch.Pdp11
 {
     public class Pdp11Instruction : MachineInstruction
     {
-        public Opcode Opcode;
+        public Mnemonic Mnemonic;
         public PrimitiveType DataWidth;
-        public MachineOperand op1;
-        public MachineOperand op2;
 
-        public override int OpcodeAsInteger => (int)Opcode;
-
-        public override MachineOperand GetOperand(int i)
-        {
-            if (i == 0)
-                return op1;
-            else if (i == 1)
-                return op2;
-            else
-                return null;
-        }
-
+        public override int MnemonicAsInteger => (int)Mnemonic;
 
         public override void Render(MachineInstructionWriter writer, MachineInstructionWriterOptions options)
         {
-            writer.WriteOpcode(Opcode.ToString());
-            if (op1 != null)
-            {
-                writer.Tab();
-                OpToString(op1, options, writer);
-                if (op2 != null)
-                {
-                    writer.WriteString(",");
-                    OpToString(op2, options, writer);
-                }
-            }
+            writer.WriteMnemonic(Mnemonic.ToString());
+            RenderOperands(writer, options);
         }
 
-        private void OpToString(
+        protected override void RenderOperand(
             MachineOperand op,
-            MachineInstructionWriterOptions options,
-            MachineInstructionWriter writer)
+            MachineInstructionWriter writer,
+            MachineInstructionWriterOptions options)
         {
             if (op is ImmediateOperand)
             {

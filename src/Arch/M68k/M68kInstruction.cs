@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,67 +30,39 @@ namespace Reko.Arch.M68k
 {
     public class M68kInstruction : MachineInstruction
     {
-        public Opcode code;
-        public PrimitiveType dataWidth;
-        public MachineOperand op1;
-        public MachineOperand op2;
-        public MachineOperand op3;
+        public Mnemonic Mnemonic { get; set; }
+        public PrimitiveType DataWidth { get; set; }
 
-        public override int OpcodeAsInteger => (int) code;
-
-        public override MachineOperand GetOperand(int i)
-        {
-            switch (i)
-            {
-            case 0: return op1;
-            case 1: return op2;
-            case 2: return op3;
-            default: return null;
-            }
-        }
+        public override int MnemonicAsInteger => (int) Mnemonic;
 
         public override void Render(MachineInstructionWriter writer, MachineInstructionWriterOptions options)
         {
-            if (code == Opcode.illegal && op1 != null && writer.Platform != null)
+            if (Mnemonic == Mnemonic.illegal && Operands.Length > 0 && writer.Platform != null)
             {
-                var imm = op1 as M68kImmediateOperand;
+                var imm = Operands[0] as M68kImmediateOperand;
                 // MacOS uses invalid opcodes to invoke Macintosh Toolbox services. 
                 // We may have to generalize the Platform API to allow specifying 
                 // the opcode of the invoking instruction, to disambiguate from 
                 // "legitimate" TRAP calls.
-                var svc = writer.Platform.FindService((int)imm.Constant.ToUInt32(), null);
+                var svc = writer.Platform.FindService((int)imm.Constant.ToUInt32(), null, null);
                 if (svc != null)
                 {
                     writer.WriteString(svc.Name);
                     return;
                 }
             }
-            if (dataWidth != null)
+            if (DataWidth != null)
             {
-                writer.WriteOpcode(string.Format("{0}{1}", code, DataSizeSuffix(dataWidth)));
+                writer.WriteMnemonic(string.Format("{0}{1}", Mnemonic, DataSizeSuffix(DataWidth)));
             }
             else
             {
-                writer.WriteOpcode(code.ToString());
+                writer.WriteMnemonic(Mnemonic.ToString());
             }
-            if (op1 != null)
-            {
-                writer.Tab();
-                WriteOperand(op1, writer, options);
-                if (op2 != null)
-                {
-                    writer.WriteChar(',');
-                    WriteOperand(op2, writer, options);
-                    if (op3 != null)
-                    {
-                        writer.WriteChar(',');
-                        WriteOperand(op3, writer, options);
-                    }
-                }
-            }
+            RenderOperands(writer, options);
         }
 
-        private void WriteOperand(MachineOperand op, MachineInstructionWriter writer, MachineInstructionWriterOptions options)
+        protected override void RenderOperand(MachineOperand op, MachineInstructionWriter writer, MachineInstructionWriterOptions options)
         {
             if (op is MemoryOperand memOp && memOp.Base == Registers.pc)
             {
@@ -107,7 +79,6 @@ namespace Reko.Arch.M68k
                     writer.AddAnnotation(addr.ToString());
                 }
                 return;
-
             }
             op.Write(writer, options);
         }

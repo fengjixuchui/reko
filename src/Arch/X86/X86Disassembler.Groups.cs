@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,310 +24,368 @@ namespace Reko.Arch.X86
 {
     public partial class X86Disassembler
     {
-        private static Decoder [] CreateGroupDecoders()
+        private static void CreateGroupDecoders()
         {
-            return new Decoder[]
+            Grp1 = new Decoder[8]
             {
 				// group 1
-				Instr(Opcode.add),
-                Instr(Opcode.or),
-                Instr(Opcode.adc),
-                Instr(Opcode.sbb),
-                Instr(Opcode.and),
-                Instr(Opcode.sub),
-                Instr(Opcode.xor),
-                Instr(Opcode.cmp),
+				Instr(Mnemonic.add),
+                Instr(Mnemonic.or),
+                Instr(Mnemonic.adc),
+                Instr(Mnemonic.sbb),
+                Instr(Mnemonic.and),
+                Instr(Mnemonic.sub),
+                Instr(Mnemonic.xor),
+                Instr(Mnemonic.cmp),
+            };
 
-				// group 2
-				Instr(Opcode.rol),
-                Instr(Opcode.ror),
-                Instr(Opcode.rcl),
-                Instr(Opcode.rcr),
-                Instr(Opcode.shl),
-                Instr(Opcode.shr),
-                Instr(Opcode.shl),
-                Instr(Opcode.sar),
+            Grp1A = new Decoder[8]
+            {
+                Instr(Mnemonic.pop, Ev),
+                s_invalid,
+                s_invalid,
+                s_invalid,
+                s_invalid,
+                s_invalid,
+                s_invalid,
+                s_invalid,
+            };
 
-				// group 3
-				Instr(Opcode.test, Ix),
-                Instr(Opcode.test, Ix),
-                Instr(Opcode.not),
-                Instr(Opcode.neg),
-                Instr(Opcode.mul),
-                Instr(Opcode.imul),
-                Instr(Opcode.div),
-                Instr(Opcode.idiv),
-				
-				// group 4
-				Instr(Opcode.inc, Eb),
-                Instr(Opcode.dec, Eb),
-                s_invalid,
-                s_invalid,
-                s_invalid,
-                s_invalid,
-                s_invalid,
-                s_invalid, 
+            Grp2 = new Decoder[8]
+            {
+                Instr(Mnemonic.rol),
+                Instr(Mnemonic.ror),
+                Instr(Mnemonic.rcl),
+                Instr(Mnemonic.rcr),
+                Instr(Mnemonic.shl),
+                Instr(Mnemonic.shr),
+                Instr(Mnemonic.shl),
+                Instr(Mnemonic.sar),
+            };
 
-				// group 5
-				Instr(Opcode.inc, Ev),
-                Instr(Opcode.dec, Ev),
-                new Alternative64Decoder(
-                    Instr(Opcode.call, InstrClass.Transfer|InstrClass.Call, Ev),
-                    Instr(Opcode.call, InstrClass.Transfer|InstrClass.Call, Eq)),
-                Instr(Opcode.call, InstrClass.Transfer|InstrClass.Call, Ep),
-                new Alternative64Decoder(
-                    Instr(Opcode.jmp, InstrClass.Transfer, Ev),
-                    Instr(Opcode.jmp, InstrClass.Transfer, Eq)),
-                Instr(Opcode.jmp, InstrClass.Transfer, Ep),
-                new Alternative64Decoder(
-                    Instr(Opcode.push, Ev),
-                    Instr(Opcode.push, Eq)),
-                s_invalid,
+            Grp3 = new Decoder[8]
+            {
+                Instr(Mnemonic.test, Ix),
+                Instr(Mnemonic.test, Ix),
+                Instr(Mnemonic.not),
+                Instr(Mnemonic.neg),
+                Instr(Mnemonic.mul),
+                Instr(Mnemonic.imul),
+                Instr(Mnemonic.div),
+                Instr(Mnemonic.idiv),
+            };
 
-				// group 6
-				new Group6Decoder(
-                    Instr(Opcode.sldt, InstrClass.System, Ew),
-                    Instr(Opcode.sldt, InstrClass.System, Rv)),
+            Grp4 = new Decoder[8]
+            {
+                Instr(Mnemonic.inc, Eb),
+                Instr(Mnemonic.dec, Eb),
+                s_invalid,
+                s_invalid,
+                s_invalid,
+                s_invalid,
+                s_invalid,
+                s_invalid,
+            };
+
+            Grp5 = new Decoder[8]
+            {
+                Instr(Mnemonic.inc, Ev),
+                Instr(Mnemonic.dec, Ev),
+                Amd64Instr(
+                    Instr(Mnemonic.call, InstrClass.Transfer|InstrClass.Call, Ev),
+                    Instr(Mnemonic.call, InstrClass.Transfer|InstrClass.Call, Eq)),
+                Instr(Mnemonic.call, InstrClass.Transfer|InstrClass.Call, Ep),
+                Amd64Instr(
+                    Instr(Mnemonic.jmp, InstrClass.Transfer, Ev),
+                    Instr(Mnemonic.jmp, InstrClass.Transfer, Eq)),
+                Instr(Mnemonic.jmp, InstrClass.Transfer, Ep),
+                Amd64Instr(
+                    Instr(Mnemonic.push, Ev),
+                    Instr(Mnemonic.push, Eq)),
+                s_invalid,
+            };
+
+            // 0F 00
+            Grp6 = new Decoder[8]
+            {
                 new Group6Decoder(
-                    Instr(Opcode.str, Ew),
-                    Instr(Opcode.str, Rv)),
-                Instr(Opcode.lldt, InstrClass.System, Ms),
-                Instr(Opcode.ltr, Ew),
-                Instr(Opcode.verr, Ew),
-                Instr(Opcode.verw, Ew),
+                    Instr(Mnemonic.sldt, InstrClass.System, Ew),
+                    Instr(Mnemonic.sldt, InstrClass.System, Rv)),
+                new Group6Decoder(
+                    Instr(Mnemonic.str, InstrClass.System, Ew),
+                    Instr(Mnemonic.str, InstrClass.System, Rw)),
+                new Group6Decoder(
+                    Instr(Mnemonic.lldt, InstrClass.System, Ms),
+                    Instr(Mnemonic.lldt, InstrClass.System, Rw)),
+                Instr(Mnemonic.ltr, InstrClass.System, Ew),
+                Instr(Mnemonic.verr, Ew),
+                Instr(Mnemonic.verw, Ew),
+                s_invalid,
+                s_invalid,
+            };
+
+            // 0F 01
+            Grp7 = new Decoder[8]
+            {
+                new Group7Decoder(
+                    Instr(Mnemonic.sgdt, Ms),
+                    s_invalid,
+                    Instr(Mnemonic.vmcall),
+                    Instr(Mnemonic.vmlaunch),
+                    Instr(Mnemonic.vmresume),
+                    Instr(Mnemonic.vmxoff),
+                    s_invalid,
+                    s_invalid,
+                    s_invalid),
+                new Group7Decoder(
+                    Instr(Mnemonic.sidt, Ms),
+                    Instr(Mnemonic.monitor),
+                    Instr(Mnemonic.mwait),
+                    Instr(Mnemonic.clac),
+                    Instr(Mnemonic.stac),
+                    s_invalid,
+                    s_invalid,
+                    s_invalid,
+                    s_invalid),
+                new Group7Decoder(
+                    Instr(Mnemonic.lgdt, InstrClass.System, Ms),
+
+                    Instr(Mnemonic.xgetbv),
+                    Instr(Mnemonic.xsetbv),
+                    s_invalid,
+                    s_invalid,
+
+                    Instr(Mnemonic.vmfunc),
+                    Instr(Mnemonic.xend),
+                    Instr(Mnemonic.xtest),
+                    s_invalid),
+                new Group6Decoder(
+                    Instr(Mnemonic.lidt, InstrClass.System, Ms),
+                    s_invalid),
+
+                new Group6Decoder(
+                    Instr(Mnemonic.smsw, Ew),
+                    Instr(Mnemonic.smsw, Rv)),
+                new Group7Decoder(
+                    s_invalid,
+
+                    s_invalid,
+                    s_invalid,
+                    s_invalid,
+                    s_invalid,
+                    s_invalid,
+                    s_invalid,
+                    Instr(Mnemonic.rdpkru),
+                    Instr(Mnemonic.wrpkru)),
+                Instr(Mnemonic.lmsw, InstrClass.System, Ew),
+                new Group7Decoder(
+                    Instr(Mnemonic.invlpg, InstrClass.System, Mb),
+
+                    Instr(Mnemonic.swapgs),
+                    Instr(Mnemonic.rdtscp),
+                    Instr(Mnemonic.monitorx),
+                    Instr(Mnemonic.mwaitx),
+
+                    s_invalid,
+                    s_invalid,
+                    s_invalid,
+                    s_invalid),
+            };
+
+            // 0F BA
+            Grp8 = new Decoder[8]
+            {
+                s_invalid,
+                s_invalid,
+                s_invalid,
+                s_invalid,
+                Instr(Mnemonic.bt),
+                Instr(Mnemonic.bts),
+                Instr(Mnemonic.btr),
+                Instr(Mnemonic.btc),
+            };
+
+            // 0F C7
+            Grp9 = new Decoder[8]
+            {
+                s_invalid,
+                new Group6Decoder(
+                    new PrefixedDecoder(
+                        Amd64Instr(
+                            Instr(Mnemonic.cmpxchg8b, Mq),
+                            Instr(Mnemonic.cmpxchg16b, Mdq))),
+                    s_invalid),
                 s_invalid,
                 s_invalid,
 
-				// group 7
+                s_invalid,
+                s_invalid,
+                new Group6Decoder(
+                    new PrefixedDecoder(
+                        Instr(Mnemonic.vmptrld, Mq),
+                        dec66:Instr(Mnemonic.vmclear, Mq),
+                        decF3:Instr(Mnemonic.vmxon, Mq)),
+                    Instr(Mnemonic.rdrand, Rv)),
+                new Group6Decoder(
+                    new PrefixedDecoder(
+                        dec:Instr(Mnemonic.vmptrst, Mq),
+                        decF3:Instr(Mnemonic.vmptrst, Mq)),
+                    Instr(Mnemonic.rdseed, Rv)),
+            };
+
+            // 0F B9
+            Grp10 = new Decoder[8]
+            {
+                Instr(Mnemonic.ud1, InstrClass.Invalid),
+				Instr(Mnemonic.ud1, InstrClass.Invalid),
+				Instr(Mnemonic.ud1, InstrClass.Invalid),
+				Instr(Mnemonic.ud1, InstrClass.Invalid),
+				Instr(Mnemonic.ud1, InstrClass.Invalid),
+				Instr(Mnemonic.ud1, InstrClass.Invalid),
+				Instr(Mnemonic.ud1, InstrClass.Invalid),
+				Instr(Mnemonic.ud1, InstrClass.Invalid),
+            };
+
+            // C6/C7
+            Grp11 = new Decoder[8]
+            {
+                Instr(Mnemonic.mov),
+                s_nyi,
+                s_nyi,
+                s_nyi,
+                s_nyi,
+                s_nyi,
+                s_nyi,
+                s_nyi,
+            };
+
+            // 0F 71
+            Grp12 = new Decoder[8]
+            {
+                s_invalid,
+                s_invalid,
+                new PrefixedDecoder(
+                    Instr(Mnemonic.psrlw, Nq,Ib),
+                    Instr(Mnemonic.vpsrlw, Hx,Ux,Ib)),
+                s_invalid,
+                new PrefixedDecoder(
+                    Instr(Mnemonic.psraw, Nq,Ib),
+                    Instr(Mnemonic.vpsraw, Hx,Ux,Ib)),
+                s_invalid,
+                new PrefixedDecoder(
+                    Instr(Mnemonic.psllw, Nq,Ib),
+                    Instr(Mnemonic.vpsllw, Hx,Ux,Ib)),
+                s_invalid,
+            };
+
+            // 0F 72
+            Grp13 = new Decoder[8]
+            {
+                s_invalid,
+                s_invalid,
+                new PrefixedDecoder(
+                    Instr(Mnemonic.psrld, Nq,Ib),
+                    VexInstr(Mnemonic.psrld, Mnemonic.vpsrld, Hx,Ux,Ib)),
+                s_invalid,
+
+                new PrefixedDecoder(
+                    Instr(Mnemonic.psrad, Nq,Ib),
+                    Instr(Mnemonic.vpsrad, Hx,Ux,Ib)),
+                s_invalid,
+                new PrefixedDecoder(
+                    Instr(Mnemonic.pslld, Nq,Ib),
+                    VexInstr(Mnemonic.pslld, Mnemonic.vpslld, Hx,Ux,Ib)),
+                s_invalid,
+            };
+
+            // 0F 73
+            Grp14 = new Decoder[8]
+            {
+                s_invalid,
+                s_invalid,
+                new PrefixedDecoder(
+                    Instr(Mnemonic.psrlq, Nq,Ib),
+                    VexInstr(Mnemonic.psrlq, Mnemonic.vpsrlq, Hx,Ux,Ib)),
+                new PrefixedDecoder(
+                    s_invalid,
+                    VexInstr(Mnemonic.psrldq, Mnemonic.vpsrldq, Hx,Ux,Ib)),
+
+                s_invalid,
+                s_invalid,
+                new PrefixedDecoder(
+                    Instr(Mnemonic.psllq, Nq,Ib),
+                    VexInstr(Mnemonic.psllq, Mnemonic.vpsllq, Hx,Ux,Ib)),
+                new PrefixedDecoder(
+                    s_invalid,
+                    VexInstr(Mnemonic.pslldq, Mnemonic.vpslldq, Hx,Ux,Ib)),
+            };
+
+            // 0F AE
+            Grp15 = new Decoder[8]
+            {
+                new Group7Decoder(Instr(Mnemonic.fxsave)),
+                new Group7Decoder(Instr(Mnemonic.fxrstor)),
+                Instr(Mnemonic.ldmxcsr, Md),
+                Instr(Mnemonic.stmxcsr, Md),
+
+                Amd64Instr(
+                    Instr(Mnemonic.xsave, Mb),
+                    Instr(Mnemonic.xsave64, Mb)),
 				new Group7Decoder(
-                    Instr(Opcode.sgdt, Ms),
-                    s_invalid,
-                    Instr(Opcode.vmcall),
-                    Instr(Opcode.vmlaunch),
-                    Instr(Opcode.vmresume),
-                    Instr(Opcode.vmxoff),
-                    s_invalid,
-                    s_invalid,
-                    s_invalid),
+                    Instr(Mnemonic.xrstor, Md),
+
+                    Instr(Mnemonic.lfence),
+                    Instr(Mnemonic.lfence),
+                    Instr(Mnemonic.lfence),
+                    Instr(Mnemonic.lfence),
+
+                    Instr(Mnemonic.lfence),
+                    Instr(Mnemonic.lfence),
+                    Instr(Mnemonic.lfence),
+                    Instr(Mnemonic.lfence)),
                 new Group7Decoder(
-                    Instr(Opcode.sidt, Ms),
-                    Instr(Opcode.monitor),
-                    Instr(Opcode.mwait),
-                    Instr(Opcode.clac),
-                    Instr(Opcode.stac),
-                    s_invalid,
-                    s_invalid,
-                    s_invalid,
-                    s_invalid),
+                    Instr(Mnemonic.xsaveopt, Md),
+
+                    Instr(Mnemonic.mfence),
+                    Instr(Mnemonic.mfence),
+                    Instr(Mnemonic.mfence),
+                    Instr(Mnemonic.mfence),
+
+                    Instr(Mnemonic.mfence),
+                    Instr(Mnemonic.mfence),
+                    Instr(Mnemonic.mfence),
+                    Instr(Mnemonic.mfence)),
                 new Group7Decoder(
-                    Instr(Opcode.lgdt, InstrClass.System, Ms),
+                    Instr(Mnemonic.clflush, Md),
 
-                    Instr(Opcode.xgetbv),
-                    Instr(Opcode.xsetbv),
-                    s_invalid,
-                    s_invalid,
+                    Instr(Mnemonic.sfence),
+                    Instr(Mnemonic.sfence),
+                    Instr(Mnemonic.sfence),
+                    Instr(Mnemonic.sfence),
 
-                    Instr(Opcode.vmfunc),
-                    Instr(Opcode.xend),
-                    Instr(Opcode.xtest),
-                    s_invalid),
-                new Group6Decoder(
-                    Instr(Opcode.lidt, InstrClass.System, Ms),
-                    s_invalid),
+                    Instr(Mnemonic.sfence),
+                    Instr(Mnemonic.sfence),
+                    Instr(Mnemonic.sfence),
+                    Instr(Mnemonic.sfence)),
+            };
 
-                new Group6Decoder(
-                    Instr(Opcode.smsw, Ew),
-                    Instr(Opcode.smsw, Rv)),
-                new Group7Decoder(
-                    s_invalid,
+            // 0F 18
+            Grp16 = new Decoder[8]
+            {
+                Instr(Mnemonic.prefetchnta, Mb),
+				Instr(Mnemonic.prefetcht0, Mb),
+				Instr(Mnemonic.prefetcht1, Mb),
+				Instr(Mnemonic.prefetcht2, Mb),
+                Instr(Mnemonic.nop, InstrClass.Linear|InstrClass.Padding),
+                Instr(Mnemonic.nop, InstrClass.Linear|InstrClass.Padding),
+                Instr(Mnemonic.nop, InstrClass.Linear|InstrClass.Padding),
+                Instr(Mnemonic.nop, InstrClass.Linear|InstrClass.Padding)
+            };
 
-                    s_invalid,
-                    s_invalid,
-                    s_invalid,
-                    s_invalid,
-                    s_invalid,
-                    s_invalid,
-                    Instr(Opcode.rdpkru),
-                    Instr(Opcode.wrpkru)),
-                Instr(Opcode.lmsw, Ew),
-                new Group7Decoder(
-                    Instr(Opcode.invlpg, Mb),
-
-                    Instr(Opcode.swapgs),
-                    Instr(Opcode.rdtscp),
-                    Instr(Opcode.monitorx),
-                    Instr(Opcode.mwaitx),
-
-                    s_invalid,
-                    s_invalid,
-                    s_invalid,
-                    s_invalid),
-
-				// group 8
-				s_invalid,
+            // VEX.0F38 F3
+            Grp17 = new Decoder[8]
+            {
                 s_invalid,
-                s_invalid,
-                s_invalid,
-                Instr(Opcode.bt),
-                Instr(Opcode.bts),
-                Instr(Opcode.btr),
-                Instr(Opcode.btc),
-
-				// group 9
-				s_invalid,
-                new Group6Decoder(
-                    new PrefixedDecoder(
-                        new Alternative64Decoder(
-                            Instr(Opcode.cmpxchg8b, Mq),
-                            Instr(Opcode.cmpxchg16b, Mdq))),
-                    s_invalid),
-                s_invalid,
-                s_invalid,
-
-                s_invalid,
-                s_invalid,
-                new Group6Decoder(
-                    new PrefixedDecoder(
-                        Instr(Opcode.vmptrld, Mq),
-                        dec66:Instr(Opcode.vmclear, Mq),
-                        decF3:Instr(Opcode.vmxon, Mq)),
-                    Instr(Opcode.rdrand, Rv)),
-                new Group6Decoder(
-                    new PrefixedDecoder(
-                        dec:Instr(Opcode.vmptrst, Mq),
-                        decF3:Instr(Opcode.vmptrst, Mq)),
-                    Instr(Opcode.rdseed, Rv)),
-
-				// group 10
-				s_nyi,
-                s_nyi,
-                s_nyi,
-                s_nyi,
-                s_nyi,
-                s_nyi,
-                s_nyi,
-                s_nyi,
-
-				// group 11
-				s_nyi,
-                s_nyi,
-                s_nyi,
-                s_nyi,
-                s_nyi,
-                s_nyi,
-                s_nyi,
-                s_nyi,
-
-				// group 12
-				s_invalid,
-                s_invalid,
-                new PrefixedDecoder(
-                    Instr(Opcode.psrlw, Nq,Ib),
-                    Instr(Opcode.vpsrlw, Hx,Ux,Ib)),
-                s_invalid,
-                new PrefixedDecoder(
-                    Instr(Opcode.psraw, Nq,Ib),
-                    Instr(Opcode.vpsraw, Hx,Ux,Ib)),
-                s_invalid,
-                new PrefixedDecoder(
-                    Instr(Opcode.psllw, Nq,Ib),
-                    Instr(Opcode.vpsllw, Hx,Ux,Ib)),
-                s_invalid,
-
-				// group 13
-				s_invalid,
-                s_invalid,
-                new PrefixedDecoder(
-                    Instr(Opcode.psrld, Nq,Ib),
-                    Instr(Opcode.vpsrld, Hx,Ux,Ib)),
-                s_invalid,
-
-                new PrefixedDecoder(
-                    Instr(Opcode.psrad, Nq,Ib),
-                    Instr(Opcode.vpsrad, Hx,Ux,Ib)),
-                s_invalid,
-                new PrefixedDecoder(
-                    Instr(Opcode.pslld, Nq,Ib),
-                    Instr(Opcode.vpslld, Hx,Ux,Ib)),
-                s_invalid,
-
-				// group 14
-				s_invalid,
-                s_invalid,
-                new PrefixedDecoder(
-                    Instr(Opcode.psrlq, Nq,Ib),
-                    Instr(Opcode.vpsrlq, Hx,Ux,Ib)),
-                new PrefixedDecoder(
-                    s_invalid,
-                    Instr(Opcode.vpsrldq, Hx,Ux,Ib)),
-
-                s_invalid,
-                s_invalid,
-                new PrefixedDecoder(
-                    Instr(Opcode.psllq, Nq,Ib),
-                    Instr(Opcode.vpsllq, Hx,Ux,Ib)),
-                new PrefixedDecoder(
-                    s_invalid,
-                    Instr(Opcode.vpslldq, Hx,Ux,Ib)),
-
-				// group 15
-				new Group7Decoder(Instr(Opcode.fxsave)),
-                new Group7Decoder(Instr(Opcode.fxrstor)),
-                Instr(Opcode.ldmxcsr, Md),
-                Instr(Opcode.stmxcsr, Md),
-
-                new Alternative64Decoder(
-                    Instr(Opcode.xsave, Mb),
-                    Instr(Opcode.xsave64, Mb)),
-				new Group7Decoder(
-                    Instr(Opcode.xrstor, Md),
-
-                    Instr(Opcode.lfence),
-                    Instr(Opcode.lfence),
-                    Instr(Opcode.lfence),
-                    Instr(Opcode.lfence),
-
-                    Instr(Opcode.lfence),
-                    Instr(Opcode.lfence),
-                    Instr(Opcode.lfence),
-                    Instr(Opcode.lfence)),
-                new Group7Decoder(
-                    Instr(Opcode.xsaveopt, Md),
-
-                    Instr(Opcode.mfence),
-                    Instr(Opcode.mfence),
-                    Instr(Opcode.mfence),
-                    Instr(Opcode.mfence),
-
-                    Instr(Opcode.mfence),
-                    Instr(Opcode.mfence),
-                    Instr(Opcode.mfence),
-                    Instr(Opcode.mfence)),
-                new Group7Decoder(
-                    Instr(Opcode.clflush, Md),
-
-                    Instr(Opcode.sfence),
-                    Instr(Opcode.sfence),
-                    Instr(Opcode.sfence),
-                    Instr(Opcode.sfence),
-
-                    Instr(Opcode.sfence),
-                    Instr(Opcode.sfence),
-                    Instr(Opcode.sfence),
-                    Instr(Opcode.sfence)),
-
-				// group 16
-				Instr(Opcode.prefetchnta, Mb),
-				Instr(Opcode.prefetcht0, Mb),
-				Instr(Opcode.prefetcht1, Mb),
-				Instr(Opcode.prefetcht2, Mb),
-                s_invalid,
-                s_invalid,
-                s_invalid,
-                s_invalid,
-
-				// group 17
-				s_invalid,
 				s_nyi,
 				s_nyi,
 				s_nyi,

@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -69,7 +69,7 @@ namespace Reko.UnitTests.Analysis
                 m.Assign(a, 3);
             });
             string expected = ToExpectedString(
-                "a = 0x00000003"
+                "a = 3<32>"
             );
             Assert.AreEqual(expected, testResult);
         }
@@ -85,9 +85,9 @@ namespace Reko.UnitTests.Analysis
                 m.Assign(a, 3);
             });
             string expected = ToExpectedString(
-                "a = 0x00000002",
+                "a = 2<32>",
                 "call <invalid> (retsize: 4;)",
-                "a = 0x00000003"
+                "a = 3<32>"
             );
 
             Assert.AreEqual(expected, testResult);
@@ -98,7 +98,7 @@ namespace Reko.UnitTests.Analysis
         {
             RunTest(m =>
             {
-                var flags = new RegisterStorage("flags", 8, 0, PrimitiveType.Word32);
+                var flags = new RegisterStorage("flags", 0x0A, 0, PrimitiveType.Word32);
                 var CN = m.Frame.EnsureFlagGroup(flags, 0x3, "CN", PrimitiveType.Byte);
                 var C = m.Frame.EnsureFlagGroup(flags, 0x1, "C", PrimitiveType.Bool);
                 var N = m.Frame.EnsureFlagGroup(flags, 0x2, "N", PrimitiveType.Bool);
@@ -122,7 +122,7 @@ namespace Reko.UnitTests.Analysis
         {
             RunTest(m =>
             {
-                var flags = new RegisterStorage("flags", 17, 0, PrimitiveType.Word32);
+                var flags = new RegisterStorage("flags", 0xA, 0, PrimitiveType.Word32);
                 var CN = m.Frame.EnsureFlagGroup(flags, 0x3, "CN", PrimitiveType.Byte);
                 var C = m.Frame.EnsureFlagGroup(flags, 0x1, "C", PrimitiveType.Bool);
                 var N = m.Frame.EnsureFlagGroup(flags, 0x2, "N", PrimitiveType.Bool);
@@ -135,7 +135,7 @@ namespace Reko.UnitTests.Analysis
                 m.BranchIf(m.Test(ConditionCode.LE, CN), "foo");
             });
             string expected = ToExpectedString(
-                "a = a + 0x00000003",
+                "a = a + 3<32>",
                 "a = a + a",
                 "N = cond(a)",
                 "branch Test(LE,CN) foo"

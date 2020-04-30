@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,7 @@
 using Moq;
 using NUnit.Framework;
 using Reko.Arch.X86;
-using Reko.Assemblers.x86;
+using Reko.Arch.X86.Assembler;
 using Reko.Core;
 using Reko.Core.Configuration;
 using Reko.Core.Expressions;
@@ -83,7 +83,7 @@ namespace Reko.UnitTests.Scanning
             BuildTest(arch, Address.SegPtr(0x0C00, 0x000), new MsdosPlatform(sc, arch), m);
         }
 
-        private class RewriterHost : IRewriterHost, IImportResolver
+        private class RewriterHost : IRewriterHost, IDynamicLinker
         {
             Dictionary<string, PseudoProcedure> pprocs = new Dictionary<string, PseudoProcedure>();
             Dictionary<ulong, FunctionType> sigs = new Dictionary<ulong, FunctionType>();
@@ -103,13 +103,24 @@ namespace Reko.UnitTests.Scanning
 
             public PseudoProcedure EnsurePseudoProcedure(string name, DataType returnType, int arity)
             {
-                PseudoProcedure p;
-                if (!pprocs.TryGetValue(name, out p))
+                if (!pprocs.TryGetValue(name, out PseudoProcedure p))
                 {
                     p = new PseudoProcedure(name, returnType, arity);
                     pprocs.Add(name, p);
                 }
                 return p;
+            }
+
+            public Expression CallIntrinsic(string name, FunctionType fnType, params Expression[] args)
+            {
+                if (!pprocs.TryGetValue(name, out var intrinsic))
+                {
+                    intrinsic = new PseudoProcedure(name, fnType);
+                    pprocs.Add(name, intrinsic);
+                }
+                return new Application(
+                    new ProcedureConstant(PrimitiveType.Ptr32, intrinsic),
+                    intrinsic.ReturnType, args);
             }
 
             public Expression PseudoProcedure(string name, DataType returnType, params Expression[] args)
@@ -198,7 +209,7 @@ namespace Reko.UnitTests.Scanning
         {
             proc = new Procedure(arch, "test", addr, arch.CreateFrame());
             block = proc.AddBlock("testblock");
-            var asm = new X86Assembler(sc, new DefaultPlatform(sc, arch), addr, new List<ImageSymbol>());
+            var asm = new X86Assembler(arch, addr, new List<ImageSymbol>());
             scanner = new Mock<IScanner>();
             scanner.Setup(s => s.Services).Returns(sc);
             m(asm);
@@ -361,7 +372,7 @@ namespace Reko.UnitTests.Scanning
             var sw = new StringWriter();
             block.WriteStatements(sw);
             string sExp =
-                "\tax = SEQ(0x0C00, Mem0[ds:bx + 0x0004:word16])(cx)" + nl;
+                "\tax = SEQ(0xC00<16>, Mem0[ds:bx + 4<16>:word16])(cx)" + nl;
             Assert.AreEqual(sExp, sw.ToString());
         }
 
@@ -414,7 +425,7 @@ namespace Reko.UnitTests.Scanning
             wi.Process();
             var sw = new StringWriter();
             block.WriteStatements(sw);
-            string sExp = "\tbx = bx & 0x0003" + nl +
+            string sExp = "\tbx = bx & 3<16>" + nl +
                 "\tSZO = cond(bx)" + nl +
                 "\tC = false" + nl +
                 "\tbx = bx + bx" + nl + 
@@ -512,7 +523,7 @@ namespace Reko.UnitTests.Scanning
                 "\tesi = esi ^ esi" + nl +
                 "\tSZO = cond(esi)" + nl +
                 "\tC = false" + nl + 
-                "\tesi = esi + 0x00000001" + nl +
+                "\tesi = esi + 1<32>" + nl +
                 "\tSZO = cond(esi)" + nl +
                  "\tgoto 0C00:0003" + nl;
             var sw = new StringWriter();
@@ -544,7 +555,7 @@ namespace Reko.UnitTests.Scanning
                 "testblock:" + nl +
                 "\tebx = GetDC" + nl +
                 "\teax = GetDC(Mem0[esp:HWND])" + nl +
-                "\tesp = esp + 0x00000004" + nl +
+                "\tesp = esp + 4<32>" + nl +
                 "\treturn" + nl;
             var sw = new StringWriter();
             block.Write(sw);

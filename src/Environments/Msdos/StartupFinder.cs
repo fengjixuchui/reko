@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -71,12 +71,12 @@ namespace Reko.Environments.Msdos
             /* This function checks the startup code for various compilers' way of
             loading DS. If found, it sets DS. This may not be needed in the future if
             pushing and popping of registers is implemented.
-            Also sets prog.offMain and prog.segMain if possible */
+            Also sets program.offMain and program.segMain if possible */
 
-            uint startoff;
             uint init;
             uint i;
-            ushort rel, para;
+            //uint startoff;
+            //ushort rel, para;
             char chModel = 'x';
             char chVendor = 'x';
             char chVersion = 'x';
@@ -183,7 +183,7 @@ namespace Reko.Environments.Msdos
             }
 
             Debug.Print("Model: {0}", chModel);
-            //prog.addressingMode = chModel;
+            //program.addressingMode = chModel;
 
             /* Now decide the compiler vendor and version number */
             if (MemoryArea.CompareArrays(image.Bytes, (int)startOff, pattMsC5Start, pattMsC5Start.Length))

@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -299,7 +299,10 @@ namespace Reko.Core.Types
 
         public Formatter VisitUnknownType(UnknownType ut)
         {
-            writer.Write("<unknown>");
+            if (ut.BitSize == 0)
+                writer.Write("<unknown>");
+            else
+                writer.Write($"<unknown{ut.BitSize}>");
             return writer;
         }
 

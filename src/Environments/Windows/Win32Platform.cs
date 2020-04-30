@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -84,6 +84,11 @@ namespace Reko.Environments.Windows
             };
         }
 
+        public override IPlatformEmulator CreateEmulator(SegmentMap segmentMap, Dictionary<Address, ImportReference> importReferences)
+        {
+            return new Win32Emulator(segmentMap, this, importReferences);
+        }
+
         public override HashSet<RegisterStorage> CreateImplicitArgumentRegisters()
         {
             var bitset = new HashSet<RegisterStorage>()
@@ -94,6 +99,7 @@ namespace Reko.Environments.Windows
                  Registers.esp,
                  Registers.fs,
                  Registers.gs,
+                 Registers.Top,
             };
             return bitset;
         }
@@ -107,6 +113,7 @@ namespace Reko.Environments.Windows
                 Registers.ecx,
                 Registers.edx,
                 Registers.esp,
+                Registers.Top,
             };
         }
 
@@ -230,34 +237,38 @@ namespace Reko.Environments.Windows
             return null;
         }
 
-        public override ProcedureBase GetTrampolineDestination(IEnumerable<RtlInstructionCluster> rdr, IRewriterHost host)
+        public override ProcedureBase GetTrampolineDestination(Address addrInstr, IEnumerable<RtlInstruction> rdr, IRewriterHost host)
         {
-            var rtlc = rdr.FirstOrDefault();
-            if (rtlc == null)
+            var instr = rdr.FirstOrDefault();
+            if (instr == null)
                 return null;
-            var jump = rtlc.Instructions[0] as RtlGoto;
-            if (jump == null)
+            if (!(instr is RtlGoto jump))
                 return null;
-            var pc = jump.Target as ProcedureConstant;
-            if (pc != null)
+            if (jump.Target is ProcedureConstant pc)
                 return pc.Procedure;
-            var access = jump.Target as MemoryAccess;
-            if (access == null)
+            if (!(jump.Target is MemoryAccess access))
                 return null;
             var addrTarget = access.EffectiveAddress as Address;
             if (addrTarget == null)
             {
-                var wAddr = access.EffectiveAddress as Constant;
-                if (wAddr == null)
+                if (!(access.EffectiveAddress is Constant wAddr))
                 {
                     return null;
                 }
-                addrTarget = MakeAddressFromConstant(wAddr);
+                addrTarget = MakeAddressFromConstant(wAddr, true);
             }
-            ProcedureBase proc = host.GetImportedProcedure(this.Architecture, addrTarget, rtlc.Address);
+            ProcedureBase proc = host.GetImportedProcedure(this.Architecture, addrTarget,  addrInstr);
             if (proc != null)
                 return proc;
             return host.GetInterceptedCall(this.Architecture, addrTarget);
+        }
+
+        public override void InjectProcedureEntryStatements(
+            Procedure proc,
+            Address addr,
+            CodeEmitter m)
+        {
+            m.Assign(proc.Frame.EnsureRegister(Registers.Top), 0);
         }
 
         public override ExternalProcedure LookupProcedureByName(string moduleName, string procName)
@@ -303,7 +314,7 @@ namespace Reko.Environments.Windows
                 return null;
         }
 
-		public override SystemService FindService(int vector, ProcessorState state)
+		public override SystemService FindService(int vector, ProcessorState state, SegmentMap segmentMap)
 		{
             SystemService svc;
             if (!services.TryGetValue(vector, out svc))

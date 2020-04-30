@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,7 +31,7 @@ namespace Reko.UnitTests.Core
 	{
         private Mock<IProcessorArchitecture> arch;
 
-        public ProcedureTests()
+		public ProcedureTests()
 		{
             arch = new Mock<IProcessorArchitecture>();
 		}
@@ -49,15 +49,14 @@ namespace Reko.UnitTests.Core
 		{
 			Procedure proc1 = Procedure.Create(arch.Object, Address.SegPtr(0x0F00, 0x0BA9), null);
 			Assert.AreEqual("fn0F00_0BA9", proc1.Name);
-			Assert.AreEqual("void fn0F00_0BA9()", proc1.ToString());
+			Assert.AreEqual("define fn0F00_0BA9", proc1.ToString());
 			Procedure proc2 = Procedure.Create(arch.Object, Address.Ptr32(0x0F000BA9), null);
 			Assert.AreEqual("fn0F000BA9", proc2.Name);
-			Assert.AreEqual("void fn0F000BA9()", proc2.ToString());
+			Assert.AreEqual("define fn0F000BA9", proc2.ToString());
 			Procedure proc3 = new Procedure(arch.Object, "foo",  Address.Ptr32(0x00123400), null);
 			Assert.AreEqual("foo", proc3.Name);
-			Assert.AreEqual("void foo()", proc3.ToString());
+			Assert.AreEqual("define foo", proc3.ToString());
 		}
-
 
 		[Test]
 		public void ProcCharacteristicIsAlloca()

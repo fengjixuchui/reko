@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,7 +36,7 @@ using System.Text;
 namespace Reko.Scanning
 {
     /// <summary>
-    /// Traces a backward slice in a (pontentially partial)
+    /// Traces a backward slice in a (potentially partial)
     /// control flow graph, in order to discover the entries of an indirect
     /// call or jump. 
     /// </summary>
@@ -52,7 +52,7 @@ namespace Reko.Scanning
     /// </remarks>
     public class BackwardSlicer
     {
-        internal static TraceSwitch trace = new TraceSwitch("BackwardSlicer", "Traces the backward slicer") { Level = TraceLevel.Warning };
+        internal static TraceSwitch trace = new TraceSwitch("BackwardSlicer", "Traces the backward slicer") { Level = TraceLevel.Verbose };
 
         internal IBackWalkHost<RtlBlock, RtlInstruction> host;
         private RtlBlock rtlBlock;
@@ -177,7 +177,7 @@ namespace Reko.Scanning
                     var sel = rtlBlock.Address.Selector.Value;
                     return host.Architecture.MakeSegmentedAddress(Constant.Word16(sel), c);
                 }
-                return host.Architecture.MakeAddressFromConstant(c);
+                return host.Architecture.MakeAddressFromConstant(c, true);
             }
             if (arg is MkSequence seq)
             {
@@ -237,13 +237,13 @@ namespace Reko.Scanning
                 if (!state.IsInBeginningOfBlock())
                     break;
 
-                DebugEx.PrintIf(trace.TraceVerbose, "Reached beginning of block {0}", state.block.Address);
+                DebugEx.Verbose(trace, "Reached beginning of block {0}", state.block.Address);
                 var preds = host.GetPredecessors(state.block);
                 if (preds.Count == 0)
                 {
-                    DebugEx.PrintIf(trace.TraceVerbose, "  No predecessors found for block {0}", state.block.Address);
-                    DebugEx.PrintIf(BackwardSlicer.trace.TraceVerbose, "  index: {0} ({1})", this.JumpTableIndex, this.JumpTableIndexInterval);
-                    DebugEx.PrintIf(BackwardSlicer.trace.TraceVerbose, "  expr:  {0}", this.JumpTableFormat);
+                    DebugEx.Verbose(trace, "  No predecessors found for block {0}", state.block.Address);
+                    DebugEx.Verbose(trace, "  index: {0} ({1})", this.JumpTableIndex, this.JumpTableIndexInterval);
+                    DebugEx.Verbose(trace, "  expr:  {0}", this.JumpTableFormat);
                     return true;
                 }
                 foreach (var pred in preds)
@@ -260,7 +260,7 @@ namespace Reko.Scanning
                             break;
                         SliceState pstate = state.CreateNew(pred,  state.block.Address);
                         worklist.Add(pstate);
-                        DebugEx.PrintIf(trace.TraceVerbose, "  Added block {0} to worklist", pred.Address);
+                        DebugEx.Verbose(trace, "  Added block {0} to worklist", pred.Address);
                     }
                 }
             }
@@ -335,6 +335,11 @@ namespace Reko.Scanning
                 return id;
             }
 
+            public List<Statement> GetDefiningStatementClosure(Identifier id)
+            {
+                return new List<Statement>();
+            }
+
             public Expression GetValue(Identifier id)
             {
                 return id;
@@ -353,6 +358,11 @@ namespace Reko.Scanning
             public Expression GetValue(Application appl)
             {
                 return appl;
+            }
+
+            public bool IsFramePointer(Expression e)
+            {
+                return false;
             }
 
             public bool IsUsedInPhi(Identifier id)
@@ -514,17 +524,17 @@ namespace Reko.Scanning
             if (!sr.LiveExprs.Keys.OfType<Identifier>().Any())
             {
                 // Couldn't find any indirect registers, so there is no work to do.
-                DebugEx.PrintIf(BackwardSlicer.trace.TraceWarning, "Bwslc: No indirect registers?");
+                DebugEx.Warn(BackwardSlicer.trace, "Bwslc: No indirect registers?");
                 return false;
             }
-            DebugEx.PrintIf(BackwardSlicer.trace.TraceVerbose, "  live: {0}", DumpLive(this.Live));
+            DebugEx.Verbose(BackwardSlicer.trace, "  live: {0}", DumpLive(this.Live));
             return true;
         }
 
         public bool Step()
         {
             var instr = this.instrs[this.iInstr];
-            DebugEx.PrintIf(BackwardSlicer.trace.TraceInfo, "Bwslc: Stepping to instruction {0}", instr);
+            DebugEx.Inform(BackwardSlicer.trace, "Bwslc: Stepping to instruction {0}", instr);
             var sr = instr.Accept(this);
             --this.iInstr;
             if (sr == null)
@@ -545,19 +555,19 @@ namespace Reko.Scanning
             }
             if (sr.Stop)
             {
-                DebugEx.PrintIf(BackwardSlicer.trace.TraceVerbose, "  Was asked to stop, stopping.");
-                DebugEx.PrintIf(BackwardSlicer.trace.TraceVerbose, "  index: {0} ({1})", this.JumpTableIndex, this.JumpTableIndexInterval);
-                DebugEx.PrintIf(BackwardSlicer.trace.TraceVerbose, "  expr:  {0}", this.JumpTableFormat);
+                DebugEx.Verbose(BackwardSlicer.trace, "  Was asked to stop, stopping.");
+                DebugEx.Verbose(BackwardSlicer.trace, "  index: {0} ({1})", this.JumpTableIndex, this.JumpTableIndexInterval);
+                DebugEx.Verbose(BackwardSlicer.trace, "  expr:  {0}", this.JumpTableFormat);
                 return false;
             }
             if (this.Live.Count == 0)
             {
-                DebugEx.PrintIf(BackwardSlicer.trace.TraceVerbose, "  No more live expressions, stopping.");
-                DebugEx.PrintIf(BackwardSlicer.trace.TraceVerbose, "  index: {0} ({1})", this.JumpTableIndex, this.JumpTableIndexInterval);
-                DebugEx.PrintIf(BackwardSlicer.trace.TraceVerbose, "  expr:  {0}", this.JumpTableFormat);
+                DebugEx.Verbose(BackwardSlicer.trace, "  No more live expressions, stopping.");
+                DebugEx.Verbose(BackwardSlicer.trace, "  index: {0} ({1})", this.JumpTableIndex, this.JumpTableIndexInterval);
+                DebugEx.Verbose(BackwardSlicer.trace, "  expr:  {0}", this.JumpTableFormat);
                 return false;
             }
-            DebugEx.PrintIf(BackwardSlicer.trace.TraceVerbose, "  live: {0}", this.DumpLive(this.Live));
+            DebugEx.Verbose(BackwardSlicer.trace, "  live: {0}", this.DumpLive(this.Live));
             return true;
         }
 
@@ -573,6 +583,25 @@ namespace Reko.Scanning
                 return id.Storage.Domain;
             }
             return StorageDomain.Memory;
+        }
+
+        private StridedInterval MakeInterval_IAdd(Expression left, Constant right)
+        {
+            if (right == null)
+                return StridedInterval.Empty;
+            var cc = this.ccNext;
+            if (this.invertCondition)
+                cc = cc.Invert();
+            switch (cc)
+            {
+            default:
+                return StridedInterval.Empty;
+            case ConditionCode.UGE:
+                long max = ~right.ToInt64();
+                if (max < 0)
+                    return StridedInterval.Empty;
+                return StridedInterval.Create(1, 0, max);
+            }
         }
 
         private StridedInterval MakeInterval_ISub(Expression left, Constant right)
@@ -598,12 +627,8 @@ namespace Reko.Scanning
             case ConditionCode.ULT: return StridedInterval.Create(1, 0, (long) right.ToUInt64() - 1);
             case ConditionCode.UGE: return StridedInterval.Create(1, (long)right.ToUInt64(), long.MaxValue);
             case ConditionCode.UGT: return StridedInterval.Create(1, (long)right.ToUInt64() + 1, long.MaxValue);
-            case ConditionCode.EQ:
-            case ConditionCode.NE:
-            case ConditionCode.None:
-                return StridedInterval.Empty;
             default:
-                throw new NotImplementedException($"Unimplemented condition code {cc}.");
+                return StridedInterval.Empty;
             }
         }
 
@@ -671,7 +696,7 @@ namespace Reko.Scanning
                 var newJt = ExpressionReplacer.Replace(assignLhs, se.SrcExpr, JumpTableFormat);
                 this.JumpTableFormat = slicer.Simplify(newJt);
             }
-            DebugEx.PrintIf(BackwardSlicer.trace.TraceVerbose, "  expr:  {0}", this.JumpTableFormat);
+            DebugEx.Verbose(BackwardSlicer.trace, "  expr:  {0}", this.JumpTableFormat);
             this.assignLhs = null;
             return se;
         }
@@ -716,7 +741,8 @@ namespace Reko.Scanning
             var seRight = binExp.Right.Accept(this, ctx);
             if (seLeft == null && seRight == null)
                 return null;
-            if (binExp.Operator == Operator.ISub && this.Live != null && (ctx.Type & ContextType.Condition) != 0)
+            if ((binExp.Operator == Operator.ISub || binExp.Operator == Operator.IAdd) && 
+                this.Live != null && (ctx.Type & ContextType.Condition) != 0)
             {
                 var domLeft = DomainOf(seLeft.SrcExpr);
 
@@ -726,21 +752,14 @@ namespace Reko.Scanning
                     {
                         if (live.Value.Type != ContextType.Jumptable)
                             continue;
-                        if ((domLeft != StorageDomain.Memory && DomainOf(live.Key) == domLeft)
-                            ||
-                            (this.slicer.AreEqual(live.Key, binExp.Left)))
+                        if (IsBoundaryCheck(binExp, domLeft, live.Key))
                         {
-                            //$TODO: if jmptableindex and jmptableindextouse not same, inject a statement.
-                            this.JumpTableIndex = live.Key;
-                            this.JumpTableIndexToUse = binExp.Left;
-                            this.JumpTableIndexInterval = MakeInterval_ISub(live.Key, binExp.Right as Constant);
-                            DebugEx.PrintIf(BackwardSlicer.trace.TraceVerbose, "  Found range of {0}: {1}", live, JumpTableIndexInterval);
-                            return new SlicerResult
-                            {
-                                SrcExpr = binExp,
-                                Stop = true
-                            };
+                            return FoundBoundaryCheck(binExp, live.Key);
                         }
+                    }
+                    if (IsBoundaryCheck(binExp, domLeft, this.assignLhs))
+                    {
+                        return FoundBoundaryCheck(binExp, this.assignLhs);
                     }
                 }
                 else
@@ -751,7 +770,7 @@ namespace Reko.Scanning
                     this.JumpTableIndex = assignLhs;
                     this.JumpTableIndexToUse = assignLhs;
                     this.JumpTableIndexInterval = MakeInterval_ISub(assignLhs, binExp.Right as Constant);
-                    DebugEx.PrintIf(BackwardSlicer.trace.TraceVerbose, "  Found range of {0}: {1}", assignLhs, JumpTableIndexInterval);
+                    DebugEx.Verbose(BackwardSlicer.trace, "  Found range of {0}: {1}", assignLhs, JumpTableIndexInterval);
                     return new SlicerResult
                     {
                         SrcExpr = null,     // the jump table expression already has the correct shape.
@@ -781,6 +800,31 @@ namespace Reko.Scanning
                 SrcExpr = binExp,
             };
             return se;
+        }
+
+        private bool IsBoundaryCheck(BinaryExpression binExp, StorageDomain domLeft, Expression liveKey)
+        {
+            if (domLeft != StorageDomain.Memory)
+                return DomainOf(liveKey) == domLeft;
+            else
+                return this.slicer.AreEqual(liveKey, binExp.Left);
+        }
+
+        private SlicerResult FoundBoundaryCheck(BinaryExpression binExp, Expression liveKey)
+        {
+            var interval = binExp.Operator == Operator.ISub
+                ? MakeInterval_ISub(liveKey, binExp.Right as Constant)
+                : MakeInterval_IAdd(liveKey, binExp.Right as Constant);
+            //$TODO: if jmptableindex and jmptableindextouse not same, inject a statement.
+            this.JumpTableIndex = liveKey;
+            this.JumpTableIndexToUse = binExp.Left;
+            this.JumpTableIndexInterval = interval;
+            DebugEx.Verbose(BackwardSlicer.trace, "  Found range of {0}: {1}", liveKey, JumpTableIndexInterval);
+            return new SlicerResult
+            {
+                SrcExpr = binExp,
+                Stop = true
+            };
         }
 
         public SlicerResult VisitBranch(RtlBranch branch)
@@ -875,7 +919,7 @@ namespace Reko.Scanning
 
         public SlicerResult VisitGoto(RtlGoto go)
         {
-            var sr = go.Target.Accept(this, BackwardSlicerContext.Cond(RangeOf(go.Target)));
+            var sr = go.Target.Accept(this, BackwardSlicerContext.Jump(RangeOf(go.Target)));
             if (JumpTableFormat == null)
             {
                 JumpTableFormat = go.Target;
@@ -994,7 +1038,10 @@ namespace Reko.Scanning
 
         public SlicerResult VisitSlice(Slice slice, BackwardSlicerContext ctx)
         {
-            throw new NotImplementedException();
+            var range = new BitRange(
+                (short)slice.Offset,
+                (short) (slice.DataType.BitSize + slice.Offset));
+            return slice.Expression.Accept(this, new BackwardSlicerContext(ctx.Type, range));
         }
 
         public SlicerResult VisitTestCondition(TestCondition tc, BackwardSlicerContext ctx)
@@ -1067,59 +1114,15 @@ namespace Reko.Scanning
             state.iInstr = state.instrs.Length - 1;
             return state;
         }
-    }
 
-    public struct BitRange : IComparable<BitRange>
-    {
-        public readonly short begin;
-        public readonly short end;
-
-        public BitRange(short begin, short end)
+        public SlicerResult VisitMicroGoto(RtlMicroGoto uGoto)
         {
-            this.begin = begin;
-            this.end = end;
+            throw new NotImplementedException();
         }
 
-        public int CompareTo(BitRange that)
+        public SlicerResult VisitMicroLabel(RtlMicroLabel uLabel)
         {
-            return (this.end - this.begin) - (that.end - that.begin);
-        }
-
-        public override bool Equals(object obj)
-        {
-            if (obj != null && obj is BitRange)
-            {
-                var that = (BitRange)obj;
-                return this.begin == that.begin && this.end == that.end;
-            }
-            return false;
-        }
-
-        public override int GetHashCode()
-        {
-            return begin.GetHashCode() ^ end.GetHashCode() * 5;
-        }
-
-        public static bool operator == (BitRange a, BitRange b)
-        {
-            return a.begin == b.begin && a.end == b.end;
-        }
-
-        public static bool operator !=(BitRange a, BitRange b)
-        {
-            return a.begin != b.begin || a.end != b.end;
-        }
-
-        public static BitRange operator | (BitRange a, BitRange b)
-        {
-            return new BitRange(
-                Math.Min(a.begin, b.begin),
-                Math.Max(a.end, b.end));
-        }
-
-        public override string ToString()
-        {
-            return $"[{begin}-{end})";
+            throw new NotImplementedException();
         }
     }
 

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,16 +35,24 @@ using Moq;
 using System.Diagnostics;
 using System.Collections.Generic;
 using Reko.UnitTests.Fragments;
-using Reko.Core.Rtl;
-using Reko.Core.Serialization;
+using Reko.Core.Lib;
 
 namespace Reko.UnitTests.Analysis
 {
+    /// <summary>
+    /// Tests for intra-procedural value propagation. 
+    /// </summary>
+    /// <remarks>
+    /// Because of the intra procedural nature of ValuePropagation,
+    /// it is pointless to test it on fragments consisting of multiple
+    /// procedures. In addition, the dependency on 
+    /// </remarks>
 	[TestFixture]
 	public class ValuePropagationTests : AnalysisTestBase
 	{
         private Mock<IProcessorArchitecture> arch;
-        private Mock<IImportResolver> importResolver;
+        private Mock<IDynamicLinker> dynamicLinker;
+        private Program program;
         private FakeDecompilerEventListener listener;
         private SsaProcedureBuilder m;
         private SegmentMap segmentMap;
@@ -53,10 +61,16 @@ namespace Reko.UnitTests.Analysis
 		public void Setup()
 		{
             arch = new Mock<IProcessorArchitecture>();
-            importResolver = new Mock<IImportResolver>();
+            arch.Setup(a => a.Name).Returns("FakeArch");
+            dynamicLinker = new Mock<IDynamicLinker>();
             listener = new FakeDecompilerEventListener();
             m = new SsaProcedureBuilder();
             segmentMap = new SegmentMap(Address.Ptr32(0));
+            program = new Program()
+            {
+                Architecture = arch.Object,
+                SegmentMap = segmentMap,
+            };
         }
 
         private ExternalProcedure CreateExternalProcedure(
@@ -89,30 +103,68 @@ namespace Reko.UnitTests.Analysis
 
         protected override void RunTest(Program program, TextWriter writer)
 		{
-			var dfa = new DataFlowAnalysis(program, importResolver.Object, new FakeDecompilerEventListener());
-			dfa.UntangleProcedures();
-			foreach (Procedure proc in program.Procedures.Values)
+			var dfa = new DataFlowAnalysis(
+                program, 
+                dynamicLinker.Object,
+                new FakeDecompilerEventListener());
+			foreach (Procedure proc in ProceduresInSccOrder(program))
 			{
 				writer.WriteLine("= {0} ========================", proc.Name);
-				var gr = proc.CreateBlockDominatorGraph();
-				Aliases alias = new Aliases(proc);
-				alias.Transform();
-                SsaTransform sst = new SsaTransform(dfa.ProgramDataFlow, proc, importResolver.Object, gr,
-                    new HashSet<RegisterStorage>());
+                SsaTransform sst = new SsaTransform(
+                    program, 
+                    proc, 
+                    new HashSet<Procedure>(),
+                    dynamicLinker.Object, 
+                    dfa.ProgramDataFlow);
+                sst.Transform();
 				SsaState ssa = sst.SsaState;
-                var cce = new ConditionCodeEliminator(ssa, program.Platform);
+                var cce = new ConditionCodeEliminator(ssa, program.Platform, listener);
                 cce.Transform();
 				ssa.Write(writer);
 				proc.Write(false, writer);
 				writer.WriteLine();
 
-				ValuePropagator vp = new ValuePropagator(program.SegmentMap, ssa, program.CallGraph, importResolver.Object, listener);
+				var vp = new ValuePropagator(program.SegmentMap, ssa, program.CallGraph, dynamicLinker.Object, listener);
 				vp.Transform();
+                sst.RenameFrameAccesses = true;
+                sst.Transform();
 
 				ssa.Write(writer);
 				proc.Write(false, writer);
 			}
 		}
+
+        private List<Procedure> ProceduresInSccOrder(Program program)
+        {
+            var list = new List<Procedure>();
+            void CollectScc(IList<Procedure> sccProcs)
+            {
+                list.AddRange(sccProcs);
+            }
+            var sscf = new SccFinder<Procedure>(new ProcedureGraph(program), CollectScc);
+            foreach (var procedure in program.Procedures.Values)
+            {
+                sscf.Find(procedure);
+            }
+            return list;
+        }
+
+        private SsaState RunTest(ProcedureBuilder m)
+        {
+            var proc = m.Procedure;
+            var sst = new SsaTransform(
+                program,
+                proc,
+                new HashSet<Procedure>(),
+                dynamicLinker.Object,
+                new ProgramDataFlow());
+            var ssa = sst.SsaState;
+            sst.Transform();
+
+            var vp = new ValuePropagator(segmentMap, ssa, program.CallGraph, dynamicLinker.Object, listener);
+            vp.Transform();
+            return ssa;
+        }
 
         private void AssertStringsEqual(string sExp, SsaState ssa)
         {
@@ -122,77 +174,59 @@ namespace Reko.UnitTests.Analysis
             var sActual = sw.ToString();
             if (sExp != sActual)
             {
-                Debug.Print("{0}", sActual);
+                Console.WriteLine(sActual);
                 Assert.AreEqual(sExp, sActual);
             }
         }
 
         private void RunValuePropagator()
         {
-            var vp = new ValuePropagator(segmentMap, m.Ssa, new CallGraph(), importResolver.Object, listener);
+            var vp = new ValuePropagator(segmentMap, m.Ssa, program.CallGraph, dynamicLinker.Object, listener);
             vp.Transform();
-            m.Ssa.Validate(s => Assert.Fail(s));
+            m.Ssa.Validate(s => { m.Ssa.Dump(true); Assert.Fail(s); });
         }
 
 		[Test]
-		public void VpChainTest()
-		{
-			RunFileTest("Fragments/multiple/chaincalls.asm", "Analysis/VpChainTest.txt");
-		}
-
-		[Test]
+        [Category(Categories.IntegrationTests)]
 		public void VpConstPropagation()
 		{
-			RunFileTest("Fragments/constpropagation.asm", "Analysis/VpConstPropagation.txt");
+			RunFileTest_x86_real("Fragments/constpropagation.asm", "Analysis/VpConstPropagation.txt");
 		}
 
 		[Test]
+        [Category(Categories.IntegrationTests)]
 		public void VpGlobalHandle()
 		{
             Given_FakeWin32Platform();
-            this.platformMock.Setup(p => p.ResolveImportByName(It.IsAny<string>(), It.IsAny<string>())).Returns((Expression) null);
-            this.platformMock.Setup(p => p.DataTypeFromImportName(It.IsAny<string>())).Returns((Tuple<string, SerializedType, SerializedType>) null);
-            this.platformMock.Setup(p => p.ResolveIndirectCall(It.IsAny<RtlCall>())).Returns((Address) null);
-            RunFileTest32("Fragments/import32/GlobalHandle.asm", "Analysis/VpGlobalHandle.txt");
+            //this.platformMock.Setup(p => p.ResolveImportByName(null, null)).IgnoreArguments().Return(null);
+            //this.platformMock.Setup(p => p.DataTypeFromImportName(null)).IgnoreArguments().Return(null);
+            //this.platformMock.Setup(p => p.ResolveIndirectCall(null)).IgnoreArguments().Return(null);
+			RunFileTest_x86_32("Fragments/import32/GlobalHandle.asm", "Analysis/VpGlobalHandle.txt");
 		}
 
 		[Test]
+        [Category(Categories.IntegrationTests)]
 		public void VpNegsNots()
 		{
-			RunFileTest("Fragments/negsnots.asm", "Analysis/VpNegsNots.txt");
+			RunFileTest_x86_real("Fragments/negsnots.asm", "Analysis/VpNegsNots.txt");
 		}
 
 		[Test]
+        [Category(Categories.IntegrationTests)]
 		public void VpNestedRepeats()
 		{
-			RunFileTest("Fragments/nested_repeats.asm", "Analysis/VpNestedRepeats.txt");
+			RunFileTest_x86_real("Fragments/nested_repeats.asm", "Analysis/VpNestedRepeats.txt");
 		}
 
 		[Test]
-		public void VpStringInstructions()
-		{
-			RunFileTest("Fragments/stringinstr.asm", "Analysis/VpStringInstructions.txt");
-		}
-
-		[Test]
-		public void VpSuccessiveDecs()
-		{
-			RunFileTest("Fragments/multiple/successivedecs.asm", "Analysis/VpSuccessiveDecs.txt");
-		}
-
-		[Test]
+        [Category(Categories.IntegrationTests)]
 		public void VpWhileGoto()
 		{
-			RunFileTest("Fragments/while_goto.asm", "Analysis/VpWhileGoto.txt");
+			RunFileTest_x86_real("Fragments/while_goto.asm", "Analysis/VpWhileGoto.txt");
 		}
 
         [Test]
-        public void VpReg00011()
-        {
-            RunFileTest("Fragments/regressions/r00011.asm", "Analysis/VpReg00011.txt");
-        }
-
-        [Test]
+        [Category(Categories.IntegrationTests)]
         public void VpLoop()
         {
             var b = new ProgramBuilder();
@@ -204,7 +238,7 @@ namespace Reko.UnitTests.Analysis
                 m.MStore(r, m.Word32(0));
                 m.Assign(r, m.ISub(r, 4));
                 m.Assign(zf, m.Cond(r));
-                m.BranchCc(ConditionCode.NE, "l0000");
+                m.BranchIf(m.Test(ConditionCode.NE, zf), "l0000");
 
                 m.Label("l0001");
                 m.Assign(r, 42);
@@ -220,15 +254,25 @@ namespace Reko.UnitTests.Analysis
         }
 
 		[Test]
+        [Category(Categories.IntegrationTests)]
 		public void VpDbp()
 		{
-			Procedure proc = new DpbMock().Procedure;
-			var gr = proc.CreateBlockDominatorGraph();
-			SsaTransform sst = new SsaTransform(new ProgramDataFlow(), proc,  null, gr,
-                new HashSet<RegisterStorage>());
-			SsaState ssa = sst.SsaState;
+			Procedure proc = new DpbFragment().Procedure;
+            var sst = new SsaTransform(
+                program,
+                proc,
+                new HashSet<Procedure>(),
+                dynamicLinker.Object, 
+                new ProgramDataFlow());
+            sst.Transform();
+            SsaState ssa = sst.SsaState;
 
-			ValuePropagator vp = new ValuePropagator(segmentMap, ssa, new CallGraph(), importResolver.Object, listener);
+			ValuePropagator vp = new ValuePropagator(
+                segmentMap, 
+                ssa,
+                program.CallGraph,
+                dynamicLinker.Object,
+                listener);
 			vp.Transform();
 
 			using (FileUnitTester fut = new FileUnitTester("Analysis/VpDbp.txt"))
@@ -240,6 +284,7 @@ namespace Reko.UnitTests.Analysis
 		}
 
 		[Test]
+        [Category(Categories.UnitTests)]
 		public void VpEquality()
 		{
 			Identifier foo = m.Reg32("foo");
@@ -250,31 +295,33 @@ namespace Reko.UnitTests.Analysis
 				new BinaryExpression(Operator.ISub, PrimitiveType.Word32, foo,
 				Constant.Word32(1)),
 				Constant.Word32(0));
-			Assert.AreEqual("foo - 0x00000001 == 0x00000000", expr.ToString());
+			Assert.AreEqual("foo - 1<32> == 0<32>", expr.ToString());
 
 			Expression simpler = vp.VisitBinaryExpression(expr);
-			Assert.AreEqual("foo == 0x00000001", simpler.ToString());
+			Assert.AreEqual("foo == 1<32>", simpler.ToString());
 		}
 
         private ExpressionSimplifier CreatePropagatorWithDummyStatement()
         {
-            var ctx = new SsaEvaluationContext(arch.Object, m.Ssa.Identifiers, importResolver.Object);
+            var ctx = new SsaEvaluationContext(arch.Object, m.Ssa.Identifiers, dynamicLinker.Object);
             ctx.Statement = new Statement(0, new SideEffect(Constant.Word32(32)), null);
             return new ExpressionSimplifier(segmentMap, ctx, listener);
         }
 
 		[Test]
+        [Category(Categories.UnitTests)]
 		public void VpAddZero()
 		{
 			Identifier r = m.Reg32("r");
 
             var sub = new BinaryExpression(Operator.ISub, PrimitiveType.Word32, new MemoryAccess(MemoryIdentifier.GlobalMemory, r, PrimitiveType.Word32), Constant.Word32(0));
-            var vp = new ExpressionSimplifier(segmentMap, new SsaEvaluationContext(arch.Object, m.Ssa.Identifiers, importResolver.Object), listener);
+            var vp = new ExpressionSimplifier(segmentMap, new SsaEvaluationContext(arch.Object, m.Ssa.Identifiers, dynamicLinker.Object), listener);
 			var exp = sub.Accept(vp);
 			Assert.AreEqual("Mem0[r:word32]", exp.ToString());
 		}
 
 		[Test]
+        [Category(Categories.UnitTests)]
 		public void VpEquality2()
 		{
             // Makes sure that 
@@ -289,63 +336,58 @@ namespace Reko.UnitTests.Analysis
             var stmX = m.Assign(x, m.Mem32(Constant.Word32(0x1000300)));
             var stmY = m.Assign(y, m.ISub(x, 2));
 			var stm = m.BranchIf(m.Eq(y, 0), "test");
-			Assert.AreEqual("x = Mem2[0x01000300:word32]", stmX.ToString());
-			Assert.AreEqual("y = x - 0x00000002", stmY.ToString());
-			Assert.AreEqual("branch y == 0x00000000 test", stm.ToString());
+			Assert.AreEqual("x = Mem2[0x1000300<32>:word32]", stmX.ToString());
+			Assert.AreEqual("y = x - 2<32>", stmY.ToString());
+			Assert.AreEqual("branch y == 0<32> test", stm.ToString());
 
-			var vp = new ValuePropagator(segmentMap, m.Ssa, new CallGraph(), importResolver.Object, listener);
-			vp.Transform(stm);
-			Assert.AreEqual("branch x == 0x00000002 test", stm.Instruction.ToString());
+            RunValuePropagator();
+
+			Assert.AreEqual("branch x == 2<32> test", stm.Instruction.ToString());
 		}
 
 		[Test]
+        [Category(Categories.UnitTests)]
 		public void VpCopyPropagate()
 		{
 			var x = m.Reg32("x");
             var y = m.Reg32("y");
             var z = m.Reg32("z");
             var w = m.Reg32("w");
-			m.Assign(x, m.Mem32(Constant.Word32(0x10004000)));
-            var stmX = m.Block.Statements.Last();
-            m.Assign(y, x);
-            var stmY = m.Block.Statements.Last();
-            m.Assign(z, m.IAdd(y, Constant.Word32(2)));
-            var stmZ = m.Block.Statements.Last();
-            m.Assign(w, y);
-            var stmW = m.Block.Statements.Last();
-            Assert.AreEqual("x = Mem4[0x10004000:word32]", stmX.Instruction.ToString());
-			Assert.AreEqual("y = x", stmY.Instruction.ToString());
-			Assert.AreEqual("z = y + 0x00000002", stmZ.Instruction.ToString());
-			Assert.AreEqual("w = y", stmW.Instruction.ToString());
+            var stmX = m.Assign(x, m.Mem32(Constant.Word32(0x10004000)));
+            var stmY = m.Assign(y, x);
+            var stmZ = m.Assign(z, m.IAdd(y, Constant.Word32(2)));
+            var stmW = m.Assign(w, y);
+            Assert.AreEqual("x = Mem4[0x10004000<32>:word32]", stmX.ToString());
+			Assert.AreEqual("y = x", stmY.ToString());
+			Assert.AreEqual("z = y + 2<32>", stmZ.ToString());
+			Assert.AreEqual("w = y", stmW.ToString());
 
-			var vp = new ValuePropagator(segmentMap, m.Ssa, new CallGraph(), importResolver.Object, listener);
-			vp.Transform(stmX);
-			vp.Transform(stmY);
-			vp.Transform(stmZ);
-			vp.Transform(stmW);
+            RunValuePropagator();
 
-			Assert.AreEqual("x = Mem4[0x10004000:word32]", stmX.Instruction.ToString());
-			Assert.AreEqual("y = x", stmY.Instruction.ToString());
-			Assert.AreEqual("z = x + 0x00000002", stmZ.Instruction.ToString());
-			Assert.AreEqual("w = x", stmW.Instruction.ToString());
+			Assert.AreEqual("x = Mem4[0x10004000<32>:word32]", stmX.ToString());
+			Assert.AreEqual("y = x", stmY.ToString());
+			Assert.AreEqual("z = x + 2<32>", stmZ.ToString());
+			Assert.AreEqual("w = x", stmW.ToString());
 			Assert.AreEqual(3, m.Ssa.Identifiers[x].Uses.Count);
 			Assert.AreEqual(0, m.Ssa.Identifiers[y].Uses.Count);
 		}
 
 		[Test]
+        [Category(Categories.UnitTests)]
 		public void VpSliceConstant()
 		{
-            var vp = new ExpressionSimplifier(segmentMap, new SsaEvaluationContext(arch.Object, null, importResolver.Object), listener);
+            var vp = new ExpressionSimplifier(segmentMap, new SsaEvaluationContext(arch.Object, null, dynamicLinker.Object), listener);
             Expression c = new Slice(PrimitiveType.Byte, Constant.Word32(0x10FF), 0).Accept(vp);
-			Assert.AreEqual("0xFF", c.ToString());
+			Assert.AreEqual("0xFF<8>", c.ToString());
 		}
 
 		[Test]
+        [Category(Categories.UnitTests)]
 		public void VpNegSub()
 		{
 			Identifier x = m.Reg32("x");
 			Identifier y = m.Reg32("y");
-            var vp = new ExpressionSimplifier(segmentMap, new SsaEvaluationContext(arch.Object, m.Ssa.Identifiers, importResolver.Object), listener);
+            var vp = new ExpressionSimplifier(segmentMap, new SsaEvaluationContext(arch.Object, m.Ssa.Identifiers, dynamicLinker.Object), listener);
 			Expression e = vp.VisitUnaryExpression(
 				new UnaryExpression(Operator.Neg, PrimitiveType.Word32, new BinaryExpression(
 				Operator.ISub, PrimitiveType.Word32, x, y)));
@@ -356,10 +398,11 @@ namespace Reko.UnitTests.Analysis
 		/// (<< (+ (* id c1) id) c2))
 		/// </summary>
 		[Test] 
+        [Category(Categories.UnitTests)]
 		public void VpMulAddShift()
 		{
 			Identifier id = m.Reg32("id");
-            var vp = new ExpressionSimplifier(segmentMap, new SsaEvaluationContext(arch.Object, m.Ssa.Identifiers, importResolver.Object), listener);
+            var vp = new ExpressionSimplifier(segmentMap, new SsaEvaluationContext(arch.Object, m.Ssa.Identifiers, dynamicLinker.Object), listener);
 			PrimitiveType t = PrimitiveType.Int32;
 			BinaryExpression b = new BinaryExpression(Operator.Shl, t, 
 				new BinaryExpression(Operator.IAdd, t, 
@@ -367,66 +410,76 @@ namespace Reko.UnitTests.Analysis
 					id),
 				Constant.Create(t, 2));
 			Expression e = vp.VisitBinaryExpression(b);
-			Assert.AreEqual("id *s 20", e.ToString());
+			Assert.AreEqual("id *s 20<i32>", e.ToString());
 		}
 
 		[Test]
+        [Category(Categories.UnitTests)]
 		public void VpShiftShift()
 		{
 			Identifier id = m.Reg32("id");
 			Expression e = m.Shl(m.Shl(id, 1), 4);
-            var vp = new ExpressionSimplifier(segmentMap, new SsaEvaluationContext(arch.Object, m.Ssa.Identifiers, importResolver.Object), listener);
+            var vp = new ExpressionSimplifier(segmentMap, new SsaEvaluationContext(arch.Object, m.Ssa.Identifiers, dynamicLinker.Object), listener);
 			e = e.Accept(vp);
-			Assert.AreEqual("id << 0x05", e.ToString());
+			Assert.AreEqual("id << 5<8>", e.ToString());
 		}
 
 		[Test]
+        [Category(Categories.UnitTests)]
 		public void VpShiftSum()
 		{
 			ProcedureBuilder m = new ProcedureBuilder();
 			Expression e = m.Shl(1, m.ISub(Constant.Byte(32), 1));
-            var vp = new ExpressionSimplifier(segmentMap, new SsaEvaluationContext(arch.Object, null, importResolver.Object), listener);
+            var vp = new ExpressionSimplifier(segmentMap, new SsaEvaluationContext(arch.Object, null, dynamicLinker.Object), listener);
 			e = e.Accept(vp);
-			Assert.AreEqual("0x80000000", e.ToString());
+			Assert.AreEqual("0x80000000<32>", e.ToString());
 		}
 
 		[Test]
+        [Category(Categories.UnitTests)]
 		public void VpSequenceOfConstants()
 		{
 			Constant pre = Constant.Word16(0x0001);
 			Constant fix = Constant.Word16(0x0002);
 			Expression e = new MkSequence(PrimitiveType.Word32, pre, fix);
-            var vp = new ExpressionSimplifier(segmentMap, new SsaEvaluationContext(arch.Object, null, importResolver.Object), listener);
+            var vp = new ExpressionSimplifier(segmentMap, new SsaEvaluationContext(arch.Object, null, dynamicLinker.Object), listener);
 			e = e.Accept(vp);
-			Assert.AreEqual("0x00010002", e.ToString());
+			Assert.AreEqual("0x10002<32>", e.ToString());
 		}
 
         [Test]
-        public void SliceShift()
+        [Category(Categories.UnitTests)]
+        public void VpSliceShift()
         {
             Constant eight = Constant.Word16(8);
             Identifier C = m.Reg8("C");
             Expression e = new Slice(PrimitiveType.Byte, new BinaryExpression(Operator.Shl, PrimitiveType.Word16, C, eight), 8);
-            var vp = new ExpressionSimplifier(segmentMap, new SsaEvaluationContext(arch.Object, m.Ssa.Identifiers, importResolver.Object), listener);
+            var vp = new ExpressionSimplifier(segmentMap, new SsaEvaluationContext(arch.Object, m.Ssa.Identifiers, dynamicLinker.Object), listener);
             e = e.Accept(vp);
             Assert.AreEqual("C", e.ToString());
         }
 
         [Test]
+        [Category(Categories.UnitTests)]
         public void VpMkSequenceToAddress()
         {
             Constant seg = Constant.Create(PrimitiveType.SegmentSelector, 0x4711);
             Constant off = Constant.Word16(0x4111);
-            arch.Setup(a => a.MakeSegmentedAddress(seg, off)).Returns(Address.SegPtr(0x4711, 0x4111));
+            arch.Setup(a => a.MakeSegmentedAddress(seg, off))
+                .Returns(Address.SegPtr(0x4711, 0x4111))
+                .Verifiable();
 
             Expression e = new MkSequence(PrimitiveType.Word32, seg, off);
-            var vp = new ExpressionSimplifier(segmentMap, new SsaEvaluationContext(arch.Object, null, importResolver.Object), listener);
+            var vp = new ExpressionSimplifier(segmentMap, new SsaEvaluationContext(arch.Object, null, dynamicLinker.Object), listener);
             e = e.Accept(vp);
             Assert.IsInstanceOf(typeof(Address), e);
             Assert.AreEqual("4711:4111", e.ToString());
+
+            arch.Verify();
         }
 
         [Test]
+        [Category(Categories.UnitTests)]
         public void VpPhiWithConstants()
         {
             var c1 = Constant.Word16(0x4711);
@@ -438,13 +491,14 @@ namespace Reko.UnitTests.Analysis
             m.Assign(r2, c2);
             var phiStm = m.Phi(r3, (r1, "block1"), (r2, "block2"));
             RunValuePropagator();
-            Assert.AreEqual("r3 = 0x4711", phiStm.Instruction.ToString());
+            Assert.AreEqual("r3 = 0x4711<16>", phiStm.Instruction.ToString());
         }
 
         [Test(Description =
             "if x = phi(a_1, a_2, ... a_n) and all phi arguments after " +
             "value propagation are equal to <exp> or x where <exp> is some  " +
             "expression then replace phi assignment with x = <exp>)")]
+        [Category(Categories.UnitTests)]
         public void VpPhiLoops()
         {
             var fp = m.Reg16("fp");
@@ -467,7 +521,7 @@ namespace Reko.UnitTests.Analysis
                 (c, "blockC"),
                 (d, "blockD"));
             RunValuePropagator();
-            Assert.AreEqual("x = fp - 0x000C", phiStm.Instruction.ToString());
+            Assert.AreEqual("x = fp - 0xC<16>", phiStm.Instruction.ToString());
         }
 
         [Test(Description =
@@ -503,7 +557,7 @@ namespace Reko.UnitTests.Analysis
                 (c, "blockC"),
                 (d, "blockD"));
             RunValuePropagator();
-            Assert.AreEqual("x = sp - 0x000C", phiStm.Instruction.ToString());
+            Assert.AreEqual("x = sp - 0xC<16>", phiStm.Instruction.ToString());
         }
 
         [Test]
@@ -519,10 +573,10 @@ namespace Reko.UnitTests.Analysis
             m.SStore(es, m.IAdd(bx, 4), m.Byte(3));
             m.Assign(es_bx_1, m.SegMem(PrimitiveType.Word32, es, bx));
             m.Assign(es_2, m.Slice(PrimitiveType.Word16, es_bx_1, 16));
-            m.Assign(bx_3, m.Cast(PrimitiveType.Word16, es_bx_1));
+            m.Assign(bx_3, m.Slice(PrimitiveType.Word16, es_bx_1, 0));
             var instr = m.Assign(bx_4, m.SegMem(PrimitiveType.Word16, es_2, m.IAdd(bx_3, 4)));
             RunValuePropagator();
-            Assert.AreEqual("bx_4 = Mem8[es_bx_1 + 0x0004:word16]", instr.ToString());
+            Assert.AreEqual("bx_4 = Mem8[es_bx_1 + 4<16>:word16]", instr.ToString());
         }
 
 
@@ -545,6 +599,7 @@ namespace Reko.UnitTests.Analysis
 		}
 
         [Test]
+        [Category(Categories.IntegrationTests)]
         public void VpDbpDbp()
         {
             var m = new ProcedureBuilder();
@@ -556,11 +611,17 @@ namespace Reko.UnitTests.Analysis
 
 			Procedure proc = m.Procedure;
 			var gr = proc.CreateBlockDominatorGraph();
-            var importResolver = new Mock<IImportResolver>().Object;
-			var sst = new SsaTransform(new ProgramDataFlow(), proc, importResolver, gr, new HashSet<RegisterStorage>());
+            var dynamicLinker = new Mock<IDynamicLinker>();
+			var sst = new SsaTransform(
+                program,
+                proc, 
+                new HashSet<Procedure>(),
+                dynamicLinker.Object,
+                new ProgramDataFlow());
+            sst.Transform();
 			var ssa = sst.SsaState;
 
-			var vp = new ValuePropagator(segmentMap, ssa, new CallGraph(), importResolver, listener);
+			var vp = new ValuePropagator(segmentMap, ssa, program.CallGraph, dynamicLinker.Object, listener);
 			vp.Transform();
 
 			using (FileUnitTester fut = new FileUnitTester("Analysis/VpDpbDpb.txt"))
@@ -571,20 +632,8 @@ namespace Reko.UnitTests.Analysis
 			}
 		}
 
-        private SsaState RunTest(ProcedureBuilder m)
-        {
-            var proc = m.Procedure;
-            var gr = proc.CreateBlockDominatorGraph();
-            var sst = new SsaTransform(new ProgramDataFlow(), proc, importResolver.Object, gr, new HashSet<RegisterStorage>());
-            var ssa = sst.SsaState;
-
-            var segmentMap = new SegmentMap(Address.Ptr32(0));
-            var vp = new ValuePropagator(segmentMap, ssa, new CallGraph(), importResolver.Object, listener);
-            vp.Transform();
-            return ssa;
-        }
-
         [Test(Description = "Casting a DPB should result in the deposited bits.")]
+        [Category(Categories.UnitTests)]
         public void VpLoadDpb()
         {
             var m = new ProcedureBuilder();
@@ -602,34 +651,34 @@ namespace Reko.UnitTests.Analysis
             #region Expected
 @"a2:a2
     def:  def a2
-    uses: tmp_2 = Mem0[a2:byte]
-          Mem5[a2 + 0x00000004:byte] = tmp_2
-Mem0:Global memory
+    uses: tmp_3 = Mem0[a2:byte]
+          Mem6[a2 + 4<32>:byte] = tmp_3
+Mem0:Mem
     def:  def Mem0
-    uses: tmp_2 = Mem0[a2:byte]
-tmp_2: orig: tmp
-    def:  tmp_2 = Mem0[a2:byte]
-    uses: d3_4 = DPB(d3, tmp_2, 0)
-          Mem5[a2 + 0x00000004:byte] = tmp_2
+    uses: tmp_3 = Mem0[a2:byte]
+tmp_3: orig: tmp
+    def:  tmp_3 = Mem0[a2:byte]
+    uses: d3_5 = DPB(d3, tmp_3, 0)
+          Mem6[a2 + 4<32>:byte] = tmp_3
 d3:d3
     def:  def d3
-    uses: d3_4 = DPB(d3, tmp_2, 0)
-d3_4: orig: d3
-    def:  d3_4 = DPB(d3, tmp_2, 0)
-Mem5: orig: Mem0
-    def:  Mem5[a2 + 0x00000004:byte] = tmp_2
+    uses: d3_5 = DPB(d3, tmp_3, 0)
+d3_5: orig: d3
+    def:  d3_5 = DPB(d3, tmp_3, 0)
+Mem6: orig: Mem0
+    def:  Mem6[a2 + 4<32>:byte] = tmp_3
 // ProcedureBuilder
 // Return size: 0
-void ProcedureBuilder()
+define ProcedureBuilder
 ProcedureBuilder_entry:
 	def a2
 	def Mem0
 	def d3
 	// succ:  l1
 l1:
-	tmp_2 = Mem0[a2:byte]
-	d3_4 = DPB(d3, tmp_2, 0)
-	Mem5[a2 + 0x00000004:byte] = tmp_2
+	tmp_3 = Mem0[a2:byte]
+	d3_5 = DPB(d3, tmp_3, 0)
+	Mem6[a2 + 4<32>:byte] = tmp_3
 ProcedureBuilder_exit:
 ";
             #endregion
@@ -638,6 +687,7 @@ ProcedureBuilder_exit:
         }
 
         [Test]
+        [Category(Categories.UnitTests)]
         public void VpLoadDpbSmallerCast()
         {
             var m = new ProcedureBuilder();
@@ -655,34 +705,34 @@ ProcedureBuilder_exit:
             #region Expected
 @"a2:a2
     def:  def a2
-    uses: tmp_2 = Mem0[a2:word16]
-          Mem5[a2 + 0x00000004:byte] = (byte) tmp_2
-Mem0:Global memory
+    uses: tmp_3 = Mem0[a2:word16]
+          Mem6[a2 + 4<32>:byte] = (byte) tmp_3
+Mem0:Mem
     def:  def Mem0
-    uses: tmp_2 = Mem0[a2:word16]
-tmp_2: orig: tmp
-    def:  tmp_2 = Mem0[a2:word16]
-    uses: d3_4 = DPB(d3, tmp_2, 0)
-          Mem5[a2 + 0x00000004:byte] = (byte) tmp_2
+    uses: tmp_3 = Mem0[a2:word16]
+tmp_3: orig: tmp
+    def:  tmp_3 = Mem0[a2:word16]
+    uses: d3_5 = DPB(d3, tmp_3, 0)
+          Mem6[a2 + 4<32>:byte] = (byte) tmp_3
 d3:d3
     def:  def d3
-    uses: d3_4 = DPB(d3, tmp_2, 0)
-d3_4: orig: d3
-    def:  d3_4 = DPB(d3, tmp_2, 0)
-Mem5: orig: Mem0
-    def:  Mem5[a2 + 0x00000004:byte] = (byte) tmp_2
+    uses: d3_5 = DPB(d3, tmp_3, 0)
+d3_5: orig: d3
+    def:  d3_5 = DPB(d3, tmp_3, 0)
+Mem6: orig: Mem0
+    def:  Mem6[a2 + 4<32>:byte] = (byte) tmp_3
 // ProcedureBuilder
 // Return size: 0
-void ProcedureBuilder()
+define ProcedureBuilder
 ProcedureBuilder_entry:
 	def a2
 	def Mem0
 	def d3
 	// succ:  l1
 l1:
-	tmp_2 = Mem0[a2:word16]
-	d3_4 = DPB(d3, tmp_2, 0)
-	Mem5[a2 + 0x00000004:byte] = (byte) tmp_2
+	tmp_3 = Mem0[a2:word16]
+	d3_5 = DPB(d3, tmp_3, 0)
+	Mem6[a2 + 4<32>:byte] = (byte) tmp_3
 ProcedureBuilder_exit:
 ";
             #endregion
@@ -691,6 +741,7 @@ ProcedureBuilder_exit:
         }
 
         [Test]
+        [Category(Categories.UnitTests)]
         public void VpCastRealConstant()
         {
             var m = new ProcedureBuilder();
@@ -701,15 +752,15 @@ ProcedureBuilder_exit:
             var ssa = RunTest(m);
             var sExp =
             #region Expected
-@"r1_0: orig: r1
-    def:  r1_0 = 1.0F
+@"r1_1: orig: r1
+    def:  r1_1 = 1.0F
 // ProcedureBuilder
 // Return size: 0
-void ProcedureBuilder()
+define ProcedureBuilder
 ProcedureBuilder_entry:
 	// succ:  l1
 l1:
-	r1_0 = 1.0F
+	r1_1 = 1.0F
 ProcedureBuilder_exit:
 ";
             #endregion
@@ -718,16 +769,17 @@ ProcedureBuilder_exit:
         }
 
         [Test]
+        [Category(Categories.UnitTests)]
         public void VpUndoUnnecessarySlicingOfSegmentPointer()
         {
             var m = new ProcedureBuilder();
             var es = m.Reg16("es", 1);
             var bx = m.Reg16("bx", 3);
-            var es_bx = m.Frame.EnsureSequence(es.Storage, bx.Storage, PrimitiveType.Word32);
+            var es_bx = m.Frame.EnsureSequence(PrimitiveType.Word32, es.Storage, bx.Storage);
 
             m.Assign(es_bx, m.SegMem(PrimitiveType.Word32, es, bx));
             m.Assign(es, m.Slice(PrimitiveType.Word16, es_bx, 16));
-            m.Assign(bx, m.Cast(PrimitiveType.Word16, es_bx));
+            m.Assign(bx, m.Slice(PrimitiveType.Word16, es_bx, 0));
             m.SStore(es, m.IAdd(bx, 4), m.Byte(3));
 
             var ssa = RunTest(m);
@@ -736,37 +788,45 @@ ProcedureBuilder_exit:
             #region Expected
 @"es:es
     def:  def es
-    uses: es_bx_3 = Mem0[es:bx:word32]
+    uses: es_bx_4 = Mem0[es:bx:word32]
 bx:bx
     def:  def bx
-    uses: es_bx_3 = Mem0[es:bx:word32]
-Mem0:Global memory
+    uses: es_bx_4 = Mem0[es:bx:word32]
+Mem0:Mem
     def:  def Mem0
-    uses: es_bx_3 = Mem0[es:bx:word32]
-es_bx_3: orig: es_bx
-    def:  es_bx_3 = Mem0[es:bx:word32]
-    uses: es_4 = SLICE(es_bx_3, word16, 16)
-          bx_5 = (word16) es_bx_3
-          Mem6[es_bx_3 + 0x0004:byte] = 0x03
-es_4: orig: es
-    def:  es_4 = SLICE(es_bx_3, word16, 16)
-bx_5: orig: bx
-    def:  bx_5 = (word16) es_bx_3
-Mem6: orig: Mem0
-    def:  Mem6[es_bx_3 + 0x0004:byte] = 0x03
+    uses: es_bx_4 = Mem0[es:bx:word32]
+es_bx_4: orig: es_bx
+    def:  es_bx_4 = Mem0[es:bx:word32]
+    uses: es_5 = SLICE(es_bx_4, word16, 16) (alias)
+          bx_6 = SLICE(es_bx_4, word16, 0) (alias)
+          es_7 = SLICE(es_bx_4, word16, 16)
+          bx_8 = SLICE(es_bx_4, word16, 0)
+          Mem9[es_bx_4 + 4<16>:byte] = 3<8>
+es_5: orig: es
+    def:  es_5 = SLICE(es_bx_4, word16, 16) (alias)
+bx_6: orig: bx
+    def:  bx_6 = SLICE(es_bx_4, word16, 0) (alias)
+es_7: orig: es
+    def:  es_7 = SLICE(es_bx_4, word16, 16)
+bx_8: orig: bx
+    def:  bx_8 = SLICE(es_bx_4, word16, 0)
+Mem9: orig: Mem0
+    def:  Mem9[es_bx_4 + 4<16>:byte] = 3<8>
 // ProcedureBuilder
 // Return size: 0
-void ProcedureBuilder()
+define ProcedureBuilder
 ProcedureBuilder_entry:
 	def es
 	def bx
 	def Mem0
 	// succ:  l1
 l1:
-	es_bx_3 = Mem0[es:bx:word32]
-	es_4 = SLICE(es_bx_3, word16, 16)
-	bx_5 = (word16) es_bx_3
-	Mem6[es_bx_3 + 0x0004:byte] = 0x03
+	es_bx_4 = Mem0[es:bx:word32]
+	es_5 = SLICE(es_bx_4, word16, 16) (alias)
+	bx_6 = SLICE(es_bx_4, word16, 0) (alias)
+	es_7 = SLICE(es_bx_4, word16, 16)
+	bx_8 = SLICE(es_bx_4, word16, 0)
+	Mem9[es_bx_4 + 4<16>:byte] = 3<8>
 ProcedureBuilder_exit:
 ";
             #endregion
@@ -775,6 +835,7 @@ ProcedureBuilder_exit:
         }
 
         [Test]
+        [Category(Categories.UnitTests)]
         public void VpMulBy6()
         {
             var m = new ProcedureBuilder();
@@ -791,29 +852,29 @@ ProcedureBuilder_exit:
             #region Expected
 @"r1:r1
     def:  def r1
-    uses: r1_1 = r1
-          r1_2 = r1 << 0x01
-          r1_3 = r1 * 0x0003
-          r1_4 = r1 * 0x0006
-r1_1: orig: r1
-    def:  r1_1 = r1
+    uses: r1_2 = r1
+          r1_3 = r1 << 1<8>
+          r1_4 = r1 * 3<16>
+          r1_5 = r1 * 6<16>
 r1_2: orig: r1
-    def:  r1_2 = r1 << 0x01
+    def:  r1_2 = r1
 r1_3: orig: r1
-    def:  r1_3 = r1 * 0x0003
+    def:  r1_3 = r1 << 1<8>
 r1_4: orig: r1
-    def:  r1_4 = r1 * 0x0006
+    def:  r1_4 = r1 * 3<16>
+r1_5: orig: r1
+    def:  r1_5 = r1 * 6<16>
 // ProcedureBuilder
 // Return size: 0
-void ProcedureBuilder()
+define ProcedureBuilder
 ProcedureBuilder_entry:
 	def r1
 	// succ:  l1
 l1:
-	r1_1 = r1
-	r1_2 = r1 << 0x01
-	r1_3 = r1 * 0x0003
-	r1_4 = r1 * 0x0006
+	r1_2 = r1
+	r1_3 = r1 << 1<8>
+	r1_4 = r1 * 3<16>
+	r1_5 = r1 * 6<16>
 ProcedureBuilder_exit:
 ";
             #endregion
@@ -822,6 +883,7 @@ ProcedureBuilder_exit:
         }
 
         [Test]
+        [Category(Categories.UnitTests)]
         public void VpIndirectCall()
         {
             var callee = CreateExternalProcedure(
@@ -835,6 +897,7 @@ ProcedureBuilder_exit:
             var m = new ProcedureBuilder();
             var r1 = m.Reg32("r1", 1);
             var sp = m.Frame.EnsureRegister(m.Architecture.StackRegister);
+            m.Assign(sp, m.Frame.FramePointer);
             m.Assign(r1, pc);
             m.Assign(sp, m.ISub(sp, 4));
             m.MStore(sp, m.Word32(3));
@@ -847,62 +910,68 @@ ProcedureBuilder_exit:
                 It.IsAny<IStorageBinder>(),
                 It.IsAny<int>(),
                 It.IsAny<DataType>()))
-                .Returns((IStorageBinder f, int off, DataType dt) => m.Mem(dt, m.IAdd(sp, off)));
+                .Returns((IStorageBinder f, int off, DataType dt) => 
+                    m.Mem(dt, m.IAdd(f.EnsureRegister((RegisterStorage)sp.Storage), off)));
+            arch.Setup(s => s.CreateFrameApplicationBuilder(
+                It.IsAny<IStorageBinder>(),
+                It.IsAny<CallSite>(),
+                It.IsAny<Expression>()))
+                .Returns((IStorageBinder binder, CallSite site, Expression c) =>
+                    new FrameApplicationBuilder(arch.Object, binder, site, c, false));
 
             var ssa = RunTest(m);
             var sExp =
             #region Expected
-@"r1_0: orig: r1
-    def:  r1_0 = foo
-r63:r63
-    def:  def r63
-    uses: r63_2 = r63 - 0x00000004
-          Mem3[r63 - 0x00000004:word32] = 0x00000003
-          r63_4 = r63 - 0x00000008
-          Mem5[r63 - 0x00000008:word16] = Mem3[0x01231230:word16]
-          r1_6 = foo(Mem8[r63 - 0x00000008:word32], Mem9[r63 - 0x00000004:word32])
-          r1_6 = foo(Mem8[r63 - 0x00000008:word32], Mem9[r63 - 0x00000004:word32])
-          r63_7 = r63
+@"fp:fp
+    def:  def fp
+    uses: r63_2 = fp
+          r63_4 = fp - 4<32>
+          Mem5[fp - 4<32>:word32] = 3<32>
+          r63_6 = fp - 8<32>
+          Mem7[fp - 8<32>:word16] = Mem5[0x1231230<32>:word16]
+          r1_8 = foo(Mem7[fp - 8<32>:word32], Mem7[fp - 4<32>:word32])
+          r1_8 = foo(Mem7[fp - 8<32>:word32], Mem7[fp - 4<32>:word32])
 r63_2: orig: r63
-    def:  r63_2 = r63 - 0x00000004
-Mem3: orig: Mem0
-    def:  Mem3[r63 - 0x00000004:word32] = 0x00000003
-    uses: Mem5[r63 - 0x00000008:word16] = Mem3[0x01231230:word16]
+    def:  r63_2 = fp
+r1_3: orig: r1
+    def:  r1_3 = foo
 r63_4: orig: r63
-    def:  r63_4 = r63 - 0x00000008
+    def:  r63_4 = fp - 4<32>
 Mem5: orig: Mem0
-    def:  Mem5[r63 - 0x00000008:word16] = Mem3[0x01231230:word16]
-r1_6: orig: r1
-    def:  r1_6 = foo(Mem8[r63 - 0x00000008:word32], Mem9[r63 - 0x00000004:word32])
-r63_7: orig: r63
-    def:  r63_7 = r63
-Mem8: orig: Mem0
-    uses: r1_6 = foo(Mem8[r63 - 0x00000008:word32], Mem9[r63 - 0x00000004:word32])
-Mem9: orig: Mem0
-    uses: r1_6 = foo(Mem8[r63 - 0x00000008:word32], Mem9[r63 - 0x00000004:word32])
+    def:  Mem5[fp - 4<32>:word32] = 3<32>
+    uses: Mem7[fp - 8<32>:word16] = Mem5[0x1231230<32>:word16]
+r63_6: orig: r63
+    def:  r63_6 = fp - 8<32>
+Mem7: orig: Mem0
+    def:  Mem7[fp - 8<32>:word16] = Mem5[0x1231230<32>:word16]
+    uses: r1_8 = foo(Mem7[fp - 8<32>:word32], Mem7[fp - 4<32>:word32])
+          r1_8 = foo(Mem7[fp - 8<32>:word32], Mem7[fp - 4<32>:word32])
+r1_8: orig: r1
+    def:  r1_8 = foo(Mem7[fp - 8<32>:word32], Mem7[fp - 4<32>:word32])
 // ProcedureBuilder
 // Return size: 0
-void ProcedureBuilder()
+define ProcedureBuilder
 ProcedureBuilder_entry:
-	def r63
+	def fp
 	// succ:  l1
 l1:
-	r1_0 = foo
-	r63_2 = r63 - 0x00000004
-	Mem3[r63 - 0x00000004:word32] = 0x00000003
-	r63_4 = r63 - 0x00000008
-	Mem5[r63 - 0x00000008:word16] = Mem3[0x01231230:word16]
-	r1_6 = foo(Mem8[r63 - 0x00000008:word32], Mem9[r63 - 0x00000004:word32])
-	r63_7 = r63
+	r63_2 = fp
+	r1_3 = foo
+	r63_4 = fp - 4<32>
+	Mem5[fp - 4<32>:word32] = 3<32>
+	r63_6 = fp - 8<32>
+	Mem7[fp - 8<32>:word16] = Mem5[0x1231230<32>:word16]
+	r1_8 = foo(Mem7[fp - 8<32>:word32], Mem7[fp - 4<32>:word32])
 	return
 	// succ:  ProcedureBuilder_exit
 ProcedureBuilder_exit:
 ";
             #endregion
-            AssertStringsEqual(sExp, ssa);
+                AssertStringsEqual(sExp, ssa);
         }
 
         [Test]
+        [Category(Categories.IntegrationTests)]
         public void VpCastCast()
         {
             var m = new ProcedureBuilder();
@@ -915,10 +984,12 @@ ProcedureBuilder_exit:
                         m.Mem(PrimitiveType.Real32, m.Word32(0x123400)))));
             m.Return();
 
+            Assert.IsNotNull(dynamicLinker);
             RunFileTest(m, "Analysis/VpCastCast.txt");
         }
 
         [Test(Description = "m68k floating-point comparison")]
+        [Category(Categories.IntegrationTests)]
         public void VpFCmp()
         {
             var m = new FCmpFragment();
@@ -927,6 +998,7 @@ ProcedureBuilder_exit:
         }
 
         [Test(Description = "Should be able to simplify address +/- constant")]
+        [Category(Categories.IntegrationTests)]
         public void VpAddress32Const()
         {
             var m = new ProcedureBuilder("VpAddress32Const");
@@ -951,10 +1023,354 @@ ProcedureBuilder_exit:
             m.SStore(es, m.IAdd(bx, 4), m.Byte(3));
             m.Assign(es_bx_1, m.SegMem(PrimitiveType.Word32, es, bx));
             m.Assign(es_2, m.Slice(PrimitiveType.Word16, es_bx_1, 16));
-            m.Assign(bx_3, m.Cast(PrimitiveType.Word16, es_bx_1));
+            m.Assign(bx_3, m.Slice(PrimitiveType.Word16, es_bx_1, 0));
             var instr = m.Assign(bx_4, m.SegMem(PrimitiveType.Word16, es_2, bx_3));
             RunValuePropagator();
             Assert.AreEqual("bx_4 = Mem8[es_bx_1:word16]", instr.ToString());
+        }
+
+        [Test]
+        [Ignore(Categories.AnalysisDevelopment)]
+        [Category(Categories.IntegrationTests)]
+        public void VpConstantHighByte()
+        {
+            var pb = new ProgramBuilder();
+            pb.Add("sum", m =>
+            {
+                var _ax = new RegisterStorage("ax", 0, 0, PrimitiveType.Word16);
+                var _al = new RegisterStorage("al", 0, 0, PrimitiveType.Byte);
+                var _ah = new RegisterStorage("ah", 0, 8, PrimitiveType.Byte);
+                var _dx = new RegisterStorage("dx", 2, 0, PrimitiveType.Word16);
+                var _si = new RegisterStorage("si", 6, 0, PrimitiveType.Word16);
+                var ax = m.Frame.EnsureRegister(_ax);
+                var ah = m.Frame.EnsureRegister(_ah);
+                var al = m.Frame.EnsureRegister(_al);
+                var dx = m.Frame.EnsureRegister(_dx);
+                var si = m.Frame.EnsureRegister(_si);
+
+                m.Assign(ah, 0);
+
+                m.Label("m0");
+                m.BranchIf(m.Eq0(m.Mem8(si)), "m3done");
+
+                m.Label("m1");
+                m.Assign(al, m.Mem8(si));
+                m.Assign(dx, m.IAdd(dx, ax));
+                m.Goto("m0");
+
+                m.Label("m3done");
+                m.Return();
+            });
+            RunFileTest(pb.BuildProgram(), "Analysis/VpConstantHighByte.txt");
+        }
+
+        // This code breaks in ValuePropagator.VisitCallInstruction when calling  
+        // ssaIdTransformer.Transform(...)
+        [Test]
+        public void VpReusedRegistersAtCall()
+        {
+            var sExp =
+            #region Expected
+@"r2_1: orig: r2
+    def:  r2_1 = Mem4[0x220200<32>:word32]
+    uses: r4_1 = r2_1
+          callee(r2_1)
+r2_2: orig: r2
+    def:  r2_2 = callee
+r4_1: orig: r4
+    def:  r4_1 = r2_1
+r25_1: orig: r25
+    def:  r25_1 = callee
+Mem4: orig: Mem0
+    uses: r2_1 = Mem4[0x220200<32>:word32]
+Mem5: orig: Mem0
+// SsaProcedureBuilder
+// Return size: 0
+define SsaProcedureBuilder
+SsaProcedureBuilder_entry:
+	// succ:  l1
+l1:
+	r2_1 = Mem4[0x220200<32>:word32]
+	r4_1 = r2_1
+	r2_2 = callee
+	r25_1 = callee
+	callee(r2_1)
+	return
+	// succ:  SsaProcedureBuilder_exit
+SsaProcedureBuilder_exit:
+";
+            #endregion
+
+            var uAddrGotSlot = m.Word32(0x0040000);
+            var reg2 = new RegisterStorage("r2", 2, 0, PrimitiveType.Word32);
+            var reg4 = new RegisterStorage("r4", 4, 0, PrimitiveType.Word32);
+            var reg25 = new RegisterStorage("r25", 25, 0, PrimitiveType.Word32);
+            var r2_1 = m.Reg("r2_1", reg2);
+            var r2_2 = m.Reg("r2_2", reg2);
+            var r4_1 = m.Reg("r4_1", reg4);
+            var r25_1 = m.Reg("r25_1", reg25);
+            m.Assign(r2_1, m.Mem32(m.Word32(0x0220200)));    // fetch a string pointer perhaps
+            m.Assign(r4_1, r2_1);
+            m.Assign(r2_2, m.Mem32(uAddrGotSlot)); // pointer to a function in a lookup table.
+            m.Assign(r25_1, r2_2);
+            var stmCall = m.Call(r25_1, 0,
+                new Identifier[] { r4_1, r2_2 },
+                new Identifier[] { });
+            m.Return();
+
+            // Initially we don't know what r2_2 is pointing to.
+            var vp = new ValuePropagator(segmentMap, m.Ssa, program.CallGraph, dynamicLinker.Object, listener);
+            vp.Transform();
+
+            // Later, Reko discovers information about the pointer in 0x400000<32>!
+
+            var sigCallee = FunctionType.Action(
+                    new Identifier("r4", PrimitiveType.Word64, reg4));
+            var callee = new ProcedureConstant(
+                PrimitiveType.Ptr32,
+                new ExternalProcedure("callee", sigCallee));
+            // Add our new found knowledge to the import resolver.
+            dynamicLinker.Setup(i => i.ResolveToImportedValue(
+                It.IsNotNull<Statement>(),
+                uAddrGotSlot)).
+                Returns(callee);
+
+            // Run Value propagation again with the newly gathered information.
+
+            vp.Transform();
+
+            m.Ssa.Validate(s => Assert.Fail(s));
+            AssertStringsEqual(sExp, m.Ssa);
+        }
+
+        // Unit test for Github #773
+        [Test]
+        [Category(Categories.UnitTests)]
+        public void VpDpbPhi()
+        {
+            var d3 = m.Reg32("d3", 3);
+            var wLoc02_2 = m.Local16("wLoc02_2");
+            var d3_3 = m.Reg32("d3_3", 3);
+            var d3_4 = m.Reg32("d3_4", 3);
+            var d3_5 = m.Reg32("d3_5", 3);
+            var d3_6 = m.Reg32("d3_6", 3);
+
+            m.Assign(wLoc02_2, m.Cast(PrimitiveType.Word16, d3));
+            m.Label("m1");
+            m.Assign(d3_3, m.Dpb(d3, m.Word16(3), 0));
+            m.Goto("m3");
+            m.Label("m2");
+            m.Assign(d3_4, m.Dpb(d3, m.Word16(4), 0));
+            m.Label("m3");
+            m.Phi(d3_5, (d3_3, "m1"), (d3_4, "m2"));
+            m.Assign(d3_6, m.Dpb(d3_5, wLoc02_2, 0));
+
+            RunValuePropagator();
+
+            var sExp =
+            #region Expected
+@"d3: orig: d3
+    uses: wLoc02_2 = (word16) d3
+          d3_3 = DPB(d3, 3<16>, 0)
+          d3_4 = DPB(d3, 4<16>, 0)
+          d3_6 = d3
+wLoc02_2: orig: wLoc04
+    def:  wLoc02_2 = (word16) d3
+d3_3: orig: d3_3
+    def:  d3_3 = DPB(d3, 3<16>, 0)
+    uses: d3_5 = PHI((d3_3, m1), (d3_4, m2))
+d3_4: orig: d3_4
+    def:  d3_4 = DPB(d3, 4<16>, 0)
+    uses: d3_5 = PHI((d3_3, m1), (d3_4, m2))
+d3_5: orig: d3_5
+    def:  d3_5 = PHI((d3_3, m1), (d3_4, m2))
+d3_6: orig: d3_6
+    def:  d3_6 = d3
+// SsaProcedureBuilder
+// Return size: 0
+define SsaProcedureBuilder
+SsaProcedureBuilder_entry:
+	// succ:  l1
+l1:
+	wLoc02_2 = (word16) d3
+	// succ:  m1
+m1:
+	d3_3 = DPB(d3, 3<16>, 0)
+	goto m3
+	// succ:  m3
+m2:
+	d3_4 = DPB(d3, 4<16>, 0)
+	// succ:  m3
+m3:
+	d3_5 = PHI((d3_3, m1), (d3_4, m2))
+	d3_6 = d3
+SsaProcedureBuilder_exit:
+";
+            #endregion
+            AssertStringsEqual(sExp, m.Ssa);
+        }
+
+        [Test]
+        public void VpSliceSeq()
+        {
+            var t1 = m.Temp(PrimitiveType.Word16, "t1");
+            var t2 = m.Temp(PrimitiveType.Word32, "t2");
+            var t3 = m.Temp(PrimitiveType.Word16, "t3");
+
+            m.Assign(t2, m.Seq(t1, m.Mem16(m.Word32(0x00123400))));
+            m.Assign(t3, m.Slice(PrimitiveType.Word16, t2, 16));
+
+            RunValuePropagator();
+
+            var sExp =
+            #region Expected
+@"t1: orig: t1
+    uses: t2 = SEQ(t1, Mem3[0x123400<32>:word16])
+          t3 = t1
+t2: orig: t2
+    def:  t2 = SEQ(t1, Mem3[0x123400<32>:word16])
+t3: orig: t3
+    def:  t3 = t1
+Mem3: orig: Mem0
+    uses: t2 = SEQ(t1, Mem3[0x123400<32>:word16])
+// SsaProcedureBuilder
+// Return size: 0
+define SsaProcedureBuilder
+SsaProcedureBuilder_entry:
+	// succ:  l1
+l1:
+	t2 = SEQ(t1, Mem3[0x123400<32>:word16])
+	t3 = t1
+SsaProcedureBuilder_exit:
+";
+            #endregion
+            AssertStringsEqual(sExp, m.Ssa);
+        }
+
+        [Test]
+        public void VpSliceSeq_SameInstruction()
+        {
+            var t1 = m.Temp(PrimitiveType.Word16, "t1");
+            var t2 = m.Temp(PrimitiveType.Word16, "t2");
+
+            var instr = m.Assign(t2, m.Slice(
+                PrimitiveType.Word16,
+                m.Seq(t1, m.Mem16(m.Word32(0x00123400))),
+                16));
+
+            RunValuePropagator();
+
+            Assert.AreEqual("t2 = t1", instr.ToString());
+        }
+
+        [Test]
+        [Category(Categories.UnitTests)]
+        public void VpSliceConst()
+        {
+            var t1 = m.Temp(PrimitiveType.Word64, "t1");
+            var t2 = m.Temp(PrimitiveType.Word32, "t2");
+
+            m.Assign(t1, m.Word64(2));
+            m.Assign(t2, m.Slice(PrimitiveType.Word32, t1, 0));
+
+            RunValuePropagator();
+
+            var sExp =
+            #region Expected
+@"t1: orig: t1
+    def:  t1 = 2<64>
+t2: orig: t2
+    def:  t2 = 2<32>
+// SsaProcedureBuilder
+// Return size: 0
+define SsaProcedureBuilder
+SsaProcedureBuilder_entry:
+	// succ:  l1
+l1:
+	t1 = 2<64>
+	t2 = 2<32>
+SsaProcedureBuilder_exit:
+";
+            #endregion
+            AssertStringsEqual(sExp, m.Ssa);
+        }
+
+        /// <summary>
+        /// This reassembles 64-bit constants. It is based on actual PowerPC code.
+        /// </summary>
+        [Test]
+        public void Vp64BitConstant()
+        {
+            var r9_1 = m.Reg32("r9_1", 9);
+            var r10_1 = m.Reg64("r10_1", 10);
+            var r10_2 = m.Reg64("r10_2", 10);
+            var r11_1 = m.Reg64("r11_1", 11);
+            var r11_2 = m.Reg64("r11_2", 11);
+            var r11_3 = m.Reg64("r11_3", 11);
+            var r4_1 = m.Reg64("r4_1", 4);
+            var r19 = m.Reg64("r19", 19);
+            var r30 = m.Reg64("r30", 30);
+            var v30 = m.Temp(PrimitiveType.Word32, "v30");
+
+            m.AddDefToEntryBlock(r19);
+            m.AddDefToEntryBlock(r30);
+            m.Assign(r11_1, m.Word64(0x91690000));
+            m.Assign(r4_1, m.Cast(PrimitiveType.Word64, m.Mem32(m.IAdd(r19, 28))));
+            m.Assign(r10_1, m.Word64(0x42420000));
+            m.Assign(r11_2, m.Or(r11_1, 0x1448));
+            m.Assign(r10_2, m.Or(r10_1, 0x8DA6));
+            m.Assign(r9_1, m.And(r30, m.Word64(0xFFFFFFFF)));
+            m.Assign(v30, m.Slice(PrimitiveType.Word32, r11_2, 0));
+            m.Assign(r11_3, m.Seq(m.Slice(PrimitiveType.Word32, r10_2, 0), v30));
+
+            RunValuePropagator();
+
+            var sExp =
+            #region Expected
+@"r9_1: orig: r9_1
+    def:  r9_1 = r30 & 0xFFFFFFFF<64>
+r10_1: orig: r10_1
+    def:  r10_1 = 0x42420000<64>
+r10_2: orig: r10_2
+    def:  r10_2 = 0x42428DA6<64>
+r11_1: orig: r11_1
+    def:  r11_1 = 0x91690000<64>
+r11_2: orig: r11_2
+    def:  r11_2 = 0x91691448<64>
+r11_3: orig: r11_3
+    def:  r11_3 = 0x42428DA691691448<64>
+r4_1: orig: r4_1
+    def:  r4_1 = (word64) Mem10[r19 + 0x1C<64>:word32]
+r19: orig: r19
+    def:  def r19
+    uses: r4_1 = (word64) Mem10[r19 + 0x1C<64>:word32]
+r30: orig: r30
+    def:  def r30
+    uses: r9_1 = r30 & 0xFFFFFFFF<64>
+v30: orig: v30
+    def:  v30 = 0x91691448<32>
+Mem10: orig: Mem0
+    uses: r4_1 = (word64) Mem10[r19 + 0x1C<64>:word32]
+// SsaProcedureBuilder
+// Return size: 0
+define SsaProcedureBuilder
+SsaProcedureBuilder_entry:
+	def r19
+	def r30
+	// succ:  l1
+l1:
+	r11_1 = 0x91690000<64>
+	r4_1 = (word64) Mem10[r19 + 0x1C<64>:word32]
+	r10_1 = 0x42420000<64>
+	r11_2 = 0x91691448<64>
+	r10_2 = 0x42428DA6<64>
+	r9_1 = r30 & 0xFFFFFFFF<64>
+	v30 = 0x91691448<32>
+	r11_3 = 0x42428DA691691448<64>
+SsaProcedureBuilder_exit:
+";
+            #endregion
+            AssertStringsEqual(sExp, m.Ssa);
         }
     }
 }

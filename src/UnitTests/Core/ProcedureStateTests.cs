@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@ using Reko.Core;
 using Reko.Core.Code;
 using Reko.Core.Expressions;
 using Reko.Core.Machine;
+using Reko.Core.Operators;
 using Reko.Core.Rtl;
 using Reko.Core.Types;
 using NUnit.Framework;
@@ -69,7 +70,7 @@ namespace Reko.UnitTests.Core
 
             sce.SetValue(idSp, m.ISub(idSp, 4));
 
-            Assert.AreEqual("sp - 0x00000004", sce.GetValue(idSp).ToString());
+            Assert.AreEqual("sp - 4<32>", sce.GetValue(idSp).ToString());
         }
 
         [Test]
@@ -80,7 +81,7 @@ namespace Reko.UnitTests.Core
             sce.SetValue(idSp, m.ISub(idSp, 4));
             sce.SetValueEa(idSp, Constant.Word32(0x12345678));
 
-            Assert.AreEqual("0x12345678", sce.GetValue(m.Mem32(idSp), map).ToString());
+            Assert.AreEqual("0x12345678<32>", sce.GetValue(m.Mem32(idSp), map).ToString());
         }
 
         [Test]
@@ -94,222 +95,171 @@ namespace Reko.UnitTests.Core
             var access = new MemoryAccess(Constant.Word32(0x00100000), PrimitiveType.Word32);
             var c = sce.GetValue(access, map);
 
-            Assert.AreEqual("0x01234567", c.ToString());
+            Assert.AreEqual("0x1234567<32>", c.ToString());
         }
 
-        public class FakeArchitecture : IProcessorArchitecture
+        public class FakeArchitecture : ProcessorArchitecture
         {
-            #region IProcessorArchitecture Members
+            public FakeArchitecture() : base("fake")
+            {
+                this.Endianness = EndianServices.Little;
+                this.InstructionBitSize = 32;
+            }
 
-            public string Name { get; set; }
-            public string Description { get; set; }
+        #region IProcessorArchitecture Members
 
-            public IEnumerable<MachineInstruction> CreateDisassembler(EndianImageReader imageReader)
+            public override IEnumerable<MachineInstruction> CreateDisassembler(EndianImageReader imageReader)
             {
                 throw new NotImplementedException();
             }
 
-            public IEqualityComparer<MachineInstruction> CreateInstructionComparer(Normalize norm)
+            public override IProcessorEmulator CreateEmulator(SegmentMap segmentMap, IPlatformEmulator envEmulator)
             {
                 throw new NotImplementedException();
             }
 
-            public ProcessorState CreateProcessorState()
+            public override IEqualityComparer<MachineInstruction> CreateInstructionComparer(Normalize norm)
             {
                 throw new NotImplementedException();
             }
 
-            public IEnumerable<Address> CreatePointerScanner(SegmentMap map, EndianImageReader rdr, IEnumerable<Address> knownLinAddrs, PointerScannerFlags flags)
+            public override ProcessorState CreateProcessorState()
             {
                 throw new NotImplementedException();
             }
 
-            public IEnumerable<RtlInstructionCluster> CreateRewriter(EndianImageReader rdr, ProcessorState state, IStorageBinder binder, IRewriterHost host)
+            public override IEnumerable<Address> CreatePointerScanner(SegmentMap map, EndianImageReader rdr, IEnumerable<Address> knownLinAddrs, PointerScannerFlags flags)
             {
                 throw new NotImplementedException();
             }
 
-            public Frame CreateFrame()
+            public override IEnumerable<RtlInstructionCluster> CreateRewriter(EndianImageReader rdr, ProcessorState state, IStorageBinder binder, IRewriterHost host)
             {
                 throw new NotImplementedException();
             }
 
-            public EndianImageReader CreateImageReader(MemoryArea image, Address addr)
-            {
-                return new LeImageReader(image, addr);
-            }
-
-            public EndianImageReader CreateImageReader(MemoryArea image, Address addrBegin, Address addrEnd)
-            {
-                return new LeImageReader(image, addrBegin, addrEnd);
-            }
-
-            public EndianImageReader CreateImageReader(MemoryArea image, ulong offset)
-            {
-                return new LeImageReader(image, offset);
-            }
-
-            public ImageWriter CreateImageWriter()
-            {
-                return new LeImageWriter();
-            }
-
-            public ImageWriter CreateImageWriter(MemoryArea mem, Address addr)
-            {
-                return new LeImageWriter(mem, addr);
-            }
-
-            public ProcedureSerializer CreateProcedureSerializer(ISerializedTypeVisitor<DataType> typeLoader, string defaultCc)
+            public override RegisterStorage GetRegister(string name)
             {
                 throw new NotImplementedException();
             }
 
-            public CallingConvention GetCallingConvention(string ccName)
+            public override RegisterStorage GetRegister(StorageDomain domain, BitRange range)
             {
                 throw new NotImplementedException();
             }
 
-            public ProcedureBase GetTrampolineDestination(EndianImageReader rdr, IRewriterHost host)
-            {
-                return null;
-            }
-
-            public RegisterStorage GetRegister(int i)
+            public override RegisterStorage[] GetRegisters()
             {
                 throw new NotImplementedException();
             }
 
-            public RegisterStorage GetRegister(string name)
+            public override bool TryGetRegister(string name, out RegisterStorage reg)
             {
                 throw new NotImplementedException();
             }
 
-            public RegisterStorage[] GetRegisters()
+            public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)
             {
                 throw new NotImplementedException();
             }
 
-            public bool TryGetRegister(string name, out RegisterStorage reg)
+            public override FlagGroupStorage GetFlagGroup(string name)
             {
                 throw new NotImplementedException();
             }
 
-            public FlagGroupStorage GetFlagGroup(uint grf)
+            public override IEnumerable<FlagGroupStorage> GetSubFlags(FlagGroupStorage flags)
             {
                 throw new NotImplementedException();
             }
 
-            public FlagGroupStorage GetFlagGroup(string name)
+            public override Expression CreateStackAccess(IStorageBinder binder, int cbOffset, DataType dataType)
             {
                 throw new NotImplementedException();
             }
 
-            public Expression CreateStackAccess(IStorageBinder binder, int cbOffset, DataType dataType)
+            public override List<RtlInstruction> InlineCall(Address addr, Address addrContinuation, EndianImageReader rdr, IStorageBinder binder)
             {
                 throw new NotImplementedException();
             }
 
-            public List<RtlInstruction> InlineCall(Address addr, Address addrContinuation, EndianImageReader rdr, IStorageBinder binder)
-            {
-                throw new NotImplementedException();
-            }
-
-            public Address MakeAddressFromConstant(Constant c)
+            public override Address MakeAddressFromConstant(Constant c, bool codeAlign)
             {
                 return Address.Ptr32(c.ToUInt32());
             }
 
-            public void PostprocessProgram(Program program)
+            public override void PostprocessProgram(Program program)
             {
                 throw new NotImplementedException();
             }
 
-            public Address ReadCodeAddress(int size, EndianImageReader rdr, ProcessorState state)
+            public override Address ReadCodeAddress(int size, EndianImageReader rdr, ProcessorState state)
             {
                 throw new NotImplementedException();
             }
 
-             public int InstructionBitSize { get { return 32; } }
 
-            public string GrfToString(uint grf)
+            public override string GrfToString(RegisterStorage flagRegister, string prefix, uint grf)
             {
                 throw new NotImplementedException();
             }
 
-            public PrimitiveType FramePointerType
-            {
-                get { throw new NotImplementedException(); }
-            }
-
-            public PrimitiveType PointerType
-            {
-                get { throw new NotImplementedException(); }
-            }
-
-            public PrimitiveType WordWidth
-            {
-                get { throw new NotImplementedException(); }
-            }
-
-            public RegisterStorage StackRegister { get; set; }
-
-            public uint CarryFlagMask
-            {
-                get { throw new NotImplementedException(); }
-            }
-
-            public bool TryParseAddress(string txtAddress, out Address addr)
+            public override bool TryParseAddress(string txtAddress, out Address addr)
             {
                 return Address.TryParse32(txtAddress, out addr);
             }
 
-            public bool TryRead(MemoryArea mem, Address addr, PrimitiveType dt, out Constant c)
-            {
-                // Arbitrarily choose little-endian.
-                return mem.TryReadLe(addr, dt, out c);
-            }
-
-            public Address MakeSegmentedAddress(Constant seg, Constant offset)
+            public override Address MakeSegmentedAddress(Constant seg, Constant offset)
             {
                 throw new NotImplementedException();
             }
 
-            public RegisterStorage GetSubregister(RegisterStorage reg, int offset, int width)
+            public override RegisterStorage GetSubregister(RegisterStorage reg, int offset, int width)
             {
                 throw new NotImplementedException();
             }
 
-            public IEnumerable<RegisterStorage> GetAliases(RegisterStorage reg)
+            public override IEnumerable<RegisterStorage> GetAliases(RegisterStorage reg)
             {
                 throw new NotImplementedException();
             }
 
-            public RegisterStorage GetWidestSubregister(RegisterStorage reg, HashSet<RegisterStorage> bits)
+            public override RegisterStorage GetWidestSubregister(RegisterStorage reg, HashSet<RegisterStorage> bits)
             {
                 throw new NotImplementedException();
             }
 
-            public void RemoveAliases(ISet<RegisterStorage> ids, RegisterStorage reg)
+            public override void RemoveAliases(ISet<RegisterStorage> ids, RegisterStorage reg)
             {
                 throw new NotImplementedException();
             }
 
-            public void LoadUserOptions(Dictionary<string, object> options)
+            public override void LoadUserOptions(Dictionary<string, object> options)
             {
                 throw new NotImplementedException();
             }
 
-            public Dictionary<string, object> SaveUserOptions()
+            public override Dictionary<string, object> SaveUserOptions()
             {
                 throw new NotImplementedException();
             }
 
-            public SortedList<string, int> GetOpcodeNames()
+            public override SortedList<string, int> GetMnemonicNames()
             {
                 throw new NotImplementedException();
             }
 
-            public int? GetOpcodeNumber(string name)
+            public override int? GetMnemonicNumber(string name)
+            {
+                throw new NotImplementedException();
+            }
+
+            public override FrameApplicationBuilder CreateFrameApplicationBuilder(IStorageBinder binder, CallSite site, Expression callee)
+            {
+                throw new NotImplementedException();
+            }
+
+            public override Expression CreateFpuStackAccess(IStorageBinder binder, int offset, DataType dataType)
             {
                 throw new NotImplementedException();
             }
@@ -352,11 +302,6 @@ namespace Reko.UnitTests.Core
             public override void SetRegister(RegisterStorage r, Constant v)
             {
                 regs[r] = v;
-            }
-
-            public override void SetInstructionPointer(Address addr)
-            {
-                throw new NotImplementedException();
             }
 
             public override void OnProcedureEntered()

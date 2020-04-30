@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,28 +33,28 @@ namespace Reko.Arch.M68k
     {
         private void RewriteBkpt()
         {
-            rtlc = InstrClass.Invalid;
-            var src = this.orw.RewriteSrc(instr.op1, instr.Address);
+            iclass = InstrClass.Invalid;
+            var src = this.orw.RewriteSrc(instr.Operands[0], instr.Address);
             m.SideEffect(host.PseudoProcedure("__bkpt", VoidType.Instance, src));
         }
 
         private void RewriteMoves()
         {
-            var src = this.orw.RewriteSrc(instr.op1, instr.Address);
-            var dst = orw.RewriteDst(instr.op2, instr.Address, instr.dataWidth, src, (s, d) =>
+            var src = this.orw.RewriteSrc(instr.Operands[0], instr.Address);
+            var dst = orw.RewriteDst(instr.Operands[1], instr.Address, instr.DataWidth, src, (s, d) =>
                 host.PseudoProcedure("__moves", VoidType.Instance, s));
         }
 
         private void RewritePflushr()
         {
-            var src = this.orw.RewriteSrc(instr.op1, instr.Address);
+            var src = this.orw.RewriteSrc(instr.Operands[0], instr.Address);
             m.SideEffect(host.PseudoProcedure("__pflushr", VoidType.Instance, src));
         }
 
         private void RewritePtest()
         {
-            var src1 = this.orw.RewriteSrc(instr.op1, instr.Address);
-            var src2 = this.orw.RewriteSrc(instr.op2, instr.Address);
+            var src1 = this.orw.RewriteSrc(instr.Operands[0], instr.Address);
+            var src2 = this.orw.RewriteSrc(instr.Operands[1], instr.Address);
             m.SideEffect(host.PseudoProcedure("__ptest", VoidType.Instance, src2, src1));
         }
 

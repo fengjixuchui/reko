@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,6 +40,18 @@ namespace Reko.Environments.Windows
         public void Generate(ICallingConventionEmitter ccr, DataType dtRet, DataType dtThis, List<DataType> dtParams)
         {
             //$TODO: make this happen
+        }
+
+        public bool IsArgument(Storage stg)
+        {
+            //$TODO: make this correct
+            return stg is RegisterStorage;
+        }
+
+        public bool IsOutArgument(Storage stg)
+        {
+            //$TODO: make this correct
+            return false;
         }
     }
 }

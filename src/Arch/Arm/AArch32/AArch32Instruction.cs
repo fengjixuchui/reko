@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,24 +31,24 @@ namespace Reko.Arch.Arm.AArch32
     {
         #region Special cases
 
-        // Specially rendered opcodes
-        private static readonly Dictionary<Opcode, string> opcodes = new Dictionary<Opcode, string>
+        // Specially rendered mnemonics
+        private static readonly Dictionary<Mnemonic, string> mnemonics = new Dictionary<Mnemonic, string>
         {
         };
 
-        // Block data transfer opcodes that affect the rendering of the first operand.
-        private static readonly HashSet<Opcode> blockDataXferOpcodes = new HashSet<Opcode>
+        // Block data transfer mnemonics that affect the rendering of the first operand.
+        private static readonly HashSet<Mnemonic> blockDataXferMnemonics = new HashSet<Mnemonic>
         {
-            Opcode.ldm, Opcode.ldmda, Opcode.ldmdb, Opcode.ldmib,
-            Opcode.stm, Opcode.stmda, Opcode.stmdb, Opcode.stmib,
-            Opcode.vldmia, Opcode.vldmdb, Opcode.vstmia, Opcode.vstmdb
+            Mnemonic.ldm, Mnemonic.ldmda, Mnemonic.ldmdb, Mnemonic.ldmib,
+            Mnemonic.stm, Mnemonic.stmda, Mnemonic.stmdb, Mnemonic.stmib,
+            Mnemonic.vldmia, Mnemonic.vldmdb, Mnemonic.vstmia, Mnemonic.vstmdb
         };
 
         // Instruction aliases render instructions differently under special conditions.
         private class ArmAlias
         {
             public readonly Func<AArch32Instruction, bool> Matches;  // predicate for the alias
-            public readonly string sOpcode;
+            public readonly string sMnemonic;
             public readonly Func<AArch32Instruction, (MachineOperand[], bool)> NewOperands;   // Mutated operands
 
             public ArmAlias(
@@ -57,40 +57,39 @@ namespace Reko.Arch.Arm.AArch32
                 Func<AArch32Instruction, (MachineOperand[], bool)> newOperands)
             {
                 this.Matches = match;
-                this.sOpcode = sOpcode;
+                this.sMnemonic = sOpcode;
                 this.NewOperands = newOperands;
             }
 
             public static (MachineOperand[], bool) Shift(AArch32Instruction i)
             {
-                return (i.ops.Skip(1).ToArray(), false);
+                return (i.Operands.Skip(1).ToArray(), false);
             }
 
             public static (MachineOperand[], bool) FirstOp(AArch32Instruction i)
             {
-                return (i.ops.Take(1).ToArray(), false);
+                return (i.Operands.Take(1).ToArray(), false);
             }
         }
 
-        private static readonly Dictionary<Opcode, ArmAlias> aliases = new Dictionary<Opcode, ArmAlias>
+        private static readonly Dictionary<Mnemonic, ArmAlias> aliases = new Dictionary<Mnemonic, ArmAlias>
         {
-            { Opcode.ldm, new ArmAlias(i => i.Writeback && i.IsStackPointer(0), "pop", ArmAlias.Shift) },
-            { Opcode.ldr, new ArmAlias(i => i.IsSinglePop(), "pop", ArmAlias.FirstOp) },
-            { Opcode.stmdb, new ArmAlias(i => i.Writeback && i.IsStackPointer(0), "push", ArmAlias.Shift) },
-            { Opcode.str, new ArmAlias(i => i.IsSinglePush(), "push", ArmAlias.FirstOp) },
+            { Mnemonic.ldm, new ArmAlias(i => i.Writeback && i.IsStackPointer(0), "pop", ArmAlias.Shift) },
+            { Mnemonic.ldr, new ArmAlias(i => i.IsSinglePop(), "pop", ArmAlias.FirstOp) },
+            { Mnemonic.stmdb, new ArmAlias(i => i.Writeback && i.IsStackPointer(0), "push", ArmAlias.Shift) },
+            { Mnemonic.str, new ArmAlias(i => i.IsSinglePush(), "push", ArmAlias.FirstOp) },
         };
         #endregion
 
         public AArch32Instruction()
         {
-            this.condition = ArmCondition.AL;
+            this.Condition = ArmCondition.AL;
         }
 
-        public Opcode opcode { get; set; }
-        public ArmCondition condition { get; set; }
-        public MachineOperand[] ops { get; set; }
+        public Mnemonic Mnemonic { get; set; }
+        public ArmCondition Condition { get; set; }
 
-        public override int OpcodeAsInteger => (int) opcode;
+        public override int MnemonicAsInteger => (int) Mnemonic;
 
         /// <summary>
         /// PC-relative addressing has an extra offset.This varies
@@ -99,22 +98,14 @@ namespace Reko.Arch.Arm.AArch32
         public abstract Address ComputePcRelativeAddress(MemoryOperand mem);
 
 
-        public override MachineOperand GetOperand(int i)
-        {
-            if (0 <= i && i < ops.Length)
-                return ops[i];
-            else
-                return null;
-        }
-
         public override void Render(MachineInstructionWriter writer, MachineInstructionWriterOptions options)
         {
-            if (opcode == Opcode.it)
+            if (Mnemonic == Mnemonic.it)
             {
-                var itOpcode = RenderIt();
-                writer.WriteOpcode(itOpcode);
+                var itMnemonic = RenderIt();
+                writer.WriteMnemonic(itMnemonic);
                 writer.Tab();
-                writer.WriteString(condition.ToString().ToLowerInvariant());
+                writer.WriteString(Condition.ToString().ToLowerInvariant());
                 return;
             }
             var (ops, writeback) = RenderMnemonic(writer);
@@ -123,7 +114,7 @@ namespace Reko.Arch.Arm.AArch32
                 writer.Tab();
                 RenderOperand(ops[0], writer, options);
                 if (writeback &&
-                    blockDataXferOpcodes.Contains(opcode) &&
+                    blockDataXferMnemonics.Contains(Mnemonic) &&
                     ops[0] is RegisterOperand)
                 {
                     writer.WriteChar('!');
@@ -134,19 +125,16 @@ namespace Reko.Arch.Arm.AArch32
                     RenderOperand(ops[iOp], writer, options);
                 }
             }
-            if (vector_index.HasValue)
+    
+            if (ShiftType != Mnemonic.Invalid)
             {
-                writer.WriteFormat("[{0}]", vector_index.Value);
-            }
-            if (ShiftType != Opcode.Invalid)
-            {
-                if (ShiftType != Opcode.lsl ||
+                if (ShiftType != Mnemonic.lsl ||
                     !(ShiftValue is ImmediateOperand imm) ||
                     !imm.Value.IsZero)
                 {
                     writer.WriteChar(',');
-                    writer.WriteOpcode(ShiftType.ToString());
-                    if (ShiftType != Opcode.rrx)
+                    writer.WriteMnemonic(ShiftType.ToString());
+                    if (ShiftType != Mnemonic.rrx)
                     {
                         writer.WriteChar(' ');
                         RenderOperand(ShiftValue, writer, options);
@@ -161,50 +149,50 @@ namespace Reko.Arch.Arm.AArch32
 
         public bool IsStackPointer(int iOp)
         {
-            return ops[iOp] is RegisterOperand r && r.Register == Registers.sp;
+            return Operands[iOp] is RegisterOperand r && r.Register == Registers.sp;
         }
 
         public bool IsSinglePop()
         {
-            return ops[1] is MemoryOperand mem &&
+            return Operands[1] is MemoryOperand mem &&
                 mem.BaseRegister == Registers.sp &&
                 this.Writeback && 
                 !mem.PreIndex &&
                 mem.Offset != null &&
                 mem.Add &&
-                mem.Offset.ToInt32() == ops[0].Width.Size;
+                mem.Offset.ToInt32() == Operands[0].Width.Size;
         }
 
         public bool IsSinglePush()
         {
-            return ops[1] is MemoryOperand mem &&
+            return Operands[1] is MemoryOperand mem &&
                 mem.BaseRegister == Registers.sp &&
                 this.Writeback &&
                 mem.PreIndex &&
                 mem.Offset != null &&
                 !mem.Add &&
-                mem.Offset.ToInt32() == ops[0].Width.Size;
+                mem.Offset.ToInt32() == Operands[0].Width.Size;
         }
 
         private (MachineOperand[], bool) RenderMnemonic(MachineInstructionWriter writer)
         {
             var sb = new StringBuilder();
-            string sOpcode;
-            var ops = (this.ops, this.Writeback);
-            if (aliases.TryGetValue(opcode, out ArmAlias armAlias) &&
+            string sMnemonic;
+            var ops = (this.Operands, this.Writeback);
+            if (aliases.TryGetValue(Mnemonic, out ArmAlias armAlias) &&
                 armAlias.Matches(this))
             {
-                sOpcode = armAlias.sOpcode;
+                sMnemonic = armAlias.sMnemonic;
                 ops = armAlias.NewOperands(this);
             }
-            else if (!opcodes.TryGetValue(opcode, out sOpcode))
+            else if (!mnemonics.TryGetValue(Mnemonic, out sMnemonic))
             {
-                sOpcode = opcode.ToString();
+                sMnemonic = Mnemonic.ToString();
             }
             var sUpdate = SetFlags ? "s" : "";
-            var sCond = condition == ArmCondition.AL ? "" : condition.ToString().ToLowerInvariant();
-            sb.Append(sOpcode);
-            if (opcode != Opcode.Invalid)
+            var sCond = Condition == ArmCondition.AL ? "" : Condition.ToString().ToLowerInvariant();
+            sb.Append(sMnemonic);
+            if (Mnemonic != Mnemonic.Invalid)
             {
                 sb.Append(sUpdate);
                 sb.Append(sCond);
@@ -222,16 +210,16 @@ namespace Reko.Arch.Arm.AArch32
                     sb.Append(".w");
                 }
             }
-            writer.WriteOpcode(sb.ToString());
+            writer.WriteMnemonic(sb.ToString());
             return ops;
         }
 
         private string RenderIt()
         {
             var sb = new StringBuilder();
-            ;  sb.Append("it");
+            sb.Append("it");
             int mask = this.itmask;
-            var bit = (~(int)this.condition & 1) << 3;
+            var bit = (~(int)this.Condition & 1) << 3;
 
             while ((mask & 0xF) != 8)
             {
@@ -241,7 +229,7 @@ namespace Reko.Arch.Arm.AArch32
             return sb.ToString();
         }
 
-        private void RenderOperand(MachineOperand op, MachineInstructionWriter writer, MachineInstructionWriterOptions options)
+        protected override void RenderOperand(MachineOperand op, MachineInstructionWriter writer, MachineInstructionWriterOptions options)
         {
             switch (op)
             {
@@ -322,11 +310,11 @@ namespace Reko.Arch.Arm.AArch32
                     if (!mem.Add)
                         writer.WriteChar('-');
                     writer.WriteString(mem.Index.Name);
-                    if (mem.ShiftType != Opcode.Invalid)
+                    if (mem.ShiftType != Mnemonic.Invalid)
                     {
                         writer.WriteChar(',');
                         writer.WriteString(mem.ShiftType.ToString().ToLowerInvariant());
-                        if (this.ShiftType != Opcode.rrx)
+                        if (this.ShiftType != Mnemonic.rrx)
                         {
                             writer.WriteFormat(" #{0}", mem.Shift);
                         }
@@ -370,11 +358,10 @@ namespace Reko.Arch.Arm.AArch32
         public bool SetFlags;
         public bool UserStmLdm;
         public bool Wide;               // (Thumb only) wide form of instruction.
-        public Opcode ShiftType;
+        public Mnemonic ShiftType;
         public MachineOperand ShiftValue;
         public ArmVectorData vector_data;
         public int vector_size;         // only valid if vector_data is valid
-        public int? vector_index;
         public byte itmask;
     }
 

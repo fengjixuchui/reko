@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -68,12 +68,11 @@ namespace Reko.Core
 
         public IProcessorArchitecture Architecture { get; }
         public List<AbsynStatement> Body { get; set; }
-        public BlockGraph ControlGraph { get; private set; }
-        public Block EntryBlock { get; private set; }
-        public Block ExitBlock { get; private set; }
-        public Frame Frame { get; private set; }
+        public BlockGraph ControlGraph { get; }
+        public Block EntryBlock { get; }
+        public Block ExitBlock { get; }
+        public Frame Frame { get; }
         public Address EntryAddress { get; }
-
 
         /// <summary>
         /// Returns all the statements of the procedure, in no particular order.
@@ -184,7 +183,7 @@ namespace Reko.Core
 
         public void WriteBody(bool showEdges, TextWriter writer)
         {
-            var formatter = new CodeFormatter(new TextFormatter(writer));
+            var formatter = CreateCodeFormatter(new TextFormatter(writer));
             new ProcedureFormatter(this, new BlockDecorator { ShowEdges = showEdges }, formatter).WriteProcedureBlocks();
         }
 
@@ -196,8 +195,13 @@ namespace Reko.Core
             var formatter = new TextFormatter(writer);
             Signature.Emit(Name, FunctionType.EmitFlags.None, new TextFormatter(writer));
             writer.WriteLine();
-            var codeFormatter = new CodeFormatter(formatter);
+            var codeFormatter = CreateCodeFormatter(formatter);
             new ProcedureFormatter(this, decorator, codeFormatter).WriteProcedureBlocks();
+        }
+
+        public CodeFormatter CreateCodeFormatter(Formatter formatter)
+        {
+            return new CodeFormatter(formatter);
         }
 
         public void WriteGraph(TextWriter writer)

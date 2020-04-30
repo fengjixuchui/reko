@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John KÃ¤llÃ©n.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,20 +50,10 @@ namespace Reko.UnitTests.Typing
 			nl = Environment.NewLine;
 		}
 
-		[Test]
-		public void TrcoFactorial()
-		{
-			RunTest16("Fragments/factorial.asm", "Typing/TrcoFactorial.txt");
-		}
 
 		[Test]
-		public void TrcoFactorialReg()
-		{
-			RunTest16("Fragments/factorial_reg.asm", "Typing/TrcoFactorialReg.txt");
-		}
-
-		[Test]
-		public void TrcoFloatingPoint()
+        [Category(Categories.IntegrationTests)]
+        public void TrcoFloatingPoint()
 		{
 			RunTest16("Fragments/fpuops.asm", "Typing/TrcoFloatingPoint.txt");
 		}
@@ -93,6 +83,7 @@ namespace Reko.UnitTests.Typing
 		}
 
         [Test]
+        [Category(Categories.IntegrationTests)]
         public void TrcoReals()
         {
             RunTest16("Fragments/fpuops.asm", "Typing/TrcoReals.txt");
@@ -187,7 +178,7 @@ namespace Reko.UnitTests.Typing
 		}
 
 		[Test]
-        [Ignore("FIXME")]
+        //[Ignore("FIXME")]
 		public void TrcoGlobalArray()
 		{
             Program program = CreateProgram();
@@ -309,19 +300,6 @@ namespace Reko.UnitTests.Typing
 		}
 
         [Test]
-        public void TrcoReg00011()
-        {
-            RunTest16("Fragments/regressions/r00011.asm", "Typing/TrcoReg00011.txt");
-        }
-
-        [Test]
-        [Ignore("Re-enable when new SSA is in place")]
-        public void TrcoReg00012()
-        {
-            RunTest16("Fragments/regressions/r00012.asm", "Typing/TrcoReg00012.txt");
-        }
-
-        [Test]
 		public void TrcoIntelIndexedAddressingMode()
 		{
 			ProgramBuilder m = new ProgramBuilder();
@@ -428,14 +406,13 @@ namespace Reko.UnitTests.Typing
 				"\ttrait_primitive(word16)" + nl +
 				"\ttrait_equal(T_2)" + nl +
 				"\ttrait_primitive(cupos16)" + nl +
-				"T_2 (in 0x0800 : word16)" + nl +
+				"T_2 (in 0x800<16> : word16)" + nl +
 				"\ttrait_primitive(word16)" + nl +
 				"\ttrait_primitive(cupos16)" + nl +
-				"T_3 (in ds >=u 0x0800 : bool)" + nl +
+				"T_3 (in ds >=u 0x800<16> : bool)" + nl +
 				"\ttrait_primitive(bool)" + nl;
 			Assert.AreEqual(exp, sb.ToString());
 		}
-
 
         [Test]
         public void TrcoArrayAccess()
@@ -453,19 +430,19 @@ namespace Reko.UnitTests.Typing
                 "T_1 (in ds : selector)" + nl +
                 "\ttrait_primitive(selector)" + nl +
                 "\ttrait_mem_array(300, 8, 0, T_7)" + nl + 
-                "T_2 (in 0x0300 : word16)" + nl +
+                "T_2 (in 0x300<16> : word16)" + nl +
                 "	trait_primitive(word16)" + nl +
-                "T_3 (in SEQ(ds, 0x0300) : ptr32)" + nl +
+                "T_3 (in SEQ(ds, 0x300<16>) : ptr32)" + nl +
                 "	trait_primitive(ptr32)" + nl +
                 "T_4 (in bx : word16)" + nl +
                 "	trait_primitive(word16)" + nl +
                 "	trait_primitive(ui16)" + nl +
-                "T_5 (in 0x0008 : word16)" + nl +
+                "T_5 (in 8<16> : word16)" + nl +
                 "	trait_primitive(word16)" + nl +
                 "	trait_primitive(ui16)" + nl +
-                "T_6 (in bx * 0x0008 : word16)" + nl +
+                "T_6 (in bx * 8<16> : word16)" + nl +
                 "	trait_primitive(ui16)" + nl +
-                "T_7 (in SEQ(ds, 0x0300)[bx * 0x0008] : word32)" + nl +
+                "T_7 (in SEQ(ds, 0x300<16>)[bx * 8<16>] : word32)" + nl +
                 "	trait_primitive(word32)" + nl;
             Assert.AreEqual(sExp, sb.ToString());
         }
@@ -559,6 +536,7 @@ namespace Reko.UnitTests.Typing
 			Identifier ax = Local16("ax");
 			Identifier bx = Local16("bx");
 			Identifier si = Local16("si");
+            Assign(Frame.EnsureRegister(Architecture.StackRegister), Frame.FramePointer);
 			Assign(es, SegMem(PrimitiveType.Word16, ds, Word16(0x7070)));
 			Assign(ax, 0x4A);
 			Assign(si, SMul(ax, SegMem(PrimitiveType.Word16, ds, Word16(0x1C0A))));

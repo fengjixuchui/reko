@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -63,7 +63,7 @@ namespace Reko.Scanning
         private PriorityQueue<WorkItem> procQueue;
         private SegmentMap segmentMap;
         private ImageMap imageMap;
-        private IImportResolver importResolver;
+        private IDynamicLinker dynamicLinker;
         private BTreeDictionary<Address, BlockRange> blocks;
         private Dictionary<Block, Address> blockStarts;
         private Dictionary<Address, ImportReference> importReferences;
@@ -75,12 +75,12 @@ namespace Reko.Scanning
         
         public Scanner(
             Program program,
-            IImportResolver importResolver,
+            IDynamicLinker dynamicLinker,
             IServiceProvider services)
             : base(program, services.RequireService<DecompilerEventListener>())
         {
             this.segmentMap = program.SegmentMap;
-            this.importResolver = importResolver;
+            this.dynamicLinker = dynamicLinker;
             this.Services = services;
             this.eventListener = services.RequireService<DecompilerEventListener>();
             this.cancelSvc = services.GetService<CancellationTokenSource>();
@@ -406,7 +406,7 @@ namespace Reko.Scanning
 
         private Block CloneBlockIntoOtherProcedure(Block block, Procedure proc)
         {
-            Debug.Print("Cloning {0} to {1}", block.Name, proc);
+            trace.Verbose("Cloning {0} to {1}", block.Name, proc);
             var clonedBlock = new BlockCloner(block, proc, Program.CallGraph).Execute();
             return clonedBlock;
         }
@@ -440,9 +440,7 @@ namespace Reko.Scanning
                 linFrom,
                 new CallInstruction(
                     new ProcedureConstant(Program.Platform.PointerType, procNew),
-                    new CallSite(
-                        procNew.Signature.ReturnAddressOnStack,
-                        0)));
+                    new CallSite(0, 0)));
             Program.CallGraph.AddEdge(callRetThunkBlock.Statements.Last, procNew);
 
             callRetThunkBlock.Statements.Add(linFrom, new ReturnInstruction());
@@ -539,7 +537,7 @@ namespace Reko.Scanning
                 return proc;
 
             visitedProcs.Add(proc);
-            Debug.WriteLineIf(trace.TraceInfo, string.Format("Scanning procedure at {0}", addr));
+            trace.Inform("Scanning procedure at {0}", addr);
 
             var st = state.Clone();
             EstablishInitialState(addr, st, proc);
@@ -569,10 +567,10 @@ namespace Reko.Scanning
         /// <returns></returns>
         private void EstablishInitialState(Address addr, ProcessorState st, Procedure proc)
         {
-            st.SetInstructionPointer(addr);
+            st.InstructionPointer = addr;;
             st.OnProcedureEntered();
             var sp = proc.Frame.EnsureRegister(Program.Architecture.StackRegister);
-            st.SetValue((Identifier)sp, (Expression)proc.Frame.FramePointer);
+            st.SetValue(sp, proc.Frame.FramePointer);
             SetAssumedRegisterValues(addr, st);
         }
 
@@ -644,7 +642,7 @@ namespace Reko.Scanning
                 return null;
             var rdr = Program.CreateImageReader(arch, addr);
             var rw = arch.CreateRewriter(rdr, arch.CreateProcessorState(), arch.CreateFrame(), this);
-            var target = Program.Platform.GetTrampolineDestination(rw, this);
+            var target = Program.Platform.GetTrampolineDestination(addr, rw.SelectMany(c => c.Instructions), this);
             return target;
         }
 
@@ -653,7 +651,7 @@ namespace Reko.Scanning
             if (importReferences.TryGetValue(addrImportThunk, out var impref))
             {
                 var global = impref.ResolveImport(
-                    importResolver,
+                    dynamicLinker,
                     Program.Platform,
                     new AddressContext(Program, addrInstruction, this.eventListener));
                 return global;
@@ -675,7 +673,7 @@ namespace Reko.Scanning
             if (importReferences.TryGetValue(addrImportThunk, out var impref))
             {
                 var extProc = impref.ResolveImportedProcedure(
-                    importResolver,
+                    dynamicLinker,
                     Program.Platform,
                     new AddressContext(Program, addrInstruction, this.eventListener));
                 return extProc;
@@ -811,6 +809,15 @@ namespace Reko.Scanning
             return ppp;
         }
 
+        public Expression CallIntrinsic(string name, FunctionType fnType, params Expression[] args)
+        {
+            var intrinsic = Program.EnsurePseudoProcedure(name, fnType);
+            return new Application(
+                new ProcedureConstant(Program.Architecture.PointerType, intrinsic),
+                fnType.ReturnValue.DataType,
+                args);
+        }
+
         public Expression PseudoProcedure(string name, DataType returnType, params Expression[] args)
         {
             var ppp = Program.EnsurePseudoProcedure(name, returnType, args);
@@ -893,11 +900,6 @@ namespace Reko.Scanning
                 var stm = block.Statements.Insert(iStm, addr.ToLinear(), instr);
                 ++iStm;
                 return stm;
-            }
-
-            public override Identifier Register(int i)
-            {
-                throw new NotImplementedException();
             }
         }
 
@@ -1027,7 +1029,7 @@ namespace Reko.Scanning
                 // 
                 // When this gets merged into analyis-development phase, fold 
                 // Procedure construction into SSA construction.
-                foreach (var rtlProc in procs.Where(p => FilterRtlProcedure(p)))
+                foreach (var rtlProc in procs.Where(FilterRtlProcedure))
                 {
                     var addrProc = rtlProc.Entry.Address;
                     TerminateAnyBlockAt(addrProc);
@@ -1047,7 +1049,7 @@ namespace Reko.Scanning
         public bool FilterRtlProcedure(RtlProcedure rtlProc)
         {
             var addrRtlProc = rtlProc.Entry.Address;
-            var trampoline = Program.Platform.GetTrampolineDestination(rtlProc.Entry.Instructions, this);
+            var trampoline = Program.Platform.GetTrampolineDestination(addrRtlProc, rtlProc.Entry.Instructions.SelectMany(c => c.Instructions), this);
             if (trampoline != null)
             {
                 //$REVIEW: consider adding known trampolines to Program. Then, when code calls or 

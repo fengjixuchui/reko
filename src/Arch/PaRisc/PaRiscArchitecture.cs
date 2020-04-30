@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,6 +37,7 @@ namespace Reko.Arch.PaRisc
         {
             InstructionBitSize = 32;
             StackRegister = Registers.GpRegs[30];
+            Endianness = EndianServices.Big;
             Options = new Dictionary<string, object>();
             SetOptionDependentProperties();
         }
@@ -49,29 +50,9 @@ namespace Reko.Arch.PaRisc
             return new PaRiscDisassembler(this, rdr);
         }
 
-        public override EndianImageReader CreateImageReader(MemoryArea img, Address addr)
+        public override IProcessorEmulator CreateEmulator(SegmentMap segmentMap, IPlatformEmulator envEmulator)
         {
-            return new BeImageReader(img, addr);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea img, Address addrBegin, Address addrEnd)
-        {
-            return new BeImageReader(img, addrBegin, addrEnd);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea img, ulong off)
-        {
-            return new BeImageReader(img, off);
-        }
-
-        public override ImageWriter CreateImageWriter()
-        {
-            return new BeImageWriter();
-        }
-
-        public override ImageWriter CreateImageWriter(MemoryArea img, Address addr)
-        {
-            return new BeImageWriter(img, addr);
+            throw new NotImplementedException();
         }
 
         public override IEqualityComparer<MachineInstruction> CreateInstructionComparer(Normalize norm)
@@ -94,7 +75,10 @@ namespace Reko.Arch.PaRisc
             return new PaRiscRewriter(this, rdr, state, binder, host);
         }
 
-        public override FlagGroupStorage GetFlagGroup(uint grf)
+        // PA-RISC uses a link register
+        public override int ReturnAddressOnStack => 0;
+
+        public override FlagGroupStorage GetFlagGroup(RegisterStorage reg, uint grf)
         {
             throw new NotImplementedException();
         }
@@ -104,19 +88,22 @@ namespace Reko.Arch.PaRisc
             throw new NotImplementedException();
         }
 
-        public override SortedList<string, int> GetOpcodeNames()
+        public override SortedList<string, int> GetMnemonicNames()
         {
             throw new NotImplementedException();
         }
 
-        public override int? GetOpcodeNumber(string name)
+        public override int? GetMnemonicNumber(string name)
         {
             throw new NotImplementedException();
         }
 
-        public override RegisterStorage GetRegister(int i)
+        public override RegisterStorage GetRegister(StorageDomain domain, BitRange range)
         {
-            throw new NotImplementedException();
+            if (Registers.RegistersByStorageDomain.TryGetValue(domain, out var reg))
+                return reg;
+            else
+                return null;
         }
 
         public override RegisterStorage GetRegister(string name)
@@ -129,7 +116,7 @@ namespace Reko.Arch.PaRisc
             return Registers.GpRegs;
         }
 
-        public override string GrfToString(uint grf)
+        public override string GrfToString(RegisterStorage reg, string str, uint grf)
         {
             return "";
         }
@@ -153,9 +140,23 @@ namespace Reko.Arch.PaRisc
             SetOptionDependentProperties();
         }
 
-        public override Address MakeAddressFromConstant(Constant c)
+        public override Address MakeAddressFromConstant(Constant c, bool codeAlign)
         {
-            return Address.Ptr32(c.ToUInt32());
+            if (Is64Bit())
+            {
+                var uAddr = c.ToUInt64();
+                if (codeAlign)
+                    uAddr &= ~3u;
+                return Address.Ptr64(uAddr);
+            }
+            else
+            {
+                var uAddr = c.ToUInt32();
+                if (codeAlign)
+                    uAddr &= ~3u;
+                return Address.Ptr32(uAddr);
+
+            }
         }
 
         public override Address ReadCodeAddress(int size, EndianImageReader rdr, ProcessorState state)
@@ -193,11 +194,6 @@ namespace Reko.Arch.PaRisc
         public override bool TryParseAddress(string txtAddr, out Address addr)
         {
             return Address.TryParse32(txtAddr, out addr);
-        }
-
-        public override bool TryRead(MemoryArea mem, Address addr, PrimitiveType dt, out Constant value)
-        {
-            throw new NotImplementedException();
         }
     }
 }

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,34 +31,18 @@ namespace Reko.Arch.Rl78
     public class Rl78Instruction : MachineInstruction
     {
         public Mnemonic Mnemonic { get; set; }
-        public MachineOperand[] Operands { get; set; }
 
-        public override int OpcodeAsInteger => (int) Mnemonic;
+        public override int MnemonicAsInteger => (int) Mnemonic;
 
         public RegisterStorage Prefix { get; internal set; }
 
-        public override MachineOperand GetOperand(int i)
-        {
-            if (0 <= i && i < Operands.Length)
-                return Operands[i];
-            else
-                return null;
-        }
-
         public override void Render(MachineInstructionWriter writer, MachineInstructionWriterOptions options)
         {
-            writer.WriteOpcode(Mnemonic.ToString());
-            if (Operands.Length == 0)
-                return;
-            writer.Tab();
-            RenderOperand(Operands[0], writer, options);
-            if (Operands.Length == 1)
-                return;
-            writer.WriteString(",");
-            RenderOperand(Operands[1], writer, options);
+            writer.WriteMnemonic(Mnemonic.ToString());
+            RenderOperands(writer, options);
         }
 
-        private void RenderOperand(MachineOperand op, MachineInstructionWriter writer, MachineInstructionWriterOptions options)
+        protected override void RenderOperand(MachineOperand op, MachineInstructionWriter writer, MachineInstructionWriterOptions options)
         {
             switch (op)
             {
@@ -67,7 +51,7 @@ namespace Reko.Arch.Rl78
                 return;
             case ImmediateOperand imm:
                 var sbImm = new StringBuilder("#");
-                var sImm = imm.Value.ToString();
+                var sImm = imm.Value.ToUInt32().ToString("X");
                 writer.WriteString(sImm);
                 return;
             case MemoryOperand mem:

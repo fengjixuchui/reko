@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,20 +37,20 @@ namespace Reko.Tools.C2Xml
     /// Parses a C compilation unit and transforms all declarations to the 
     /// XML syntax used by Reko.
     /// </summary>
-    public class XmlConverter 
+    public class XmlConverter
     {
-        private TextReader rdr;
-        private XmlWriter writer;
-        private ParserState parserState;
-        private IPlatform platform;
+        private readonly TextReader rdr;
+        private readonly XmlWriter writer;
+        private readonly ParserState parserState;
+        private readonly IPlatform platform;
 
         public XmlConverter(TextReader rdr, XmlWriter writer, IPlatform platform)
         {
             this.rdr = rdr;
             this.writer = writer;
-            this.platform = platform;
+            this.platform = platform ?? throw new ArgumentNullException(nameof(platform));
             this.parserState = new ParserState();
-       }
+        }
 
         public void Convert()
         {

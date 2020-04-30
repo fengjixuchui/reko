@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John KÃ¤llÃ©n.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -72,7 +72,7 @@ namespace Reko.WebSite
 		{
             try
             {
-                DecompileAssembler("x86-asm", null);
+                DecompileAssembler("x86-protected-32", null);
             } 
             catch
             {
@@ -80,17 +80,18 @@ namespace Reko.WebSite
             }
 		}
 
-		private void DecompileAssembler(string asmLabel, Address loadAddress)
+		private void DecompileAssembler(string archName, Address loadAddress)
 		{
             var cfg = RekoConfigurationService.Load();
-            var asm = cfg.GetAssembler(asmLabel);
-            var prog = asm.AssembleFragment(loadAddress, txtAssembler.Text + Environment.NewLine);
+            var arch = cfg.GetArchitecture(archName);
+            var asm = arch.CreateAssembler(null);
+            var program = asm.AssembleFragment(loadAddress, txtAssembler.Text + Environment.NewLine);
             var sc = new ServiceContainer();
             var loader = new Loader(sc);
-            DecompilerDriver decomp = new DecompilerDriver(loader, sc);
+            var decomp = new Decompiler(loader, sc);
             var proj = new Project {
                 Programs = {
-                    prog
+                    program
                 }
             };
 			decomp.Project = proj;

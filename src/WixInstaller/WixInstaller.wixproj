@@ -6,7 +6,7 @@
     <ProductVersion>3.7</ProductVersion>
     <ProjectGuid>b1916638-ef20-4692-8c95-1c5ad6c67d30</ProjectGuid>
     <SchemaVersion>2.0</SchemaVersion>
-    <OutputName>reko-0.8.1.0-%24%28Platform%29</OutputName>
+    <OutputName>reko-0.9.1.0</OutputName>
     <OutputType>Package</OutputType>
     <WixTargetsPath Condition=" '$(WixTargetsPath)' == '' AND '$(MSBuildExtensionsPath32)' != '' ">$(MSBuildExtensionsPath32)\Microsoft\WiX\v3.x\Wix.targets</WixTargetsPath>
     <WixTargetsPath Condition=" '$(WixTargetsPath)' == '' ">$(MSBuildExtensionsPath)\Microsoft\WiX\v3.x\Wix.targets</WixTargetsPath>
@@ -41,6 +41,14 @@
       <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
       <RefTargetDir>INSTALLFOLDER</RefTargetDir>
     </ProjectReference>
+    <ProjectReference Include="..\Arch\Arc\Arc.csproj">
+      <Name>Arc</Name>
+      <Project>{f9c628df-eb23-46d7-9580-3a2b749e8bda}</Project>
+      <Private>True</Private>
+      <DoNotHarvest>True</DoNotHarvest>
+      <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
+      <RefTargetDir>INSTALLFOLDER</RefTargetDir>
+    </ProjectReference>
     <ProjectReference Include="..\Arch\Arm\Arm.csproj">
       <Name>Arm</Name>
       <Project>{32f09304-51be-4797-a86a-c0befed2422b}</Project>
@@ -52,6 +60,38 @@
     <ProjectReference Include="..\Arch\Avr\Avr.csproj">
       <Name>Avr</Name>
       <Project>{5e75d702-3032-41fe-8d09-86428555a8ed}</Project>
+      <Private>True</Private>
+      <DoNotHarvest>True</DoNotHarvest>
+      <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
+      <RefTargetDir>INSTALLFOLDER</RefTargetDir>
+    </ProjectReference>
+    <ProjectReference Include="..\Arch\Blackfin\Blackfin.csproj">
+      <Name>Blackfin</Name>
+      <Project>{0bccefdd-63a8-47f2-9a39-8ce7b5f9cfab}</Project>
+      <Private>True</Private>
+      <DoNotHarvest>True</DoNotHarvest>
+      <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
+      <RefTargetDir>INSTALLFOLDER</RefTargetDir>
+    </ProjectReference>
+    <ProjectReference Include="..\Arch\Cray\Cray.csproj">
+      <Name>Cray</Name>
+      <Project>{47b16677-2bfc-4a5c-a830-e1683c574aec}</Project>
+      <Private>True</Private>
+      <DoNotHarvest>True</DoNotHarvest>
+      <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
+      <RefTargetDir>INSTALLFOLDER</RefTargetDir>
+    </ProjectReference>
+    <ProjectReference Include="..\Arch\i8051\i8051.csproj">
+      <Name>i8051</Name>
+      <Project>{ab5ddeb2-87c0-42c7-8cd3-72cb2b1282fb}</Project>
+      <Private>True</Private>
+      <DoNotHarvest>True</DoNotHarvest>
+      <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
+      <RefTargetDir>INSTALLFOLDER</RefTargetDir>
+    </ProjectReference>
+    <ProjectReference Include="..\Arch\LatticeMico\LatticeMico.csproj">
+      <Name>LatticeMico</Name>
+      <Project>{75d6bc51-64d8-4f1c-bffd-ee2debfd83ba}</Project>
       <Private>True</Private>
       <DoNotHarvest>True</DoNotHarvest>
       <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
@@ -76,6 +116,14 @@
     <ProjectReference Include="..\Arch\M68k\M68k.csproj">
       <Name>M68k</Name>
       <Project>{38a94634-b2b2-4a89-af02-2a2898b93343}</Project>
+      <Private>True</Private>
+      <DoNotHarvest>True</DoNotHarvest>
+      <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
+      <RefTargetDir>INSTALLFOLDER</RefTargetDir>
+    </ProjectReference>
+    <ProjectReference Include="..\Arch\MicroBlaze\MicroBlaze.csproj">
+      <Name>MicroBlaze</Name>
+      <Project>{9e952b82-a52f-4221-bc4a-dd9d8b9f7854}</Project>
       <Private>True</Private>
       <DoNotHarvest>True</DoNotHarvest>
       <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
@@ -116,6 +164,14 @@
     <ProjectReference Include="..\Arch\MSP430\MSP430.csproj">
       <Name>MSP430</Name>
       <Project>{ff9e9894-f7e2-464d-b288-4157b864d053}</Project>
+      <Private>True</Private>
+      <DoNotHarvest>True</DoNotHarvest>
+      <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
+      <RefTargetDir>INSTALLFOLDER</RefTargetDir>
+    </ProjectReference>
+    <ProjectReference Include="..\Arch\OpenRISC\OpenRISC.csproj">
+      <Name>OpenRISC</Name>
+      <Project>{a2d0eb22-6807-4c6f-9974-3b9721980f06}</Project>
       <Private>True</Private>
       <DoNotHarvest>True</DoNotHarvest>
       <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
@@ -201,6 +257,14 @@
       <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
       <RefTargetDir>INSTALLFOLDER</RefTargetDir>
     </ProjectReference>
+    <ProjectReference Include="..\Arch\WE32100\WE32100.csproj">
+      <Name>WE32100</Name>
+      <Project>{a3d277db-5f5d-41f7-80f1-1c84a5026b90}</Project>
+      <Private>True</Private>
+      <DoNotHarvest>True</DoNotHarvest>
+      <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
+      <RefTargetDir>INSTALLFOLDER</RefTargetDir>
+    </ProjectReference>
     <ProjectReference Include="..\Arch\X86.Design\X86.Design.csproj">
       <Name>X86.Design</Name>
       <Project>{370a707f-3b17-4680-bc35-8edc846f058f}</Project>
@@ -236,30 +300,6 @@
     <ProjectReference Include="..\Arch\zSeries\zSeries.csproj">
       <Name>zSeries</Name>
       <Project>{33ce0d6a-8762-4505-975f-ee61c355fd04}</Project>
-      <Private>True</Private>
-      <DoNotHarvest>True</DoNotHarvest>
-      <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
-      <RefTargetDir>INSTALLFOLDER</RefTargetDir>
-    </ProjectReference>
-    <ProjectReference Include="..\Assemblers\M68k\M68kAssembler.csproj">
-      <Name>M68kAssembler</Name>
-      <Project>{fd6ad906-bed1-4ac1-a7c5-0a04cca2d7dc}</Project>
-      <Private>True</Private>
-      <DoNotHarvest>True</DoNotHarvest>
-      <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
-      <RefTargetDir>INSTALLFOLDER</RefTargetDir>
-    </ProjectReference>
-    <ProjectReference Include="..\Assemblers\Pdp11\Pdp11Assembler.csproj">
-      <Name>Pdp11Assembler</Name>
-      <Project>{3bb6b0fb-6686-428b-9dc9-a32f349e50e6}</Project>
-      <Private>True</Private>
-      <DoNotHarvest>True</DoNotHarvest>
-      <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
-      <RefTargetDir>INSTALLFOLDER</RefTargetDir>
-    </ProjectReference>
-    <ProjectReference Include="..\Assemblers\x86\X86Assembler.csproj">
-      <Name>X86Assembler</Name>
-      <Project>{3805de2c-659a-442d-8c34-e88822a4d27c}</Project>
       <Private>True</Private>
       <DoNotHarvest>True</DoNotHarvest>
       <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
@@ -361,6 +401,14 @@
       <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
       <RefTargetDir>INSTALLFOLDER</RefTargetDir>
     </ProjectReference>
+    <ProjectReference Include="..\Environments\MorphOS\MorphOS.csproj">
+      <Name>MorphOS</Name>
+      <Project>{22b34ddf-36cf-48f1-8e62-dc7f18e42594}</Project>
+      <Private>True</Private>
+      <DoNotHarvest>True</DoNotHarvest>
+      <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
+      <RefTargetDir>INSTALLFOLDER</RefTargetDir>
+    </ProjectReference>
     <ProjectReference Include="..\Environments\Msdos.Design\Msdos.Design.csproj">
       <Name>Msdos.Design</Name>
       <Project>{6b0ded4f-5035-49ce-ae54-be92b3354e44}</Project>
@@ -372,6 +420,14 @@
     <ProjectReference Include="..\Environments\Msdos\Msdos.csproj">
       <Name>Msdos</Name>
       <Project>{a943cf9b-7fcd-413a-b6d9-a199a69af217}</Project>
+      <Private>True</Private>
+      <DoNotHarvest>True</DoNotHarvest>
+      <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
+      <RefTargetDir>INSTALLFOLDER</RefTargetDir>
+    </ProjectReference>
+    <ProjectReference Include="..\Environments\OS2\OS2.csproj">
+      <Name>OS2</Name>
+      <Project>{6369aaec-5946-412b-929b-024c4fb1cfd6}</Project>
       <Private>True</Private>
       <DoNotHarvest>True</DoNotHarvest>
       <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
@@ -409,6 +465,14 @@
       <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
       <RefTargetDir>INSTALLFOLDER</RefTargetDir>
     </ProjectReference>
+    <ProjectReference Include="..\Environments\Switch\Switch.csproj">
+      <Name>Switch</Name>
+      <Project>{c1bae231-5a72-40d2-8b75-328849d58c0f}</Project>
+      <Private>True</Private>
+      <DoNotHarvest>True</DoNotHarvest>
+      <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
+      <RefTargetDir>INSTALLFOLDER</RefTargetDir>
+    </ProjectReference>
     <ProjectReference Include="..\Environments\SysV\SysV.csproj">
       <Name>SysV</Name>
       <Project>{5307665e-072f-4398-872d-6550be6fc1eb}</Project>
@@ -436,6 +500,14 @@
     <ProjectReference Include="..\Environments\Windows\Windows.csproj">
       <Name>Windows</Name>
       <Project>{4a298321-9855-43de-aa9c-79e4efa0ae56}</Project>
+      <Private>True</Private>
+      <DoNotHarvest>True</DoNotHarvest>
+      <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
+      <RefTargetDir>INSTALLFOLDER</RefTargetDir>
+    </ProjectReference>
+    <ProjectReference Include="..\Environments\Xbox360\Xbox360.csproj">
+      <Name>Xbox360</Name>
+      <Project>{e45b5b79-17ed-4b74-a68b-ce9119c51677}</Project>
       <Private>True</Private>
       <DoNotHarvest>True</DoNotHarvest>
       <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
@@ -521,6 +593,14 @@
       <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
       <RefTargetDir>INSTALLFOLDER</RefTargetDir>
     </ProjectReference>
+    <ProjectReference Include="..\ImageLoaders\Nro\Nro.csproj">
+      <Name>Nro</Name>
+      <Project>{0ab0aab7-292e-4827-a480-a32561b07fd7}</Project>
+      <Private>True</Private>
+      <DoNotHarvest>True</DoNotHarvest>
+      <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
+      <RefTargetDir>INSTALLFOLDER</RefTargetDir>
+    </ProjectReference>
     <ProjectReference Include="..\ImageLoaders\OdbgScript\OdbgScript.csproj">
       <Name>OdbgScript</Name>
       <Project>{2882376f-663a-4fc8-842c-b0300a6829e8}</Project>
@@ -532,6 +612,14 @@
     <ProjectReference Include="..\ImageLoaders\VmsExe\VmsExe.csproj">
       <Name>VmsExe</Name>
       <Project>{4059bebf-7b5c-4701-ac98-ade2515d8823}</Project>
+      <Private>True</Private>
+      <DoNotHarvest>True</DoNotHarvest>
+      <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
+      <RefTargetDir>INSTALLFOLDER</RefTargetDir>
+    </ProjectReference>
+    <ProjectReference Include="..\ImageLoaders\XexLoader\Xex.csproj">
+      <Name>Xex</Name>
+      <Project>{e6d43750-9abc-407d-b247-c91593c77062}</Project>
       <Private>True</Private>
       <DoNotHarvest>True</DoNotHarvest>
       <RefProjectOutputGroups>Binaries;Content;Satellites</RefProjectOutputGroups>
@@ -604,6 +692,4 @@
 	<Target Name="AfterBuild">
 	</Target>
 	-->
-  
-  
 </Project>

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,7 +38,6 @@ namespace Reko.Core
 
         public abstract Statement Emit(Instruction instr);
         public abstract Frame Frame { get; }
-        public abstract Identifier Register(int i);
 
         public virtual AliasAssignment Alias(Identifier dst, Expression src)
         {
@@ -117,9 +116,19 @@ namespace Reko.Core
         /// <returns></returns>
         public Statement Store(Expression dst, Expression src)
         {
-            if (dst is Constant || dst is ProcedureConstant)
-                throw new ArgumentException("Constants are not L-values.", nameof(dst));
-            return Emit(new Store(dst, src));
+            if (dst is Identifier)
+                throw new ArgumentException("Use the 'Assign' method for identifiers.", nameof(dst));
+            if (dst is MemoryAccess ||
+                dst is SegmentedAccess ||
+                dst is FieldAccess ||
+                dst is ArrayAccess ||
+                dst is MemberPointerSelector ||
+                dst is Dereference)
+            {
+                return Emit(new Store(dst, src));
+            }
+            throw new ArgumentException(
+                $"An expression of the type {dst.GetType().Name} is not an L-value.", nameof(dst));
         }
 
         /// <summary>
@@ -132,6 +141,12 @@ namespace Reko.Core
         public Statement MStore(Expression ea, Expression src)
         {
             Store s = new Store(new MemoryAccess(MemoryIdentifier.GlobalMemory, ea, src.DataType), src);
+            return Emit(s);
+        }
+
+        public Statement MStore(MemoryIdentifier mem, Expression ea, Expression src)
+        {
+            Store s = new Store(new MemoryAccess(mem, ea, src.DataType), src);
             return Emit(s);
         }
 
@@ -184,7 +199,17 @@ namespace Reko.Core
         public Identifier Local16(string name)
         {
             localStackOffset -= PrimitiveType.Word32.Size;
-            return Frame.EnsureStackLocal(localStackOffset, PrimitiveType.Word16, name);
+            return Local16(name, localStackOffset);
+        }
+
+        /// <summary>
+        /// Allocates a stack-based 16-bit variable  named <paramref name="name"/> at the 
+        /// given <paramref name="offset"/>.
+        /// </summary>
+        public virtual Identifier Local16(string name, int offset)
+        {
+            Debug.Assert(offset < 0);
+            return Frame.EnsureStackLocal(offset, PrimitiveType.Word16, name);
         }
 
         /// <summary>
@@ -209,7 +234,7 @@ namespace Reko.Core
         /// <summary>
         /// Generate a temporary identifier named <paramref name="name"/> with the data type <paramref name="type"/>.
         /// </summary>
-        public Identifier Temp(DataType type, string name)
+        public virtual Identifier Temp(DataType type, string name)
         {
             return Frame.CreateTemporary(name, type);
         }

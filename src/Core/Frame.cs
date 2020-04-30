@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John KÃ¤llÃ©n.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -99,17 +99,17 @@ namespace Reko.Core
         public int ReturnAddressSize { get; set; }
         public bool ReturnAddressKnown { get; set; }
 
-        public Identifier CreateSequence(Storage head, Storage tail, DataType dt)
+        public Identifier CreateSequence(DataType dt, params Storage [] elements)
         {
-            Identifier id = new Identifier(string.Format("{0}_{1}", head.Name, tail.Name), dt, new
-                SequenceStorage(head, tail, dt));
+            var name = string.Join("_", elements.Select(e => e.Name));
+            var id = new Identifier(name, dt, new SequenceStorage(dt, elements));
             identifiers.Add(id);
             return id;
         }
 
-        public Identifier CreateSequence(string name, Storage head, Storage tail, DataType dt)
+        public Identifier CreateSequence(DataType dt, string name, params Storage[] elements)
         {
-            var id = new Identifier(name, dt, new SequenceStorage(head, tail, dt));
+            var id = new Identifier(name, dt, new SequenceStorage(dt, elements));
             identifiers.Add(id);
             return id;
         }
@@ -124,11 +124,9 @@ namespace Reko.Core
                 return EnsureFlagGroup(grf);
             case SequenceStorage seq:
                 return EnsureSequence(
+                    seq.DataType,
                     seq.Name,
-                    seq.Head,
-                    seq.Tail,
-                    PrimitiveType.CreateWord(
-                        (int)(seq.Head.BitSize + seq.Tail.BitSize)));
+                    seq.Elements);
             case FpuStackStorage fp:
                 return EnsureFpuStackVariable(fp.FpuStackOffset, fp.DataType);
             case StackStorage st:
@@ -157,7 +155,7 @@ namespace Reko.Core
 
 		public Identifier CreateTemporary(string name, DataType dt)
 		{
-			Identifier id = new Identifier(name, dt, 
+            Identifier id = new Identifier(name, dt, 
                 new TemporaryStorage(name, identifiers.Count, dt));
 			identifiers.Add(id);
 			return id;
@@ -167,7 +165,7 @@ namespace Reko.Core
 		{
 			if (grfMask == 0)
 				return null;
-			Identifier id = FindFlagGroup(grfMask);
+			Identifier id = FindFlagGroup(freg, grfMask);
 			if (id == null)
 			{
 				id = new Identifier(name, dt, new FlagGroupStorage(freg, grfMask, name, dt));
@@ -180,7 +178,7 @@ namespace Reko.Core
         {
             if (grf.FlagGroupBits == 0)
                 return null;
-            var id = FindFlagGroup(grf.FlagGroupBits);
+            var id = FindFlagGroup(grf.FlagRegister, grf.FlagGroupBits);
             if (id == null)
             {
                 id = new Identifier(grf.Name, grf.DataType, new FlagGroupStorage(grf.FlagRegister, grf.FlagGroupBits, grf.Name, grf.DataType));
@@ -230,22 +228,22 @@ namespace Reko.Core
 			return idOut;
 		}
 
-		public Identifier EnsureSequence(Storage head, Storage tail, DataType dt)
-		{
-			Identifier idSeq = FindSequence(head, tail);
+		public Identifier EnsureSequence(DataType dt, params Storage [] elements)
+        {
+			Identifier idSeq = FindSequence(elements);
 			if (idSeq == null)
 			{
-				idSeq = CreateSequence(head, tail, dt);
+				idSeq = CreateSequence(dt, elements);
 			}
 			return idSeq;
 		}
 
-        public Identifier EnsureSequence(string name, Storage head, Storage tail, DataType dt)
+        public Identifier EnsureSequence(DataType dt, string name, params Storage [] elements)
         {
-            Identifier idSeq = FindSequence(head, tail);
+            Identifier idSeq = FindSequence(elements);
             if (idSeq == null)
             {
-                idSeq = CreateSequence(name, head, tail, dt);
+                idSeq = CreateSequence(dt, name, elements);
             }
             return idSeq;
         }
@@ -320,26 +318,32 @@ namespace Reko.Core
 		{
 			if (id == null)
 				return 0;
-			StackArgumentStorage stVar = id.Storage as StackArgumentStorage;
-			if (stVar != null)
-				return stVar.StackOffset;
-			FpuStackStorage fstVar = id.Storage as FpuStackStorage;
-			if (fstVar != null)
-				return fstVar.FpuStackOffset;
+            if (id.Storage is StackArgumentStorage stVar)
+                return stVar.StackOffset;
+            if (id.Storage is FpuStackStorage fstVar)
+                return fstVar.FpuStackOffset;
 
-			throw new ArgumentOutOfRangeException("var", "Variable must be an argument.");
+            throw new ArgumentOutOfRangeException("id", "Identifier must be an argument.");
 		}
 
-		public Identifier FindSequence(Storage n1, Storage n2)
-		{
-			foreach (Identifier id in identifiers)
-			{
-				SequenceStorage seq = id.Storage as SequenceStorage;
-				if (seq != null && seq.Head == n1 && seq.Tail == n2)
-					return id;
-			}
-			return null;
-		}
+        public Identifier FindSequence(Storage[] elements)
+        {
+            foreach (Identifier id in identifiers)
+            {
+                if (id.Storage is SequenceStorage seq &&
+                    seq.Elements.Length == elements.Length)
+                {
+                    var allSame = true;
+                    for (int i = 0; allSame && i < seq.Elements.Length; ++i)
+                    {
+                        allSame &= seq.Elements[i].Equals(elements[i]);
+                    }
+                    if (allSame)
+                        return id;
+                }
+            }
+            return null;
+        }
 
 		/// <summary>
 		/// Returns the number of bytes the stack arguments consume on the stack.
@@ -350,24 +354,24 @@ namespace Reko.Core
 			int cbMax = 0;
 			foreach (Identifier id in identifiers)
 			{
-				StackArgumentStorage sa = id.Storage as StackArgumentStorage;
-				if (sa == null)
-					continue;
-				cbMax = Math.Max(cbMax, sa.StackOffset + sa.DataType.Size);
+                if (!(id.Storage is StackArgumentStorage sa))
+                    continue;
+                cbMax = Math.Max(cbMax, sa.StackOffset + sa.DataType.Size);
 			}
 			return cbMax;
 		}
 
-		public Identifier FindFlagGroup(uint grfMask)
+		public Identifier FindFlagGroup(RegisterStorage reg, uint grfMask)
 		{
 			foreach (Identifier id in identifiers)
 			{
-				FlagGroupStorage flags = id.Storage as FlagGroupStorage;
-				if (flags != null && flags.FlagGroupBits == grfMask)
-				{
-					return id;
-				}
-			}
+                if (id.Storage is FlagGroupStorage flags &&
+                    flags.FlagRegister == reg &&
+                    flags.FlagGroupBits == grfMask)
+                {
+                    return id;
+                }
+            }
 			return null;
 		}
 
@@ -375,10 +379,9 @@ namespace Reko.Core
 		{
 			foreach (Identifier id in identifiers)
 			{
-				FpuStackStorage fst = id.Storage as FpuStackStorage;
-				if (fst != null && fst.FpuStackOffset == off)
-					return id;
-			}
+                if (id.Storage is FpuStackStorage fst && fst.FpuStackOffset == off)
+                    return id;
+            }
 			return null;
 		}
 
@@ -386,12 +389,11 @@ namespace Reko.Core
 		{
 			foreach (Identifier id in identifiers)
 			{
-				OutArgumentStorage s = id.Storage as OutArgumentStorage;
-				if (s != null && s.OriginalIdentifier == idOrig)
-				{
-					return id;
-				}
-			}
+                if (id.Storage is OutArgumentStorage s && s.OriginalIdentifier == idOrig)
+                {
+                    return id;
+                }
+            }
 			return null;
 		}
 
@@ -399,10 +401,9 @@ namespace Reko.Core
 		{
 			foreach (Identifier id in identifiers)
 			{
-				RegisterStorage s = id.Storage as RegisterStorage;
-				if (s != null && s == reg)
-					return id;
-			}
+                if (id.Storage is RegisterStorage s && s == reg)
+                    return id;
+            }
 			return null;
 		}
 
@@ -410,12 +411,11 @@ namespace Reko.Core
 		{
 			foreach (Identifier id in identifiers)
 			{
-				StackArgumentStorage s = id.Storage as StackArgumentStorage;
-				if (s != null && s.StackOffset == offset && id.DataType.Size == size)
-				{
-					return id;
-				}
-			}
+                if (id.Storage is StackArgumentStorage s && s.StackOffset == offset && id.DataType.Size == size)
+                {
+                    return id;
+                }
+            }
 			return null;
 		}
 
@@ -423,10 +423,9 @@ namespace Reko.Core
 		{
 			foreach (Identifier id in identifiers)
 			{
-				StackLocalStorage loc = id.Storage as StackLocalStorage;
-				if (loc != null && loc.StackOffset == offset && id.DataType.Size == size)
-					return id;
-			}
+                if (id.Storage is StackLocalStorage loc && loc.StackOffset == offset && id.DataType.Size == size)
+                    return id;
+            }
 			return null;
 		}
 

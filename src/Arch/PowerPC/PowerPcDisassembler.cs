@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,9 +28,13 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
 
+#pragma warning disable IDE1006 // Naming Styles
+
 namespace Reko.Arch.PowerPC
 {
-    public partial class PowerPcDisassembler : DisassemblerBase<PowerPcInstruction>
+    using Decoder = Decoder<PowerPcDisassembler, Mnemonic, PowerPcInstruction>;
+ 
+    public partial class PowerPcDisassembler : DisassemblerBase<PowerPcInstruction, Mnemonic>
     {
         private readonly PowerPcArchitecture arch;
         private readonly EndianImageReader rdr;
@@ -56,39 +60,59 @@ namespace Reko.Arch.PowerPC
                 return null;
             this.allowSetCR0 = false;
             this.ops.Clear();
-            var instrCur = primaryDecoders[wInstr >> 26].Decode(this, wInstr);
+            var instrCur = primaryDecoders[wInstr >> 26].Decode(wInstr, this);
+            if (wInstr == 0)
+                instrCur.InstructionClass |= InstrClass.Zero;
             instrCur.Address = addr;
             instrCur.Length = 4;
             return instrCur;
         }
 
-        private PowerPcInstruction MakeInstruction(InstrClass iclass, Opcode opcode)
+        public override PowerPcInstruction CreateInvalidInstruction()
         {
-            return new PowerPcInstruction(opcode)
+            return new PowerPcInstruction(Mnemonic.illegal)
+            {
+                InstructionClass = InstrClass.Invalid,
+                Operands = MachineInstruction.NoOperands
+            };
+        }
+
+        public override PowerPcInstruction MakeInstruction(InstrClass iclass, Mnemonic mnemonic)
+        {
+            return new PowerPcInstruction(mnemonic)
             {
                 Address = addr,
                 InstructionClass = iclass,
                 Length = 4,
-                op1 = ops.Count > 0 ? ops[0] : null,
-                op2 = ops.Count > 1 ? ops[1] : null,
-                op3 = ops.Count > 2 ? ops[2] : null,
-                op4 = ops.Count > 3 ? ops[3] : null,
-                op5 = ops.Count > 4 ? ops[4] : null,
+                Operands = ops.ToArray(),
                 setsCR0 = allowSetCR0,
             };
         }
 
         #region Mutators
 
-        // If the instructions LSB is '1', then set the setsCR0
+        /// <summary>
+        /// If the instruction's LSB is '1', then set the setsCR0 bit.
+        /// </summary>
         internal static bool C(uint wInstr, PowerPcDisassembler dasm)
         {
             dasm.allowSetCR0 = (wInstr & 1) != 0;
             return true;
         }
-        
-        // Force the setsCR0 flag to '1'.
-        internal static bool CC(uint uInstr, PowerPcDisassembler dasm)
+
+        /// <summary>
+        /// If the instruction's bit 10 is '1', then set the setsCR0 bit.
+        /// </summary>
+        internal static bool C10(uint wInstr, PowerPcDisassembler dasm)
+        {
+            dasm.allowSetCR0 = (wInstr & (1 << 10)) != 0;
+            return true;
+        }
+
+        /// <summary>
+        /// Force the setsCR0 flag to '1'.
+        /// </summary>
+        internal static bool CC(uint _, PowerPcDisassembler dasm)
         {
             dasm.allowSetCR0 = true;
             return true;
@@ -219,6 +243,19 @@ namespace Reko.Arch.PowerPC
         internal static readonly Mutator<PowerPcDisassembler> v3 = v(11);
         internal static readonly Mutator<PowerPcDisassembler> v4 = v(6);
 
+        // vector register using only 3 bits of encoding
+        internal static Mutator<PowerPcDisassembler> v3_(int offset)
+        {
+            return (u, d) =>
+            {
+                var op = d.VRegFromBits((u >> offset) & 0x7);
+                d.ops.Add(op);
+                return true;
+            };
+        }
+        internal static readonly Mutator<PowerPcDisassembler> v3_6 = v3_(6);
+
+
         internal static Mutator<PowerPcDisassembler> I(int offset)
         {
             return (u, d) =>
@@ -253,11 +290,15 @@ namespace Reko.Arch.PowerPC
             };
         }
         internal static readonly Mutator<PowerPcDisassembler> u6_2 = u(6, 2);
+        internal static readonly Mutator<PowerPcDisassembler> u6_4 = u(6, 4);
         internal static readonly Mutator<PowerPcDisassembler> u6_5 = u(6, 5);
         internal static readonly Mutator<PowerPcDisassembler> u9_1 = u(9, 1);
+        internal static readonly Mutator<PowerPcDisassembler> u11_5 = u(11, 5);
         internal static readonly Mutator<PowerPcDisassembler> u14_2 = u(14, 2);
         internal static readonly Mutator<PowerPcDisassembler> u16_1 = u(16, 1);
         internal static readonly Mutator<PowerPcDisassembler> u16_2 = u(16, 2);
+        internal static readonly Mutator<PowerPcDisassembler> u16_3 = u(16, 3);
+        internal static readonly Mutator<PowerPcDisassembler> u16_4 = u(16, 4);
         internal static readonly Mutator<PowerPcDisassembler> u16_5 = u(16, 5);
         internal static readonly Mutator<PowerPcDisassembler> u17_8 = u(17, 8);
         internal static readonly Mutator<PowerPcDisassembler> u18_3 = u(18, 3);
@@ -277,6 +318,17 @@ namespace Reko.Arch.PowerPC
         }
         internal static readonly Mutator<PowerPcDisassembler> s0_12 = s(0, 12);
         internal static readonly Mutator<PowerPcDisassembler> s16_5 = s(16, 5);
+
+        internal static Mutator<PowerPcDisassembler> s(Bitfield[] fields)
+        {
+            return (u, d) =>
+            {
+                var n = Bitfield.ReadSignedFields(fields, u);
+                var op = ImmediateOperand.Int32(n);
+                d.ops.Add(op);
+                return true;
+            };
+        }
 
         // VMX extension to access 128 vector regs
         //    //| A | 0 0 0 0 | a | 1 | VDh | VBh |
@@ -310,11 +362,16 @@ namespace Reko.Arch.PowerPC
             return true;
         }
 
+        internal static bool Is64Bit(uint wInstr, PowerPcDisassembler dasm)
+        {
+            return dasm.defaultWordWidth.BitSize == 64;
+        }
+
         #endregion
 
         private MachineOperand MemOff(uint reg, uint wInstr)
         {
-            var d = Constant.Int32((short)wInstr);
+            var d = Constant.Int(arch.WordWidth, (short)wInstr);
             return new MemoryOperand(PrimitiveType.Word32, arch.Registers[(int)reg & 0x1F], d);
         }
 
@@ -349,10 +406,12 @@ namespace Reko.Arch.PowerPC
             //        }}
             //");
 #endif
-            return new PowerPcInstruction(Opcode.illegal)
-            {
-                InstructionClass = InstrClass.Invalid
-            };
+            return CreateInvalidInstruction();
+        }
+
+        public override PowerPcInstruction NotYetImplemented(uint wInstr, string message)
+        {
+            return base.NotYetImplemented(wInstr, message);
         }
     }
 }

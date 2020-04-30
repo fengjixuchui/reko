@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,7 +30,7 @@ using Reko.Core.Operators;
 
 namespace Reko.Core
 {
-    public interface IImportResolver
+    public interface IDynamicLinker
     {
         ExternalProcedure ResolveProcedure(string moduleName, string importName, IPlatform platform);
         ExternalProcedure ResolveProcedure(string moduleName, int ordinal, IPlatform platform);
@@ -40,19 +40,19 @@ namespace Reko.Core
     }
 
     /// <summary>
-    /// An import resolver tries to resolve a reference to external code or
+    /// The dynamic linker tries to resolve a reference to external code or
     /// data by consulting the current project first hand, and the platform
     /// in second hand. Doing it that way allows users to override platform
     /// definitions as the need arises.
     /// </summary>
-    public class ImportResolver : IImportResolver
+    public class DynamicLinker : IDynamicLinker
     {
         private readonly Project project;
         private readonly Program program;
         private readonly DecompilerEventListener eventListener;
         private readonly Dictionary<string, ImageSymbol> localProcs;
 
-        public ImportResolver(Project project, Program program, DecompilerEventListener eventListener)
+        public DynamicLinker(Project project, Program program, DecompilerEventListener eventListener)
         {
             this.project = project ?? throw new ArgumentNullException("project");
             this.program = program;
@@ -111,6 +111,12 @@ namespace Reko.Core
                         return new ExternalProcedure(svc.Name, svc.Signature, svc.Characteristics);
                     }
                 }
+                if (project.LoadedMetadata.Modules.TryGetValue(moduleName, out var module) &&
+                    module.ServicesByName.TryGetValue(importName, out var service))
+                {
+                    return new ExternalProcedure(service.Name, service.Signature, service.Characteristics);
+                }
+
             }
 
             foreach (var program in project.Programs)
@@ -124,7 +130,10 @@ namespace Reko.Core
                         return new ExternalProcedure(importName, sig);
                 }
             }
-
+            if (project.LoadedMetadata.Signatures.TryGetValue(importName, out var signature))
+            {
+                return new ExternalProcedure(importName, signature);
+            }
             return platform.LookupProcedureByName(moduleName, importName);
         }
 
@@ -151,6 +160,24 @@ namespace Reko.Core
                             "Unable to resolve signature for {0}", svc.Name);
                         return new ExternalProcedure(svc.Name, new FunctionType());
                     }
+                }
+            }
+            if (project.LoadedMetadata.Modules.TryGetValue(moduleName, out var module) &&
+                module.ServicesByOrdinal.TryGetValue(ordinal, out var service))
+            {
+                EnsureSignature(program, service);
+                if (service.Signature != null)
+                {
+                    return new ExternalProcedure(service.Name, service.Signature, service.Characteristics);
+                }
+                else
+                {
+                    // We have a name for the external procedure, but can't find a proper signature for it. 
+                    // So we make a "dumb" one. It's better than nothing.
+                    eventListener.Warn(
+                        new NullCodeLocation(moduleName),
+                        "Unable to resolve signature for {0}", service.Name);
+                    return new ExternalProcedure(service.Name, new FunctionType());
                 }
             }
             return platform.LookupProcedureByOrdinal(moduleName, ordinal);
@@ -246,12 +273,14 @@ namespace Reko.Core
                 var id = Identifier.Global(sym.Name, sym.DataType);
                 return new UnaryExpression(Operator.AddrOf, program.Platform.PointerType, id);
             }
-    }
+        }
 
         public Expression ResolveToImportedValue(Statement stm, Constant c)
         {
             var addrInstruction = program.SegmentMap.MapLinearAddressToAddress(stm.LinearAddress);
-            var addrImportThunk = program.Platform.MakeAddressFromConstant(c);
+            var addrImportThunk = program.Platform.MakeAddressFromConstant(c, true);
+            if (addrImportThunk == null)
+                return null;
             if (!program.ImportReferences.TryGetValue(addrImportThunk, out var impref))
                 return null;
 
@@ -268,10 +297,10 @@ namespace Reko.Core
                 // Read an address sized value at the given address.
                 if (!program.SegmentMap.TryFindSegment(impref.ReferenceAddress, out ImageSegment seg))
                     return null;
-                var dt = program.Architecture.PointerType;
+                var dt = PrimitiveType.CreateWord(impref.ReferenceAddress.DataType.BitSize);
                 if (!program.Architecture.TryRead(seg.MemoryArea, impref.ReferenceAddress, dt, out Constant cIndirect))
                     return Constant.Invalid;
-                return cIndirect;
+                return Constant.Create(program.Architecture.WordWidth, cIndirect.ToInt64());
             }
             else
             {

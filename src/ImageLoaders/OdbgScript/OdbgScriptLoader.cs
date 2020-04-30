@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,19 +18,17 @@
  */
 #endregion
 
-using Reko.Arch.X86;
 using Reko.Core;
 using Reko.Core.Services;
-using Reko.Environments.Windows;
-using Reko.ImageLoaders.MzExe;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using rulong = System.UInt64;
 
+#pragma warning disable IDE1006 // Naming Styles
+
 namespace Reko.ImageLoaders.OdbgScript
 {
-
     /// <summary>
     /// ImageLoader that uses OdbgScript to assist in the unpacking of 
     /// compressed or obfuscated binaries.
@@ -39,13 +37,15 @@ namespace Reko.ImageLoaders.OdbgScript
     /// file to specify the script file to use.</remarks>
     public class OdbgScriptLoader : ImageLoader
     {
+        private readonly ImageLoader originalImageLoader;
         private Debugger debugger;
-        private OllyLang scriptInterpreter;
+        private OllyLangInterpreter scriptInterpreter;
         private rulong OldIP;
 
-        public OdbgScriptLoader(IServiceProvider services, string filename, byte[] imgRaw)
-            : base(services, filename, imgRaw)
+        public OdbgScriptLoader(ImageLoader imageLoader) 
+            : base(imageLoader.Services, imageLoader.Filename, imageLoader.RawImage)
         {
+            this.originalImageLoader = imageLoader;
         }
 
         public override Address PreferredBaseAddress
@@ -55,7 +55,7 @@ namespace Reko.ImageLoaders.OdbgScript
         }
 
         public SegmentMap ImageMap { get; set; }
-        public IntelArchitecture Architecture { get; set; }
+        public IProcessorArchitecture Architecture { get; set; }
 
         /// <summary>
         /// Original entry point to the executable, before it was packed.
@@ -64,48 +64,39 @@ namespace Reko.ImageLoaders.OdbgScript
 
         public override Program Load(Address addrLoad)
         {
-            // First load the file as a PE Executable. This gives us a (writeable) image and 
+            // First load the file. This gives us a (writeable) image and 
             // the packed entry point.
-            var pe = CreatePeImageLoader();
-            var program = pe.Load(pe.PreferredBaseAddress);
-            var rr = pe.Relocate(program, pe.PreferredBaseAddress);
+            var origLdr = this.originalImageLoader;
+            var program = origLdr.Load(origLdr.PreferredBaseAddress);
+            var rr = origLdr.Relocate(program, origLdr.PreferredBaseAddress);
             this.ImageMap = program.SegmentMap;
-            this.Architecture = (IntelArchitecture)program.Architecture;
+            this.Architecture = program.Architecture;
 
-            var win32 = new Win32Emulator(program.SegmentMap, program.Platform, program.ImportReferences);
-            var state = (X86State)program.Architecture.CreateProcessorState();
-            var emu = new X86Emulator((IntelArchitecture)program.Architecture, program.SegmentMap, win32);
+            var envEmu = program.Platform.CreateEmulator(program.SegmentMap, program.ImportReferences);
+            var emu = program.Architecture.CreateEmulator(program.SegmentMap, envEmu);
             this.debugger = new Debugger(emu);
-            this.scriptInterpreter = new OllyLang(Services);
-            this.scriptInterpreter.Host = new Host(this, program.SegmentMap);
+            this.scriptInterpreter = new OllyLangInterpreter(Services, program.Architecture);
+            this.scriptInterpreter.Host = new OdbgScriptHost(this, program);
             this.scriptInterpreter.Debugger = this.debugger;
             emu.InstructionPointer = rr.EntryPoints[0].Address;
             emu.BeforeStart += emu_BeforeStart;
             emu.ExceptionRaised += emu_ExceptionRaised;
 
-            var stackSeg = InitializeStack(emu);
-            LoadScript(Argument, scriptInterpreter.script);
+            var stackSeg = envEmu.InitializeStack(emu, rr.EntryPoints[0].ProcessorState);
+            scriptInterpreter.Script = LoadScript(scriptInterpreter.Host, Argument);
             emu.Start();
-            TearDownStack(stackSeg);
+            envEmu.TearDownStack(stackSeg);
 
-            foreach (var ic in win32.InterceptedCalls)
+            foreach (var ic in envEmu.InterceptedCalls)
             {
-                program.InterceptedCalls.Add(Address.Ptr32(ic.Key), ic.Value);
+                program.InterceptedCalls.Add(ic.Key, ic.Value);
             }
             return program;
         }
 
-        private ImageSegment InitializeStack(X86Emulator emu)
+        public override ImageSegment AddSegmentReference(Address addr, ushort seg)
         {
-            var stack = new MemoryArea(Address.Ptr32(0x7FE00000), new byte[1024 * 1024]);
-            var stackSeg = this.ImageMap.AddSegment(stack, "stack", AccessMode.ReadWrite);
-            emu.WriteRegister(Registers.esp, (uint)stack.EndAddress.ToLinear() - 4u);
-            return stackSeg;
-        }
-
-        private void TearDownStack(ImageSegment stackSeg)
-        {
-            this.ImageMap.Segments.Remove(stackSeg.Address);
+            return originalImageLoader.AddSegmentReference(addr, seg);
         }
 
         public override RelocationResults Relocate(Program program, Address addrLoad)
@@ -121,14 +112,7 @@ namespace Reko.ImageLoaders.OdbgScript
             return new RelocationResults(eps, syms);
         }
 
-        public virtual PeImageLoader CreatePeImageLoader()
-        {
-            ExeImageLoader mz = new ExeImageLoader(Services, Filename, RawImage);
-            PeImageLoader pe = new PeImageLoader(Services, Filename, RawImage, mz.e_lfanew);
-            return pe;
-        }
-
-        public virtual void LoadScript(string scriptFilename, OllyScript script)
+        public virtual OllyScript LoadScript(IOdbgScriptHost host, string scriptFilename)
         {
             // If the script file is not a rooted path, first try looking at 
             // the current directory. If there is no file there, try finding 
@@ -149,7 +133,10 @@ namespace Reko.ImageLoaders.OdbgScript
                     scriptFilename = absPath;
                 }
             }
-            script.LoadFile(scriptFilename, null);
+            using (var parser = OllyScriptParser.FromFile(host, fsSvc, scriptFilename, null))
+            {
+                return parser.ParseScript();
+            }
         }
 
         private void emu_ExceptionRaised(object sender, EventArgs e)
@@ -225,18 +212,6 @@ namespace Reko.ImageLoaders.OdbgScript
             }
         }
 
-        public bool ScripterLoadFile(string szFileName)
-        {
-            scriptInterpreter.Reset();
-            return scriptInterpreter.script.LoadFile(szFileName);
-        }
-
-        public bool ScripterLoadBuffer(string szScript)
-        {
-            scriptInterpreter.Reset();
-            return scriptInterpreter.script.LoadScriptFromString(szScript);
-        }
-
         public bool ScripterResume()
         {
             scriptInterpreter.Run();
@@ -251,16 +226,6 @@ namespace Reko.ImageLoaders.OdbgScript
         private void AutoDebugEntry()
         {
             ScripterResume();
-        }
-
-        bool ScripterAutoDebug(string szDebuggee)
-        {
-            if (scriptInterpreter.script.IsLoaded && scriptInterpreter.Debugger.InitDebugEx(szDebuggee, null, null, AutoDebugEntry) != null)
-            {
-                scriptInterpreter.Debugger.DebugLoop();
-                return true;
-            }
-            return false;
         }
     }
 }

@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,7 +35,7 @@ namespace Reko.Arch.Arm.AArch64
         public RegisterStorage Base;
         public Constant Offset;
         public RegisterStorage Index;
-        public Opcode IndexExtend;
+        public Mnemonic IndexExtend;
         public int IndexShift;
         public bool PreIndex;
         public bool PostIndex;
@@ -58,7 +58,7 @@ namespace Reko.Arch.Arm.AArch64
                 var off = Offset.ToInt32();
                 if (off < 0)
                 {
-                    writer.WriteFormat("-#&{0:X}", -off);
+                    writer.WriteFormat("#-&{0:X}", -off);
                 }
                 else
                 {
@@ -69,10 +69,10 @@ namespace Reko.Arch.Arm.AArch64
             {
                 writer.WriteChar(',');
                 writer.WriteString(Index.Name);
-                if (IndexExtend != Opcode.Invalid && (IndexExtend != Opcode.lsl || IndexShift != 0))
+                if (IndexExtend != Mnemonic.Invalid && (IndexExtend != Mnemonic.lsl || IndexShift != 0))
                 {
                     writer.WriteChar(',');
-                    writer.WriteOpcode(IndexExtend.ToString());
+                    writer.WriteMnemonic(IndexExtend.ToString());
                     if (IndexShift != 0)
                     {
                         writer.WriteString($" #{IndexShift}");

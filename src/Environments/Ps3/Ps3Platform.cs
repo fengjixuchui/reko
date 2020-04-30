@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -56,7 +56,12 @@ namespace Reko.Environments.Ps3
 
         public override PrimitiveType PointerType { get { return PrimitiveType.Ptr32; } }
 
-        public override HashSet<RegisterStorage>  CreateImplicitArgumentRegisters()
+        public override IPlatformEmulator CreateEmulator(SegmentMap segmentMap, Dictionary<Address, ImportReference> importReferences)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override HashSet<RegisterStorage> CreateImplicitArgumentRegisters()
         {
             //$TODO: find out what registers are always preserved
             return new HashSet<RegisterStorage>();
@@ -73,7 +78,7 @@ namespace Reko.Environments.Ps3
             throw new NotImplementedException();
         }
 
-        public override SystemService FindService(int vector, ProcessorState state)
+        public override SystemService FindService(int vector, ProcessorState state, SegmentMap segmentMap)
         {
             throw new NotImplementedException();
         }
@@ -97,7 +102,7 @@ namespace Reko.Environments.Ps3
             }
         }
 
-        public override ProcedureBase GetTrampolineDestination(IEnumerable<RtlInstructionCluster> rdr, IRewriterHost host)
+        public override ProcedureBase GetTrampolineDestination(Address addrInstr, IEnumerable<RtlInstruction> rdr, IRewriterHost host)
         {
             var dasm = rdr.Take(8).ToArray();
             if (dasm.Length < 8)
@@ -110,19 +115,19 @@ namespace Reko.Environments.Ps3
             /*
             //addi r12,r0,0000
             instr = dasm[0].Instructions[0];
-            if (instr.Opcode != Opcode.addi)
+            if (instr.Mnemonic != Mnemonic.addi)
                 return null;
 
             //oris r12,r12,0006
             instr = dasm.DisassembleInstruction();
-            if (instr.Opcode != Opcode.oris)
+            if (instr.Mnemonic != Mnemonic.oris)
                 return null;
             immOp = (ImmediateOperand) instr.op3;
             uint aFuncDesc = immOp.Value.ToUInt32() << 16;
 
             //lwz r12,nnnn(r12)
             instr = dasm.DisassembleInstruction();
-            if (instr.Opcode != Opcode.lwz)
+            if (instr.Mnemonic != Mnemonic.lwz)
                 return null;
             memOp = (MemoryOperand)instr.op2;
             int offset = memOp.Offset.ToInt32();
@@ -130,28 +135,28 @@ namespace Reko.Environments.Ps3
 
             //std r2,40(r1)
             instr = dasm.DisassembleInstruction();
-            if (instr.Opcode != Opcode.std)
+            if (instr.Mnemonic != Mnemonic.std)
                 return null;
 
             //lwz r0,0(r12)
             // Have a pointer to a trampoline
             instr = dasm.DisassembleInstruction();
-            if (instr.Opcode != Opcode.lwz)
+            if (instr.Mnemonic != Mnemonic.lwz)
                 return null;
 
             //lwz r2,4(r12)
             instr = dasm.DisassembleInstruction();
-            if (instr.Opcode != Opcode.lwz)
+            if (instr.Mnemonic != Mnemonic.lwz)
                 return null;
 
             // mtctr r0
             instr = dasm.DisassembleInstruction();
-            if (instr.Opcode != Opcode.mtctr)
+            if (instr.Mnemonic != Mnemonic.mtctr)
                 return null;
 
             // bcctr 14,00
             instr = dasm.DisassembleInstruction();
-            if (instr.Opcode != Opcode.bcctr)
+            if (instr.Mnemonic != Mnemonic.bcctr)
                 return null;
 
             // Read the function pointer from the function descriptor.
@@ -168,14 +173,19 @@ namespace Reko.Environments.Ps3
             throw new NotImplementedException();
         }
 
-        public override Address MakeAddressFromConstant(Constant c)
+        public override Address MakeAddressFromConstant(Constant c, bool codeAlign)
         {
             // Bizarrely, pointers are 32-bit on this 64-bit platform.
-            return Address.Ptr32(c.ToUInt32());
+            var uAddr = c.ToUInt32();
+            if (codeAlign)
+                uAddr &= ~3u;
+            return Address.Ptr32(uAddr);
         }
 
-        public override Address MakeAddressFromLinear(ulong uAddr)
+        public override Address MakeAddressFromLinear(ulong uAddr, bool codeAlign)
         {
+            if (codeAlign)
+                uAddr &= ~3u;
             return Address.Ptr32((uint)uAddr);
         }
 

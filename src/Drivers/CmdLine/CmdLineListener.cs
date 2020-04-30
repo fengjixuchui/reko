@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -51,7 +51,7 @@ namespace Reko.CmdLine
             return new NullCodeLocation(program.SegmentMap.MapLinearAddressToAddress(stm.LinearAddress).ToString());
         }
 
-        public ICodeLocation CreateJumpTableNavigator(Program program, Address addrIndirectJump, Address addrVector, int stride)
+        public ICodeLocation CreateJumpTableNavigator(Program program, IProcessorArchitecture _, Address addrIndirectJump, Address addrVector, int stride)
         {
             return new NullCodeLocation(addrIndirectJump.ToString());
         }

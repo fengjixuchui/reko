@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,9 +36,17 @@ namespace Reko.UnitTests
 
         /// <summary>
         /// The UnitTests category is used for unit tests that do not require
-        /// any I/O. They should complete in at most 1 ms.
+        /// any I/O. They should complete in at most 1 ms, which  means not
+        /// using "recordings" saved on disk or popping up windows during the test.
         /// </summary>
+
         public const string UnitTests = "UnitTests";
+
+        /// <summary>
+        /// Tests that are slower, because they show UI or hit
+        /// the file system, are considered integration tests.
+        /// </summary>
+        public const string IntegrationTests = "IntegrationTests";
 
         /// <summary>
         /// The purpose of FailedTests category is to avoid running such unit
@@ -58,5 +66,12 @@ namespace Reko.UnitTests
         /// them fixed soon, so we turn off some tests until the fixes are done.
         /// </summary>
         public const string Capstone = "Capstone";
+        // Tests that are currently failing in the "analysis-development"
+        // branch. Before merging back into "master", these must all be 
+        // running again.
+        public const string AnalysisDevelopment = "AnalysisDevelopment";
+
+        // Tests that may fail due to work in progress
+        public const string WorkInProgress = "WIP";
     }
 }

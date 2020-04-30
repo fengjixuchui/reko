@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -198,14 +198,13 @@ namespace Reko.Arch.PaRisc
         {
             var rHi = ((RegisterOperand) instr.Operands[0]).Register;
             var rLo = ((RegisterOperand) instr.Operands[1]).Register;
-            var regp = binder.EnsureSequence(rHi, rLo, dtSeq);
+            var regp = binder.EnsureSequence(dtSeq, rHi, rLo);
             m.Assign(regp, m.Seq(binder.EnsureRegister(rHi), binder.EnsureRegister(rLo)));
             var shamt = RewriteOp(instr.Operands[2]);
             var dst = RewriteOp(instr.Operands[3]);
             m.Assign(dst, m.Slice(dt, m.Shr(regp, shamt), 0));
             MaybeSkipNextInstruction(InstrClass.ConditionalTransfer, false, dst);
         }
-
 
         private void RewriteSt(PrimitiveType size)
         {

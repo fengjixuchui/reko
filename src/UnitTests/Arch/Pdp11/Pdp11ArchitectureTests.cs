@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -52,7 +52,7 @@ namespace Reko.UnitTests.Arch.Pdp11
             
             var access = arch.CreateStackAccess(binder.Object, -12, PrimitiveType.Word16);
 
-            Assert.AreEqual("Mem0[sp + -12:word16]", access.ToString());
+            Assert.AreEqual("Mem0[sp + -12<i16>:word16]", access.ToString());
         }
     }
 }

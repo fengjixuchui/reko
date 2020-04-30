@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -129,7 +129,7 @@ namespace Reko.UnitTests.Gui.Windows
             interactor.Object.Program = program;
             interactor.Object.GotoAddress();
 
-            Assert.AreEqual("0x01020304", interactor.Object.Control.ToolBarAddressTextbox.Text);
+            Assert.AreEqual("0x01020304<p32>", interactor.Object.Control.ToolBarAddressTextbox.Text);
         }
 
         private void Given_Architecture()

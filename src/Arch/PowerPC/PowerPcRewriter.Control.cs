@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,7 +35,7 @@ namespace Reko.Arch.PowerPC
     {
         private void RewriteB()
         {
-            var dst = RewriteOperand(instr.op1);
+            var dst = RewriteOperand(instr.Operands[0]);
             m.Goto(dst);
         }
 
@@ -51,12 +51,12 @@ namespace Reko.Arch.PowerPC
 
         private void RewriteBl()
         {
-            var dst = RewriteOperand(instr.op1);
+            var dst = RewriteOperand(instr.Operands[0]);
             var addrDst = dst as Address;
             if (addrDst != null && instr.Address.ToLinear() + 4 == addrDst.ToLinear())
             {
                 // PowerPC idiom to get the current instruction pointer in the lr register
-                rtlc = InstrClass.Linear;
+                iclass = InstrClass.Linear;
                 m.Assign(binder.EnsureRegister(arch.lr), addrDst);
             }
             else
@@ -72,11 +72,11 @@ namespace Reko.Arch.PowerPC
 
         private void RewriteBranch(bool updateLinkregister, bool toLinkRegister, ConditionCode cc)
         {
-            var ccrOp = instr.op1 as RegisterOperand;
             Expression cr;
+            var ccrOp = instr.Operands[0] as RegisterOperand;
             if (ccrOp != null)
             {
-                cr = RewriteOperand(instr.op1);
+                cr = RewriteOperand(instr.Operands[0]);
             }
             else 
             {
@@ -100,7 +100,7 @@ namespace Reko.Arch.PowerPC
             }
             else
             {
-                var dst = RewriteOperand(ccrOp != null ? instr.op2 : instr.op1);
+                var dst = RewriteOperand(ccrOp != null ? instr.Operands[1] : instr.Operands[0]);
                 if (updateLinkregister)
                 {
                     m.BranchInMiddleOfInstruction(
@@ -140,7 +140,7 @@ namespace Reko.Arch.PowerPC
 
             Expression cond = decOp(ctr, Constant.Zero(ctr.DataType));
 
-            if (instr.op1 is ConditionOperand ccOp)
+            if (instr.Operands[0] is ConditionOperand ccOp)
             {
                 Expression test = m.Test(
                     CcFromOperand(ccOp),
@@ -148,11 +148,11 @@ namespace Reko.Arch.PowerPC
                 if (!ifSet)
                     test = test.Invert();
                 cond = m.Cand(cond, test);
-                dest = RewriteOperand(instr.op2);
+                dest = RewriteOperand(instr.Operands[1]);
             }
             else
             {
-                dest = RewriteOperand(instr.op1);
+                dest = RewriteOperand(instr.Operands[0]);
             }
             
             m.Assign(ctr, m.ISub(ctr, 1));
@@ -176,39 +176,151 @@ namespace Reko.Arch.PowerPC
         private void RewriteBranch(bool linkRegister, Expression destination)
         {
             var ctr = binder.EnsureRegister(arch.ctr);
-            var bo = ((Constant)RewriteOperand(instr.op1)).ToByte();
+            var bo = ((Constant) RewriteOperand(instr.Operands[0])).ToByte();
+            var bi = ((Constant) RewriteOperand(instr.Operands[1])).ToByte();
             switch (bo)
             {
             case 0x00:
-            case 0x01: throw new NotImplementedException("dec ctr");
+            case 0x01:
+                // throw new NotImplementedException("dec ctr");
+                EmitUnitTest();
+                iclass = InstrClass.Invalid;
+                m.Invalid();
+                break;
             case 0x02:
-            case 0x03: throw new NotImplementedException("dec ctr");
+            case 0x03:
+                // throw new NotImplementedException("dec ctr");
+                EmitUnitTest();
+                iclass = InstrClass.Invalid;
+                m.Invalid();
+                break;
             case 0x04:
             case 0x05:
             case 0x06:
-            case 0x07: throw new NotImplementedException("condition false");
+            case 0x07:
+                // Bit 0 = LT
+                // Bit 1 = GT
+                // Bit 2 = EQ
+                // Bit 3 = SO
+                ConditionCode cc;
+                switch (bi)
+                {
+                // Fixed arithmetic flags.
+                case 0: cc = ConditionCode.GE; break;
+                case 1: cc = ConditionCode.LE; break;
+                case 2: cc = ConditionCode.NE; break;
+                case 3: cc = ConditionCode.NO; break;
+                // Floating point flags.
+                case 4: cc = ConditionCode.GE; break;
+                case 5: cc = ConditionCode.LE; break;
+                case 6: cc = ConditionCode.NE; break;
+                case 7: cc = ConditionCode.NO; break;
+                default:
+                    EmitUnitTest();
+                    iclass = InstrClass.Invalid;
+                    m.Invalid();
+                    return;
+                }
+                EmitBranch(destination, bi, cc);
+                break;
             case 0x08:
-            case 0x09: throw new NotImplementedException("dec ctr; condition false");
+            case 0x09:
+                throw new NotImplementedException("dec ctr; condition false");
             case 0x0A:
-            case 0x0B: throw new NotImplementedException("dec ctr; condition false");
+            case 0x0B:
+                {
+                    if (destination is Address addr)
+                    {
+                        //$TODO implement this
+                        EmitUnitTest();
+                        iclass = InstrClass.Invalid;
+                        m.Invalid();
+                    }
+                    else
+                    {
+                        iclass = InstrClass.Invalid;
+                        m.Invalid();
+                    }
+                }
+                break;
             case 0x0C:
             case 0x0D:
             case 0x0E:
-            case 0x0F: throw new NotImplementedException("condition true");
+            case 0x0F:
+                switch (bi)
+                {
+                // Fixed arithmetic flags.
+                case 0: cc = ConditionCode.LT; break;
+                case 1: cc = ConditionCode.GT; break;
+                case 2: cc = ConditionCode.EQ; break;
+                case 3: cc = ConditionCode.OV; break;
+                // Floating point flags
+                case 4: cc = ConditionCode.LT; break;
+                case 5: cc = ConditionCode.GT; break;
+                case 6: cc = ConditionCode.EQ; break;
+                case 7: cc = ConditionCode.OV; break;
+                default:
+                    EmitUnitTest();
+                    iclass = InstrClass.Invalid;
+                    m.Invalid();
+                    return;
+                }
+                EmitBranch(destination, bi, cc);
+                break;
             case 0x10:
             case 0x11:
             case 0x18:
-            case 0x19: throw new NotImplementedException("condition true");
+            case 0x19:
+                {
+                    if (destination is Address addr)
+                    {
+                        m.Assign(ctr, m.ISub(ctr, 1));
+                        m.Branch(m.Eq0(ctr), addr);
+                    }
+                    else
+                    {
+                        iclass = InstrClass.Invalid;
+                        m.Invalid();
+                    }
+                }
+                break;
             case 0x12:
             case 0x13:
             case 0x1A:
-            case 0x1B: throw new NotImplementedException("condition true");
+            case 0x1B:
+                {
+                    if (destination is Address addr)
+                    {
+                        m.Assign(ctr, m.ISub(ctr, 1));
+                        m.Branch(m.Eq0(ctr), addr);
+                    }
+                    else
+                    {
+                        iclass = InstrClass.Invalid;
+                        m.Invalid();
+                    }
+                }
+                break;
             default:
                 if (linkRegister)
                     m.Call(ctr, 0);
                 else
                     m.Goto(ctr);
                 return;
+            }
+        }
+
+        private void EmitBranch(Expression destination, byte bi, ConditionCode cc)
+        {
+            var flag = binder.EnsureFlagGroup(arch.GetFlagGroup(arch.cr, 1u << bi));
+            if (destination is Address addrDst)
+            {
+                m.Branch(m.Test(cc, flag), addrDst);
+            }
+            else
+            {
+                m.BranchInMiddleOfInstruction(m.Test(cc.Invert(), flag), instr.Address + instr.Length, InstrClass.ConditionalTransfer);
+                m.Goto(destination);
             }
         }
 

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,11 +28,11 @@ namespace Reko.Core.Code
 	/// </summary>
 	public class Assignment : Instruction
 	{
-		public Assignment(Identifier dst, Expression src)
-		{
-            this.Dst = dst ?? throw new ArgumentNullException(nameof(dst), "Argument must have a non-null value.");
-			this.Src = src;
-		}
+        public Assignment(Identifier dst, Expression src)
+        {
+            this.Dst = dst ?? throw new ArgumentNullException(nameof(dst));
+            this.Src = src ?? throw new ArgumentNullException(nameof(src));
+        }
 
         public Identifier Dst { get; set; }
         public Expression Src { get; set; }
@@ -62,9 +62,9 @@ namespace Reko.Core.Code
 	{
 		public Store(Expression dst, Expression src)
 		{
-			Dst = dst;
-			Src = src;
-		}
+            Dst = dst ?? throw new ArgumentNullException(nameof(dst));
+			Src = src ?? throw new ArgumentNullException(nameof(src));
+        }
 
         public Expression Dst { get; set; }
 

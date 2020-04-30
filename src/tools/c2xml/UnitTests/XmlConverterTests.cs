@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,27 +50,7 @@ namespace Reko.Tools.C2Xml.UnitTests
                 throw new NotImplementedException();
             }
 
-            public override EndianImageReader CreateImageReader(MemoryArea img, ulong off)
-            {
-                throw new NotImplementedException();
-            }
-
-            public override EndianImageReader CreateImageReader(MemoryArea image, Address addrBegin, Address addrEnd)
-            {
-                throw new NotImplementedException();
-            }
-
-            public override EndianImageReader CreateImageReader(MemoryArea img, Address addr)
-            {
-                throw new NotImplementedException();
-            }
-
-            public override ImageWriter CreateImageWriter()
-            {
-                throw new NotImplementedException();
-            }
-
-            public override ImageWriter CreateImageWriter(MemoryArea img, Address addr)
+            public override IProcessorEmulator CreateEmulator(SegmentMap segmentMap, IPlatformEmulator envEmulator)
             {
                 throw new NotImplementedException();
             }
@@ -106,7 +86,7 @@ namespace Reko.Tools.C2Xml.UnitTests
                 throw new NotImplementedException();
             }
 
-            public override FlagGroupStorage GetFlagGroup(uint grf)
+            public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)
             {
                 throw new NotImplementedException();
             }
@@ -116,7 +96,7 @@ namespace Reko.Tools.C2Xml.UnitTests
                 throw new NotImplementedException();
             }
 
-            public override RegisterStorage GetRegister(int i)
+            public override RegisterStorage GetRegister(StorageDomain domain, BitRange bitRange)
             {
                 throw new NotImplementedException();
             }
@@ -126,12 +106,12 @@ namespace Reko.Tools.C2Xml.UnitTests
                 throw new NotImplementedException();
             }
 
-            public override string GrfToString(uint grf)
+            public override string GrfToString(RegisterStorage flagRegister, string prefix, uint grf)
             {
                 throw new NotImplementedException();
             }
 
-            public override Address MakeAddressFromConstant(Constant c)
+            public override Address MakeAddressFromConstant(Constant c, bool codeAlign)
             {
                 throw new NotImplementedException();
             }
@@ -151,21 +131,15 @@ namespace Reko.Tools.C2Xml.UnitTests
                 throw new NotImplementedException();
             }
 
-            public override int? GetOpcodeNumber(string name)
+            public override int? GetMnemonicNumber(string name)
             {
                 throw new NotImplementedException();
             }
 
-            public override SortedList<string, int> GetOpcodeNames()
+            public override SortedList<string, int> GetMnemonicNames()
             {
                 throw new NotImplementedException();
             }
-
-            public override bool TryRead(MemoryArea mem, Address addr, PrimitiveType dt, out Constant value)
-            {
-                return mem.TryReadLe(addr, dt, out value);
-            }
-
         }
 
         void RunTest(string c_code, string expectedXml)
@@ -223,7 +197,7 @@ namespace Reko.Tools.C2Xml.UnitTests
 @"<?xml version=""1.0"" encoding=""utf-16""?>
 <library xmlns=""http://schemata.jklnet.org/Decompiler"">
   <Types>
-    <struct name=""tagPoint"">
+    <struct name=""tagPoint"" size=""8"">
       <field offset=""0"" name=""x"">
         <prim domain=""SignedInt"" size=""4"" />
       </field>
@@ -243,7 +217,7 @@ namespace Reko.Tools.C2Xml.UnitTests
 @"<?xml version=""1.0"" encoding=""utf-16""?>
 <library xmlns=""http://schemata.jklnet.org/Decompiler"">
   <Types>
-    <struct name=""link"">
+    <struct name=""link"" size=""4"">
       <field offset=""0"" name=""next"">
         <ptr size=""4"">
           <struct name=""link"" />
@@ -303,7 +277,7 @@ namespace Reko.Tools.C2Xml.UnitTests
     <typedef name=""FOO"">
       <struct name=""foo"" />
     </typedef>
-    <struct name=""foo"">
+    <struct name=""foo"" size=""12"">
       <field offset=""0"" name=""x"">
         <prim domain=""SignedInt"" size=""4"" />
       </field>
@@ -330,7 +304,7 @@ namespace Reko.Tools.C2Xml.UnitTests
 @"<?xml version=""1.0"" encoding=""utf-16""?>
 <library xmlns=""http://schemata.jklnet.org/Decompiler"">
   <Types>
-    <struct name=""foo"">
+    <struct name=""foo"" size=""4"">
       <field offset=""0"" name=""x"">
         <prim domain=""SignedInt"" size=""4"" />
       </field>
@@ -365,7 +339,7 @@ namespace Reko.Tools.C2Xml.UnitTests
 @"<?xml version=""1.0"" encoding=""utf-16""?>
 <library xmlns=""http://schemata.jklnet.org/Decompiler"">
   <Types>
-    <union name=""u"">
+    <union name=""u"" size=""4"">
       <alt name=""i"">
         <prim domain=""SignedInt"" size=""4"" />
       </alt>
@@ -378,7 +352,7 @@ namespace Reko.Tools.C2Xml.UnitTests
         <prim domain=""Real"" size=""4"" />
       </alt>
     </union>
-    <struct name=""tagVariant"">
+    <struct name=""tagVariant"" size=""8"">
       <field offset=""0"" name=""type"">
         <prim domain=""SignedInt"" size=""4"" />
       </field>
@@ -451,7 +425,7 @@ namespace Reko.Tools.C2Xml.UnitTests
     <typedef name=""byte"">
       <prim domain=""UnsignedInt"" size=""1"" />
     </typedef>
-    <struct name=""header"">
+    <struct name=""header"" size=""20"">
       <field offset=""0"" name=""signature"">
         <arr length=""16"">
           <type>byte</type>
@@ -524,12 +498,12 @@ namespace Reko.Tools.C2Xml.UnitTests
                 @"<?xml version=""1.0"" encoding=""utf-16""?>
 <library xmlns=""http://schemata.jklnet.org/Decompiler"">
   <Types>
-    <struct name=""struct_0"">
+    <struct name=""struct_0"" size=""4"">
       <field offset=""0"" name=""x"">
         <prim domain=""SignedInt"" size=""4"" />
       </field>
     </struct>
-    <struct name=""Foo"">
+    <struct name=""Foo"" size=""4"">
       <field offset=""0"" name=""a"">
         <struct name=""struct_0"" />
       </field>
@@ -622,7 +596,7 @@ namespace Reko.Tools.C2Xml.UnitTests
             var sExp = @"<?xml version=""1.0"" encoding=""utf-16""?>
 <library xmlns=""http://schemata.jklnet.org/Decompiler"">
   <Types>
-    <struct name=""struct_0"">
+    <struct name=""struct_0"" size=""4"">
       <field offset=""0"" name=""bar"">
         <prim domain=""SignedInt"" size=""4"" />
       </field>
@@ -836,7 +810,7 @@ namespace Reko.Tools.C2Xml.UnitTests
             var sExp = @"<?xml version=""1.0"" encoding=""utf-16""?>
 <library xmlns=""http://schemata.jklnet.org/Decompiler"">
   <Types>
-    <struct name=""foo"">
+    <struct name=""foo"" size=""4"">
       <field offset=""0"" name=""x"">
         <prim domain=""SignedInt"" size=""4"" />
       </field>
@@ -1004,6 +978,45 @@ namespace Reko.Tools.C2Xml.UnitTests
 </library>";
             RunTest("typedef void _near * PVOID;", sExp);
         }
+
+        [Test]
+        public void C2X_far_ptr_to_pascal_fn()
+        {
+            var sExp = @"<?xml version=""1.0"" encoding=""utf-16""?>
+<library xmlns=""http://schemata.jklnet.org/Decompiler"">
+  <Types>
+    <typedef name=""PFN"">
+      <ptr size=""4"">
+        <fn convention=""__pascal"">
+          <return>
+            <prim domain=""SignedInt"" size=""4"" />
+          </return>
+        </fn>
+      </ptr>
+    </typedef>
+  </Types>
+</library>";
+            RunTest("typedef int (__pascal __far  *PFN)();", sExp);
+        }
+
+        [Test]
+        public void C2X_loadds()
+        {
+            var sExp = @"<?xml version=""1.0"" encoding=""utf-16""?>
+<library xmlns=""http://schemata.jklnet.org/Decompiler"">
+  <Types />
+  <procedure name=""fn"">
+    <signature convention=""__pascal"">
+      <return>
+        <prim domain=""SignedInt"" size=""4"" />
+      </return>
+    </signature>
+  </procedure>
+</library>";
+            RunTest("int __pascal __loadds fn();", sExp);
+
+        }
     }
 }
+
 #endif

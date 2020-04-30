@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -43,6 +43,11 @@ namespace Reko.Environments.MacOS.Classic
             encoding = new MacOsRomanEncoding();
         }
 
+        public override IPlatformEmulator CreateEmulator(SegmentMap segmentMap, Dictionary<Address, ImportReference> importReferences)
+        {
+            throw new NotImplementedException();
+        }
+
         public override HashSet<RegisterStorage> CreateImplicitArgumentRegisters()
         {
             return new HashSet<RegisterStorage> { Registers.a5, Registers.a7 };
@@ -65,7 +70,7 @@ namespace Reko.Environments.MacOS.Classic
                 return new M68kCallingConvention((M68kArchitecture)this.Architecture);
         }
 
-        public override SystemService FindService(int vector, ProcessorState state)
+        public override SystemService FindService(int vector, ProcessorState state, SegmentMap segmentMap)
         {
             EnsureTypeLibraries(PlatformIdentifier);
             vector &= 0xFFFF;

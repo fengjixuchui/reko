@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -48,10 +48,9 @@ namespace Reko.UserInterfaces.WindowsForms.Forms
         void dlg_Load(object sender, EventArgs e)
         {
             var asms = dlg.Services.RequireService<IConfigurationService>()
-                .GetAssemblers()
-                .OfType<AssemblerDefinition>()
+                .GetArchitectures()
                 .Select(elem => new ListOption { Text = elem.Description, Value = elem }).ToList();
-            dlg.AssemblerList.DataSource = asms;
+            dlg.ArchitectureList.DataSource = asms;
         }
 
         void BrowseButton_Click(object sender, EventArgs e)

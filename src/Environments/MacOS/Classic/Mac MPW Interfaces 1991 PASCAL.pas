@@ -428,8 +428,8 @@ TYPE
 ID = LONGINT;
 MarkerIdType = INTEGER;
 ChunkHeader = RECORD
-ckID: ID;
-ckSize: LONGINT;
+	ckID: ID;
+	ckSize: LONGINT;
 END;
 ContainerChunk = RECORD
 ckID: ID;
@@ -3365,35 +3365,33 @@ crmSerialDevice = 1;
 { version of the CRMSerialRecord below }
 curCRMSerRecVers = 1;
 TYPE
-{ Maintains compatibility w/ apps & tools that expect an old style icon
-CRMIconPtr = ^CRMIconRecord;
-CRMIconHandle = ^CRMIconPtr;
-CRMIconRecord = RECORD
-oldIcon: ARRAY [0..31] OF LONGINT;
-{ ICN#
-}
-oldMask: ARRAY [0..31] OF LONGINT;
-theSuite: Handle;
-{ Handle to an IconSuite
-}
-reserved: LONGINT;
+	{ Maintains compatibility w/ apps & tools that expect an old style icon }
+	CRMIconPtr = ^CRMIconRecord;
+	CRMIconHandle = ^CRMIconPtr;
+	CRMIconRecord = RECORD
+	oldIcon: ARRAY [0..31] OF LONGINT;
+	{ ICN#
+	}
+	oldMask: ARRAY [0..31] OF LONGINT;
+	theSuite: Handle;
+	{ Handle to an IconSuite
+	}
+	reserved: LONGINT;
 END;
 
-}
-
 
 
 
 CRMSerialPtr = ^CRMSerialRecord;
 CRMSerialRecord = RECORD
-version: INTEGER;
-inputDriverName: StringHandle;
-outputDriverName: StringHandle;
-name: StringHandle;
-deviceIcon: CRMIconHandle;
-ratedSpeed: LONGINT;
-maxSpeed: LONGINT;
-reserved: LONGINT;
+	version: INTEGER;
+	inputDriverName: StringHandle;
+	outputDriverName: StringHandle;
+	name: StringHandle;
+	deviceIcon: CRMIconHandle;
+	ratedSpeed: LONGINT;
+	maxSpeed: LONGINT;
+	reserved: LONGINT;
 END;
 
 {$ENDC} { UsingCRMSerialDevices }
@@ -7870,6 +7868,7 @@ INLINE $205F,$A045,$3E80;
 FUNCTION PBFlushFileAsync(paramBlock: ParmBlkPtr): OSErr;
 INLINE $205F,$A445,$3E80;
 FUNCTION PBMountVol(paramBlock: ParmBlkPtr): OSErr;
+	inline $A00F;		{ added by @uxmal; needs verification }
 FUNCTION PBUnmountVol(paramBlock: ParmBlkPtr): OSErr;
 FUNCTION PBEject(paramBlock: ParmBlkPtr): OSErr;
 FUNCTION PBOffLine(paramBlock: ParmBlkPtr): OSErr;
@@ -11166,6 +11165,7 @@ FUNCTION GetHandleSize(h: Handle): Size;
   	INLINE $205F, $A025, $3E80;				{ added by @uxmal; needs verification}
 	
 PROCEDURE SetHandleSize(h: Handle;newSize: Size);
+	inline $A024;							{ added by @uxmal; needs verification}
 PROCEDURE EmptyHandle(h: Handle);
 INLINE $205F,$A02B;
 PROCEDURE ReallocHandle(h: Handle;byteCount: Size);
@@ -12459,6 +12459,7 @@ PROCEDURE Date2Secs(d: DateTimeRec;VAR secs: LONGINT);
 PROCEDURE Secs2Date(secs: LONGINT;VAR d: DateTimeRec);
   	INLINE $201F, $225F, $A9C6;			{added by @uxmal; needs verification}
 PROCEDURE Delay(numTicks: LONGINT;VAR finalTicks: LONGINT);
+	inline $A03B;						{added by @uxmal; needs verification}
 FUNCTION GetTrapAddress(trapNum: INTEGER): LONGINT;
   	INLINE $201F, $A146, $2E88;			{added by @uxmal; needs verification}
 PROCEDURE SetTrapAddress(trapAddr: LONGINT;trapNum: INTEGER);
@@ -17001,17 +17002,13 @@ Ptr;
 fCodeAddr: Ptr);
 
 { ptr to jt entry }
+
 { code address w/i jt entry (returned) }
 
 RTSetSegLoadParam:
-(fUserHdlr:
-fOldUserHdlr:
-
-{ ptr to user handler }
-{ ptr to old user handler (returned) }
-
-Ptr;
-Ptr);
+(fUserHdlr:		Ptr;	{ ptr to user handler }
+ fOldUserHdlr:	Ptr		{ ptr to old user handler (returned) }
+);
 
 END;
 RTPBPtr = ^RTPB;
@@ -21976,7 +21973,7 @@ tmSearchNoDiacrit = $0100; {These are only for TMSearchTypes}
 tmSearchNoCase = $0200;
 {These are only for TMSearchTypes}
 TYPE
-{ TMSelTypes & TMSearchTypes
+{ TMSelTypes & TMSearchTypes }
 TMSearchTypes = INTEGER;
 
 TMSelTypes = INTEGER;
@@ -21987,16 +21984,11 @@ cursorGraphics = 2;
 TYPE
 TMCursorTypes = INTEGER;
 
-CONST
-{ TMTermTypes }
+CONST { TMTermTypes }
 tmTextTerminal = $0001;
 tmGraphicsTerminal = $0002;
-TYPE
-{ TMTermTypes
-}
-TMTermTypes = INTEGER;
-
-}
+TYPE { TMTermTypes }
+	TMTermTypes = INTEGER;
 
 TermDataBlockPtr = ^TermDataBlock;
 TermDataBlockH = ^TermDataBlockPtr;
@@ -24044,15 +24036,15 @@ h: INTEGER);
 END;
 RectPtr = ^Rect;
 Rect = RECORD
-CASE INTEGER OF
-1:
-(top: INTEGER;
-left: INTEGER;
-bottom: INTEGER;
-right: INTEGER);
-2:
-(topLeft: Point;
-botRight: Point);
+    CASE INTEGER OF
+    1:
+        (top: INTEGER;
+         left: INTEGER;
+         bottom: INTEGER;
+         right: INTEGER);
+    2:
+       (topLeft: Point;
+        botRight: Point);
 END;
 
 PROCEDURE Debugger;

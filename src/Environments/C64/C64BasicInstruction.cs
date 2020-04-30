@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,16 +45,10 @@ namespace Reko.Environments.C64
             this.InstructionClass = InstrClass.Linear;
         }
 
-        public override int OpcodeAsInteger
+        public override int MnemonicAsInteger
         {
             get { throw new NotImplementedException(); }
         }
-
-        public override MachineOperand GetOperand(int i)
-        {
-            return null;
-        }
-
 
         public override void Render(MachineInstructionWriter writer, MachineInstructionWriterOptions options)
         {

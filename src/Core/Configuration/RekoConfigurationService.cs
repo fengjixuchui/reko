@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Configuration;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -33,7 +34,7 @@ namespace Reko.Core.Configuration
 {
     /// <summary>
     /// Client code uses this service to access information stored 
-    /// in the app.config file.
+    /// in the reko.config file.
     /// </summary>
     public interface IConfigurationService
     {
@@ -41,13 +42,11 @@ namespace Reko.Core.Configuration
          ICollection<ArchitectureDefinition> GetArchitectures();
          ICollection<PlatformDefinition> GetEnvironments();
          ICollection<SignatureFileDefinition> GetSignatureFiles();
-         ICollection<AssemblerDefinition> GetAssemblers();
          ICollection<RawFileDefinition> GetRawFiles();
 
          PlatformDefinition GetEnvironment(string envName);
          IProcessorArchitecture GetArchitecture(string archLabel);
          ICollection<SymbolSourceDefinition> GetSymbolSources();
-         Assembler GetAssembler(string assemblerName);
          RawFileDefinition GetRawFile(string rawFileFormat);
 
          IEnumerable<UiStyleDefinition> GetDefaultPreferences ();
@@ -68,7 +67,6 @@ namespace Reko.Core.Configuration
         private readonly List<SignatureFileDefinition> sigFiles;
         private readonly List<ArchitectureDefinition> architectures;
         private readonly List<PlatformDefinition> opEnvs;
-        private readonly List<AssemblerDefinition> asms;
         private readonly List<SymbolSourceDefinition> symSources;
         private readonly List<RawFileDefinition> rawFiles;
         private readonly UiPreferencesConfiguration uiPreferences;
@@ -79,7 +77,6 @@ namespace Reko.Core.Configuration
             this.sigFiles = LoadCollection(config.SignatureFiles, LoadSignatureFile);
             this.architectures = LoadCollection(config.Architectures, LoadArchitecture);
             this.opEnvs = LoadCollection(config.Environments, LoadEnvironment);
-            this.asms = LoadCollection(config.Assemblers, LoadAssembler);
             this.symSources = LoadCollection(config.SymbolSources, LoadSymbolSource);
             this.rawFiles = LoadCollection(config.RawFiles, LoadRawFile);
             this.uiPreferences = new UiPreferencesConfiguration();
@@ -96,7 +93,7 @@ namespace Reko.Core.Configuration
             {
                 Argument = l.Argument,
                 Extension = l.Extension,
-                Offset = l.Offset,
+                Offset = ConvertNumber(l.Offset),
                 Label = l.Label,
                 MagicNumber = l.MagicNumber,
                 TypeName = l.Type
@@ -145,6 +142,7 @@ namespace Reko.Core.Configuration
                 Description = env.Description,
                 MemoryMapFile = env.MemoryMap,
                 TypeName = env.Type,
+                CaseInsensitive = env.CaseInsensitive,
                 Heuristics = env.Heuristics,
                 TypeLibraries = LoadCollection(env.TypeLibraries, LoadTypeLibraryReference),
                 CharacteristicsLibraries = LoadCollection(env.Characteristics, LoadTypeLibraryReference),
@@ -155,16 +153,6 @@ namespace Reko.Core.Configuration
                         .ToArray(),
                         StringComparer.OrdinalIgnoreCase)
                     : new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
-            };
-        }
-
-        private AssemblerDefinition LoadAssembler(Assembler_v1 sAsm)
-        {
-            return new AssemblerDefinition
-            {
-                Description = sAsm.Description,
-                Name = sAsm.Name,
-                TypeName = sAsm.Type,
             };
         }
 
@@ -274,16 +262,12 @@ namespace Reko.Core.Configuration
         /// <returns></returns>
         public static RekoConfigurationService Load()
         {
-            var configFileName = ConfigurationManager.AppSettings["RekoConfiguration"];
-            if (configFileName == null)
-                throw new ApplicationException("Missing app setting 'RekoConfiguration' in configuration file.");
-            return Load(configFileName);
+            return Load("reko.config");
         }
 
         public static RekoConfigurationService Load(string configFileName)
         {
-            var appConfig = AppDomain.CurrentDomain.SetupInformation.ConfigurationFile;
-            var appDir = Path.GetDirectoryName(appConfig);
+            var appDir = AppDomain.CurrentDomain.BaseDirectory;
             configFileName = Path.Combine(appDir, configFileName);
 
             using (var stm = File.Open(configFileName, FileMode.Open, FileAccess.Read, FileShare.Read))
@@ -293,6 +277,33 @@ namespace Reko.Core.Configuration
                 return new RekoConfigurationService(sConfig);
             }
         }
+
+        private long ConvertNumber(string sNumber)
+        {
+            if (string.IsNullOrEmpty(sNumber))
+                return 0;
+            sNumber = sNumber.Trim();
+            if (sNumber.StartsWith("0x", StringComparison.InvariantCultureIgnoreCase))
+            {
+                if (Int64.TryParse(
+                    sNumber.Substring(2),
+                    NumberStyles.HexNumber,
+                    CultureInfo.InvariantCulture,
+                    out long offset))
+                {
+                    return offset;
+                }
+            }
+            else
+            {
+                if (Int64.TryParse(sNumber, out long offset))
+                {
+                    return offset;
+                }
+            }
+            return 0;
+        }
+
 
         public virtual ICollection<LoaderDefinition> GetImageLoaders()
         {
@@ -319,11 +330,6 @@ namespace Reko.Core.Configuration
             return opEnvs;
         }
 
-        public virtual ICollection<AssemblerDefinition> GetAssemblers()
-        {
-            return asms;
-        }
-
         public virtual ICollection<RawFileDefinition> GetRawFiles()
         {
             return rawFiles;
@@ -342,16 +348,6 @@ namespace Reko.Core.Configuration
             var arch = (IProcessorArchitecture)Activator.CreateInstance(t, elem.Name);
             arch.Description = elem.Description;
             return arch;
-        }
-
-        public virtual Assembler GetAssembler(string asmLabel)
-        {
-            var elem = GetAssemblers()
-                .Where(e => e.Name == asmLabel).SingleOrDefault();
-            if (elem == null)
-                return null;
-            Type t = Type.GetType(elem.TypeName, true);
-            return (Assembler)t.GetConstructor(Type.EmptyTypes).Invoke(null);
         }
 
         public PlatformDefinition GetEnvironment(string envName)

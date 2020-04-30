@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -55,7 +55,7 @@ namespace Reko.UnitTests.Analysis
         private void AssertProcedureCode(string expected)
         {
             ProcedureCodeVerifier.AssertCode(m.Ssa.Procedure, expected);
-        }
+            }
 
         [Test]
         public void SsamCallBypass()
@@ -79,7 +79,7 @@ namespace Reko.UnitTests.Analysis
             var sExp = @"
 sp_1 = fp
 call a (retsize: 4;)
-	uses: a,sp_1
+	uses: a:a,r63:sp_1
 sp_5 = sp_1
 ";
             AssertProcedureCode(sExp);

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -22,14 +22,12 @@ namespace Reko.Environments.Windows
 			get { return ""; }
 		}
 
-		public override HashSet<RegisterStorage> CreateImplicitArgumentRegisters()
-		{
-			return new HashSet<RegisterStorage>
-			{
-			};
-		}
+        public override IPlatformEmulator CreateEmulator(SegmentMap segmentMap, Dictionary<Address, ImportReference> importReferences)
+        {
+            throw new NotImplementedException();
+        }
 
-		public override HashSet<RegisterStorage> CreateTrashedRegisters()
+        public override HashSet<RegisterStorage> CreateTrashedRegisters()
 		{
 			return new HashSet<RegisterStorage>();
 		}
@@ -46,13 +44,13 @@ namespace Reko.Environments.Windows
 			return null;
 		}
 
-		public override SystemService FindService(int vector, ProcessorState state)
+		public override SystemService FindService(int vector, ProcessorState state, SegmentMap segmentMap)
 		{
 			//throw new NotImplementedException("INT services are not supported by " + this.GetType().Name);
 			return null;
 		}
 
-		public override ProcedureBase GetTrampolineDestination(IEnumerable<RtlInstructionCluster> rtls, IRewriterHost host)
+		public override ProcedureBase GetTrampolineDestination(Address addrInstr, IEnumerable<RtlInstruction> rtls, IRewriterHost host)
 		{
 			return null;
 		}

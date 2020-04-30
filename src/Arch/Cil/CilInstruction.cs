@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,23 +36,11 @@ namespace Reko.Arch.Cil
         };
 
         public OpCode Opcode { get; set; }
-        public override int OpcodeAsInteger { get { return (int)Opcode.Value; } }
-
-        public override MachineOperand GetOperand(int i)
-        {
-            throw new NotImplementedException();
-        }
+        public override int MnemonicAsInteger { get { return (int)Opcode.Value; } }
 
         public override void Render(MachineInstructionWriter writer, MachineInstructionWriterOptions options)
         {
-            try
-            {
-                writer.WriteOpcode(mpopcodetostring[Opcode]);
-            }
-            catch
-            {
-                throw new NotImplementedException("Lolwut: " + Opcode);
-            }
+            writer.WriteMnemonic(mpopcodetostring[Opcode]);
         }
 
         public object Operand { get; set; }

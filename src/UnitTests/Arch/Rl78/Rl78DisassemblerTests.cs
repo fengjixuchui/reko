@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2018 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,11 +45,6 @@ namespace Reko.UnitTests.Arch.Rl78
 
         public override Address LoadAddress => addr;
 
-        protected override ImageWriter CreateImageWriter(byte[] bytes)
-        {
-            return new LeImageWriter(bytes);
-        }
-
         private void AssertCode(string sExp, string hexBytes)
         {
             var i = DisassembleHexBytes(hexBytes);
@@ -65,7 +60,7 @@ namespace Reko.UnitTests.Arch.Rl78
         [Test]
         public void Rl78Dis_mov_x_imm()
         {
-            AssertCode("mov\tx,0x42", "50 42");
+            AssertCode("mov\tx,42", "50 42");
         }
 
         [Test]
@@ -95,13 +90,13 @@ namespace Reko.UnitTests.Arch.Rl78
         [Test]
         public void Rl78Dis_mov_psw_imm()
         {
-            AssertCode("mov\t[0FFFFAh],0x42", "CE FA 42");
+            AssertCode("mov\t[0FFFFAh],42", "CE FA 42");
         }
 
         [Test]
         public void Rl78Dis_shr_a_6()
         {
-            AssertCode("shr\ta,0x06", "31 6A");
+            AssertCode("shr\ta,6", "31 6A");
         }
 
         [Test]

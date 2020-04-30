@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -52,14 +52,9 @@ namespace Reko.Arch.Arm.AArch64
             nInstr = null;
         }
 
-        public override int OpcodeAsInteger
+        public override int MnemonicAsInteger
         {
-            get { return info.Opcode; }
-        }
-
-        public override MachineOperand GetOperand(int i)
-        {
-            throw new NotSupportedException();
+            get { return info.Mnemonic; }
         }
 
         public override void Render(MachineInstructionWriter writer, MachineInstructionWriterOptions options)
@@ -70,54 +65,48 @@ namespace Reko.Arch.Arm.AArch64
 
     public class AArch64Instruction : MachineInstruction
     {
-        public Opcode opcode;
-        public MachineOperand[] ops;
-        public Opcode shiftCode;
+        public Mnemonic Mnemonic;
+        public Mnemonic shiftCode;
         public MachineOperand shiftAmount;
         public VectorData vectorData;
 
-        public override int OpcodeAsInteger => (int)opcode;
-
-        public override MachineOperand GetOperand(int i)
-        {
-            throw new NotImplementedException();
-        }
+        public override int MnemonicAsInteger => (int)Mnemonic;
 
         public override void Render(MachineInstructionWriter writer, MachineInstructionWriterOptions options)
         {
-            int iOp = WriteOpcode(writer);
-            if (ops == null || ops.Length == 0)
+            int iOp = WriteMnemonic(writer);
+            if (Operands == null || Operands.Length == 0)
                 return;
             writer.Tab();
-            RenderOperand(ops[iOp++], writer, options);
-            for (; iOp < ops.Length; ++iOp)
+            RenderOperand(Operands[iOp++], writer, options);
+            for (; iOp < Operands.Length; ++iOp)
             {
-                var op = ops[iOp];
+                var op = Operands[iOp];
                 writer.WriteChar(',');
                 RenderOperand(op, writer, options);
             }
-            if (this.shiftCode == Opcode.Invalid)
+            if (this.shiftCode == Mnemonic.Invalid)
                 return;
-            if (shiftCode == Opcode.lsl && (shiftAmount is ImmediateOperand imm && imm.Value.IsIntegerZero))
+            if (shiftCode == Mnemonic.lsl && (shiftAmount is ImmediateOperand imm && imm.Value.IsIntegerZero))
                 return;
             writer.WriteChar(',');
-            writer.WriteOpcode(shiftCode.ToString());
+            writer.WriteMnemonic(shiftCode.ToString());
             writer.WriteChar(' ');
             RenderOperand(shiftAmount, writer, options);
         }
 
-        private int WriteOpcode(MachineInstructionWriter writer)
+        private int WriteMnemonic(MachineInstructionWriter writer)
         {
-            if (opcode == Opcode.b && ops[0] is ConditionOperand cop)
+            if (Mnemonic == Mnemonic.b && Operands[0] is ConditionOperand cop)
             {
-                writer.WriteOpcode($"b.{cop.Condition.ToString().ToLower()}");
+                writer.WriteMnemonic($"b.{cop.Condition.ToString().ToLower()}");
                 return 1;
             }
-            writer.WriteOpcode(opcode.ToString());
+            writer.WriteMnemonic(Mnemonic.ToString());
             return 0;
         }
 
-        private void RenderOperand(MachineOperand op, MachineInstructionWriter writer, MachineInstructionWriterOptions options)
+        protected override void RenderOperand(MachineOperand op, MachineInstructionWriter writer, MachineInstructionWriterOptions options)
         {
             switch (op)
             {

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,9 +27,11 @@ namespace Reko.Core.Code
 	/// <summary>
 	/// Base class for rebuilding instructions -- and expressions therein.
 	/// </summary>
-    /// <remarks>Use this class if most of your transformations will be simple copies, but you need to make 
-    /// exceptions for a few types of expressions. If your transformation will affect most or all of the instruction
-    /// and/or expression types, use <code>ExpressionVisitor</code> directly instead.</remarks>
+    /// <remarks>Use this class if most of your transformations will be simple
+    /// copies, but you need to make exceptions for a few types of 
+    /// expressions. If your transformation will affect most or all of the
+    /// instruction and/or expression types, use <code>ExpressionVisitor</code>
+    /// directly instead.</remarks>
 	public class InstructionTransformer : ExpressionVisitor<Expression>
 	{
 		public InstructionTransformer()
@@ -87,12 +89,11 @@ namespace Reko.Core.Code
 
 		public virtual Instruction TransformPhiAssignment(PhiAssignment phi)
 		{
-			for (int i = 0; i < phi.Src.Arguments.Length; ++i)
+            var args = phi.Src.Arguments;
+			for (int i = 0; i < args.Length; ++i)
 			{
-                var value = phi.Src.Arguments[i].Value.Accept(this);
-                phi.Src.Arguments[i] = new PhiArgument(
-                    phi.Src.Arguments[i].Block,
-                    value);
+                var value = args[i].Value.Accept(this);
+                args[i] = new PhiArgument(args[i].Block, value);
 			}
 			phi.Dst = (Identifier) phi.Dst.Accept(this);
 			return phi;

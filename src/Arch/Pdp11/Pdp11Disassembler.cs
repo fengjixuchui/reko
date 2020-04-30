@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,8 +29,12 @@ using System.Text;
 
 namespace Reko.Arch.Pdp11
 {
-    public class Pdp11Disassembler : DisassemblerBase<Pdp11Instruction>
+    using Decoder = Decoder<Pdp11Disassembler, Mnemonic, Pdp11Instruction>;
+
+    public class Pdp11Disassembler : DisassemblerBase<Pdp11Instruction, Mnemonic>
     {
+        private static readonly Decoder[] decoders;
+
         private readonly Pdp11Architecture arch;
         private readonly EndianImageReader rdr;
         private readonly List<MachineOperand> ops;
@@ -46,40 +50,48 @@ namespace Reko.Arch.Pdp11
 
         public override Pdp11Instruction DisassembleInstruction()
         {
-            if (!rdr.IsValid)
-                return null;
             var addr = rdr.Address;
             if (!rdr.TryReadLeUInt16(out ushort opcode))
                 return null;
-            if (addr.ToLinear() == 0x277A)
-                addr.ToString();
             ops.Clear();
             dataWidth = PrimitiveType.Word16;
             var decoder = decoders[(opcode >> 0x0C) & 0x00F];
-            if (decoder != null)
-            {
-                instrCur = decoder.Decode(opcode, this);
-            }
-            else
-            {
-                switch ((opcode >> 0x0C) & 0x007)
-                {
-                case 0: instrCur = NonDoubleOperandInstruction(opcode, this); break;
-                case 7: instrCur = extraDecoders[(opcode >> 0x09) & 7].Decode(opcode, this); break;
-                default: throw new NotImplementedException();
-                }
-            }
+            instrCur = decoder.Decode(opcode, this);
             instrCur.Address = addr;
             instrCur.Length = (int)(rdr.Address - addr);
             return instrCur;
         }
 
+        public override Pdp11Instruction MakeInstruction(InstrClass iclass, Mnemonic mnemonic)
+        {
+            var instr = new Pdp11Instruction
+            {
+                InstructionClass = iclass,
+                Mnemonic = mnemonic,
+                DataWidth = this.dataWidth,
+                Operands = this.ops.ToArray()
+            };
+            return instr;
+        }
+
+        public override Pdp11Instruction CreateInvalidInstruction()
+        {
+            return new Pdp11Instruction
+            {
+                InstructionClass = InstrClass.Invalid,
+                Mnemonic = Mnemonic.illegal,
+                Operands = MachineInstruction.NoOperands
+            };
+        }
+
         #region Mutators
+
         private static bool b(uint uInstr, Pdp11Disassembler dasm)
         {
             dasm.dataWidth = PrimitiveType.Byte;
             return true;
         }
+
         private static bool w(uint uInstr, Pdp11Disassembler dasm)
         {
             dasm.dataWidth = PrimitiveType.Word16;
@@ -88,7 +100,6 @@ namespace Reko.Arch.Pdp11
 
         private static bool E(uint wOpcode, Pdp11Disassembler dasm)
         {
-
             var op = dasm.DecodeOperand(wOpcode);
             if (op == null)
                 return false;
@@ -105,11 +116,16 @@ namespace Reko.Arch.Pdp11
             return true;
         }
 
+        private static bool R0(uint wOpcode, Pdp11Disassembler dasm)
+        {
+            var op = new RegisterOperand(dasm.arch.GetRegister(((int) wOpcode) & 7));
+            dasm.ops.Add(op);
+            return true;
+        }
+
         private static bool r(uint wOpcode, Pdp11Disassembler dasm)
         {
             var op = new RegisterOperand(dasm.arch.GetRegister(((int)wOpcode >> 6) & 7));
-            if (op == null)
-                return false;
             dasm.ops.Add(op);
             return true;
         }
@@ -117,8 +133,21 @@ namespace Reko.Arch.Pdp11
         private static bool I(uint wOpcode, Pdp11Disassembler dasm)
         {
             var op = dasm.Imm6((ushort)wOpcode);
-            if (op == null)
-                return false;
+            dasm.ops.Add(op);
+            return true;
+        }
+
+        private static bool Ib(uint wOpcode, Pdp11Disassembler dasm)
+        {
+            var op = ImmediateOperand.Byte((byte)wOpcode);
+            dasm.ops.Add(op);
+            return true;
+        }
+
+        // I4 - low order 4 bits.
+        private static bool I4(uint wOpcode, Pdp11Disassembler dasm)
+        {
+            var op = ImmediateOperand.Byte((byte)(wOpcode & 0x0F));
             dasm.ops.Add(op);
             return true;
         }
@@ -141,116 +170,130 @@ namespace Reko.Arch.Pdp11
             return true;
         }
         
+        private static bool PcRel(uint wOpcode, Pdp11Disassembler dasm)
+        {
+            var uAddr = (int) dasm.rdr.Address.ToLinear() + 2 * (sbyte) (wOpcode & 0xFF);
+            dasm.ops.Add(new AddressOperand(Address.Ptr16((ushort) uAddr)));
+            return true;
+        }
+
         #endregion
 
-        abstract class Decoder
+        private static Decoder Instr(Mnemonic mnemonic, params Mutator<Pdp11Disassembler> [] mutators)
         {
-            public abstract Pdp11Instruction Decode(ushort opcode, Pdp11Disassembler dasm);
+            return new InstrDecoder<Pdp11Disassembler,Mnemonic,Pdp11Instruction>(InstrClass.Linear, mnemonic, mutators);
         }
 
-        class InstrDecoder : Decoder
+        private static Decoder Instr(Mnemonic mnemonic, InstrClass iclass, params Mutator<Pdp11Disassembler>[] mutators)
         {
-            private readonly InstrClass iclass;
-            private readonly Opcode opcode;
-            private readonly Mutator<Pdp11Disassembler>[] mutators;
-
-            public InstrDecoder(Opcode op, InstrClass iclass, params Mutator<Pdp11Disassembler>[] mutators)
-            {
-                this.opcode = op;
-                this.iclass = iclass;
-                this.mutators = mutators;
-            }
-
-            public override Pdp11Instruction Decode(ushort opcode, Pdp11Disassembler dasm)
-            {
-                foreach (var m in mutators)
-                {
-                    if (!m(opcode, dasm))
-                        return new Pdp11Instruction
-                        {
-                            Opcode = Opcode.illegal,
-                            InstructionClass = InstrClass.Invalid,
-                        };
-                }
-                var instr = new Pdp11Instruction
-                {
-                    Opcode = this.opcode,
-                    InstructionClass = iclass,
-                    DataWidth = dasm.dataWidth,
-                    op1 = dasm.ops.Count > 0 ? dasm.ops[0] : null,
-                    op2 = dasm.ops.Count > 1 ? dasm.ops[1] : null,
-                };
-                return instr;
-            }
+            return new InstrDecoder<Pdp11Disassembler, Mnemonic, Pdp11Instruction>(iclass, mnemonic, mutators);
         }
 
-        class FnDecoder : Decoder
-        {
-            private Func<ushort, Pdp11Disassembler, Pdp11Instruction> fn;
-
-            public FnDecoder(Func<ushort, Pdp11Disassembler, Pdp11Instruction> fn)
-            {
-                this.fn = fn;
-            }
-
-            public override Pdp11Instruction Decode(ushort opcode, Pdp11Disassembler dasm)
-            {
-                return fn(opcode, dasm);
-            }
-        }
-
-        private static InstrDecoder Instr(Opcode opcode, params Mutator<Pdp11Disassembler> [] mutators)
-        {
-            return new InstrDecoder(opcode, InstrClass.Linear, mutators);
-        }
-
-        private static InstrDecoder Instr(Opcode opcode, InstrClass iclass, params Mutator<Pdp11Disassembler>[] mutators)
-        {
-            return new InstrDecoder(opcode, iclass, mutators);
-        }
-
-        private static readonly Decoder[] decoders;
-        private static readonly Decoder[] extraDecoders;
-        private static readonly Decoder[] fpu2Decoders;
 
         static Pdp11Disassembler()
         {
-            var illegal = Instr(Opcode.illegal, InstrClass.Invalid);
-            
-            decoders = new Decoder[] {
-                null,
-                Instr(Opcode.mov, w,e,E),
-                Instr(Opcode.cmp, e,E),
-                Instr(Opcode.bit, e,E),
-                Instr(Opcode.bic, e,E),
-                Instr(Opcode.bis, e,E),
-                Instr(Opcode.add, w,e,E),
-                null,
+            var illegal = Instr(Mnemonic.illegal, InstrClass.Invalid);
 
-                null,
-                Instr(Opcode.movb, b,e,E),
-                Instr(Opcode.cmp, e,E),
-                Instr(Opcode.bit, e,E),
-                Instr(Opcode.bic, e,E),
-                Instr(Opcode.bis, e,E),
-                Instr(Opcode.sub, w,e,E),
-                null,
-            };
+            var jsr = Instr(Mnemonic.jsr, InstrClass.Transfer | InstrClass.Call, w, r, E);
+            var emt = Instr(Mnemonic.emt, InstrClass.Transfer | InstrClass.Call, Ib);
+            var trap = Instr(Mnemonic.trap, InstrClass.Transfer, Ib);
 
-            extraDecoders = new Decoder[]
-            {
-                Instr(Opcode.mul, E,r),
-                Instr(Opcode.div, E,r),
-                Instr(Opcode.ash, E,r),
-                Instr(Opcode.ashc, E,r),
-                Instr(Opcode.xor, E,r),
-                new FnDecoder(FpuArithmetic),
-                illegal,
-                Instr(Opcode.sob , r,I)
-            };
+            var condCode = Select((0, 5), u => u == 0,
+                Instr(Mnemonic.nop, InstrClass.Linear | InstrClass.Padding),
+                Mask(4, 1, "  Condition code operators",
+                    Instr(Mnemonic.clrflags, I4),
+                    Instr(Mnemonic.setflags, I4)));
 
-            fpu2Decoders = new Decoder[16]
-            {
+            var nondoubleFb = Sparse(6, 10, "  no double operand", illegal,
+                (0x000, Sparse(0, 6, "  0x000", illegal,
+                    (0x00, Instr(Mnemonic.halt, InstrClass.Terminates | InstrClass.Zero)),
+                    (0x01, Instr(Mnemonic.wait)),
+                    (0x02, Instr(Mnemonic.rti, InstrClass.Transfer)),
+                    (0x03, Instr(Mnemonic.bpt)),
+                    (0x04, Instr(Mnemonic.iot)),
+                    (0x05, Instr(Mnemonic.reset, InstrClass.Transfer)),
+                    (0x06, Instr(Mnemonic.rtt, InstrClass.Transfer)),
+                    (0x07, illegal))),
+                (0x001, Instr(Mnemonic.jmp, InstrClass.Transfer, E)),
+                (0x002, Mask(3, 3, "  002",
+                    Instr(Mnemonic.rts, InstrClass.Transfer, R0),
+                    Instr(Mnemonic.spl, E),
+                    illegal,
+                    illegal,
+                    condCode,
+                    condCode,
+                    condCode,
+                    condCode)),
+                (0x003, Instr(Mnemonic.swab, E)),
+               (0x020, jsr),
+               (0x021, jsr),
+               (0x022, jsr),
+               (0x023, jsr),
+               (0x024, jsr),
+               (0x025, jsr),
+               (0x026, jsr),
+               (0x027, jsr),
+
+               (0x220, emt),
+               (0x221, emt),
+               (0x222, emt),
+               (0x223, emt),
+               (0x224, trap),
+               (0x225, trap),
+               (0x226, trap),
+               (0x227, trap),
+
+               (0x028, Instr(Mnemonic.clr, w, E)),
+               (0x228, Instr(Mnemonic.clrb, b, E)),
+               (0x029, Instr(Mnemonic.com, w, E)),
+               (0x229, Instr(Mnemonic.comb, b, E)),
+               (0x02A, Instr(Mnemonic.inc, w, E)),
+               (0x22A, Instr(Mnemonic.incb, b, E)),
+               (0x02B, Instr(Mnemonic.dec, w, E)),
+               (0x22B, Instr(Mnemonic.decb, b, E)),
+               (0x02C, Instr(Mnemonic.neg, w, E)),
+               (0x22C, Instr(Mnemonic.negb, b, E)),
+               (0x02D, Instr(Mnemonic.adc, w, E)),
+               (0x22D, Instr(Mnemonic.adcb, b, E)),
+               (0x02E, Instr(Mnemonic.sbc, w, E)),
+               (0x22E, Instr(Mnemonic.sbcb, b, E)),
+               (0x02F, Instr(Mnemonic.tst, w, E)),
+               (0x22F, Instr(Mnemonic.tstb, b, E)),
+               (0x030, Instr(Mnemonic.ror, w, E)),
+               (0x230, Instr(Mnemonic.rorb, b, E)),
+               (0x031, Instr(Mnemonic.rol, w, E)),
+               (0x231, Instr(Mnemonic.rolb, b, E)),
+               (0x032, Instr(Mnemonic.asr, w, E)),
+               (0x232, Instr(Mnemonic.asrb, b, E)),
+               (0x033, Instr(Mnemonic.asl, w, E)),
+               (0x233, Instr(Mnemonic.aslb, b, E)),
+               (0x034, Instr(Mnemonic.mark, Ib)),
+               (0x234, Instr(Mnemonic.mtps, b, E)),
+               (0x035, Instr(Mnemonic.mfpi, w, E)),
+               (0x235, Instr(Mnemonic.mfpd, b, E)),
+               (0x036, Instr(Mnemonic.mtpi, w, E)),
+               (0x236, Instr(Mnemonic.mtpd, b, E)),
+               (0x037, Instr(Mnemonic.sxt, w, E)),
+               (0x237, Instr(Mnemonic.mfps, b, E)));
+
+            var nondouble = Sparse(8, 8, nondoubleFb,
+                (0x01, Instr(Mnemonic.br, InstrClass.Transfer, PcRel)),
+                (0x02, Instr(Mnemonic.bne, InstrClass.ConditionalTransfer, PcRel)),
+                (0x03, Instr(Mnemonic.beq, InstrClass.ConditionalTransfer, PcRel)),
+                (0x04, Instr(Mnemonic.bge, InstrClass.ConditionalTransfer, PcRel)),
+                (0x05, Instr(Mnemonic.blt, InstrClass.ConditionalTransfer, PcRel)),
+                (0x06, Instr(Mnemonic.bgt, InstrClass.ConditionalTransfer, PcRel)),
+                (0x07, Instr(Mnemonic.ble, InstrClass.ConditionalTransfer, PcRel)),
+                (0x80, Instr(Mnemonic.bpl, InstrClass.ConditionalTransfer, PcRel)),
+                (0x81, Instr(Mnemonic.bmi, InstrClass.ConditionalTransfer, PcRel)),
+                (0x82, Instr(Mnemonic.bhi, InstrClass.ConditionalTransfer, PcRel)),
+                (0x83, Instr(Mnemonic.blos,InstrClass.ConditionalTransfer, PcRel)),
+                (0x84, Instr(Mnemonic.bvc, InstrClass.ConditionalTransfer, PcRel)),
+                (0x85, Instr(Mnemonic.bvs, InstrClass.ConditionalTransfer, PcRel)),
+                (0x86, Instr(Mnemonic.bcc, InstrClass.ConditionalTransfer, PcRel)),
+                (0x87, Instr(Mnemonic.bcs, InstrClass.ConditionalTransfer, PcRel)));
+
+            var fpu2Decoders = Mask(8, 4, "  fpu2Decoders",
                 illegal,
                 // 00 cfcc
                 // 01 setf
@@ -265,24 +308,53 @@ namespace Reko.Arch.Pdp11
                 // 4 clrf
                 // 5 tstf
                 // 6 absf
-                //{  7, "F", Opcode.negf }, 
-                Instr(Opcode.mulf, F,f),
-                Instr(Opcode.modf, F,f),
+                //{  7, "F", Mnemonic.negf }, 
+                Instr(Mnemonic.mulf, F,f),
+                Instr(Mnemonic.modf, F,f),
 
-                Instr(Opcode.addf, F,f),
+                Instr(Mnemonic.addf, F,f),
                 illegal,
-                Instr(Opcode.subf, F,f),
-                Instr(Opcode.cmpf, F,f),
+                Instr(Mnemonic.subf, F,f),
+                Instr(Mnemonic.cmpf, F,f),
 
                 illegal,
-                Instr(Opcode.divf, f,F),
-                Instr(Opcode.stexp, f,E),
-                Instr(Opcode.stcdi, f,F),
+                Instr(Mnemonic.divf, f,F),
+                Instr(Mnemonic.stexp, f,E),
+                Instr(Mnemonic.stcdi, f,F),
 
-                Instr(Opcode.stcfd, f,F),
-                Instr(Opcode.ldexp, F,f),
-                Instr(Opcode.ldcid, F,f),
-                Instr(Opcode.ldcfd, F,f),
+                Instr(Mnemonic.stcfd, f,F),
+                Instr(Mnemonic.ldexp, F,f),
+                Instr(Mnemonic.ldcid, F,f),
+                Instr(Mnemonic.ldcfd, F,f));
+
+            var extra = Mask(9, 3, "  extra",
+                Instr(Mnemonic.mul, E, r),
+                Instr(Mnemonic.div, E, r),
+                Instr(Mnemonic.ash, E, r),
+                Instr(Mnemonic.ashc, E, r),
+                Instr(Mnemonic.xor, E, r),
+                fpu2Decoders,
+                illegal,
+                Instr(Mnemonic.sob, r, I));
+
+            decoders = new Decoder[] {
+                nondouble,
+                Instr(Mnemonic.mov, w,e,E),
+                Instr(Mnemonic.cmp, w,e,E),
+                Instr(Mnemonic.bit, w,e,E),
+                Instr(Mnemonic.bic, w,e,E),
+                Instr(Mnemonic.bis, w,e,E),
+                Instr(Mnemonic.add, w,e,E),
+                extra,
+
+                nondouble,
+                Instr(Mnemonic.movb, b,e,E),
+                Instr(Mnemonic.cmpb, b,e,E),
+                Instr(Mnemonic.bitb, b,e,E),
+                Instr(Mnemonic.bicb, b,e,E),
+                Instr(Mnemonic.bisb, b,e,E),
+                Instr(Mnemonic.sub, w,e,E),
+                extra,
             };
         }
 
@@ -300,197 +372,9 @@ namespace Reko.Arch.Pdp11
             return new RegisterOperand(freg);
         }
 
-        private static Pdp11Instruction FpuArithmetic(ushort opcode, Pdp11Disassembler dasm)
-        {
-            return fpu2Decoders[(opcode >> 8) & 0x0F].Decode(opcode, dasm);
-        }
-
         private PrimitiveType DataWidthFromSizeBit(uint p)
         {
             return p != 0 ? PrimitiveType.Byte : PrimitiveType.Word16;
-        }
-
-        private static Pdp11Instruction NonDoubleOperandInstruction(ushort opcode, Pdp11Disassembler dasm)
-        {
-            var iclass = InstrClass.Linear;
-            switch ((opcode >> 8))
-            {
-            case 0x01: return dasm.BranchInstruction(opcode, Opcode.br, InstrClass.Transfer);
-            case 0x02: return dasm.BranchInstruction(opcode, Opcode.bne);
-            case 0x03: return dasm.BranchInstruction(opcode, Opcode.beq);
-            case 0x04: return dasm.BranchInstruction(opcode, Opcode.bge);
-            case 0x05: return dasm.BranchInstruction(opcode, Opcode.blt);
-            case 0x06: return dasm.BranchInstruction(opcode, Opcode.bgt);
-            case 0x07: return dasm.BranchInstruction(opcode, Opcode.ble);
-            case 0x80: return dasm.BranchInstruction(opcode, Opcode.bpl);
-            case 0x81: return dasm.BranchInstruction(opcode, Opcode.bmi);
-            case 0x82: return dasm.BranchInstruction(opcode, Opcode.bhi);
-            case 0x83: return dasm.BranchInstruction(opcode, Opcode.blos);
-            case 0x84: return dasm.BranchInstruction(opcode, Opcode.bvc);
-            case 0x85: return dasm.BranchInstruction(opcode, Opcode.bvs);
-            case 0x86: return dasm.BranchInstruction(opcode, Opcode.bcc);
-            case 0x87: return dasm.BranchInstruction(opcode, Opcode.bcs);
-            }
-
-            var dataWidth = dasm.DataWidthFromSizeBit(opcode & 0x8000u);
-            int cop = 1;
-            MachineOperand op1 = null;
-            MachineOperand op2 = null;
-            Opcode oc = Opcode.illegal;
-            switch ((opcode >> 6) & 0x3FF)
-            {
-            case 0x000:
-                switch (opcode & 0x3F)
-                {
-                case 0x00: cop = 0; oc = Opcode.halt; iclass = InstrClass.Terminates|InstrClass.Zero; break;
-                case 0x01: cop = 0; oc = Opcode.wait; break;
-                case 0x02: cop = 0; oc = Opcode.rti; iclass = InstrClass.Transfer; break;
-                case 0x03: cop = 0; oc = Opcode.bpt; break;
-                case 0x04: cop = 0; oc = Opcode.iot; break;
-                case 0x05: cop = 0; oc = Opcode.reset; iclass = InstrClass.Transfer; break;
-                case 0x06: cop = 0; oc = Opcode.rtt; iclass = InstrClass.Transfer; break;
-                case 0x07: cop = 0; oc = Opcode.illegal; break;
-                }
-                break;
-            case 0x001: op1 = dasm.DecodeOperand(opcode); oc = Opcode.jmp; iclass = InstrClass.Transfer; break;
-            case 0x002:
-                switch (opcode & 0x38)
-                {
-                case 0: op1 = dasm.DecodeOperand(opcode & 7u); oc = Opcode.rts; iclass = InstrClass.Transfer; break;
-                case 3: op1 = dasm.DecodeOperand(opcode); oc = Opcode.spl; break;
-                case 0x20:
-                case 0x28:
-                case 0x30:
-                case 0x38:
-                    return dasm.DecodeCondCode(opcode);
-                }
-                break;
-            case 0x003:
-                oc = Opcode.swab; op1 = dasm.DecodeOperand(opcode);
-                dataWidth = PrimitiveType.Byte;
-                break;
-            case 0x020:
-            case 0x021:
-            case 0x022:
-            case 0x023:
-            case 0x024:
-            case 0x025:
-            case 0x026:
-            case 0x027:
-                oc = Opcode.jsr;
-                iclass = InstrClass.Transfer | InstrClass.Call;
-                cop = 2;
-                op1 = Reg(opcode >> 6, dasm);
-                op2 = dasm.DecodeOperand(opcode);
-                dataWidth = PrimitiveType.Word16;
-                break;
-            case 0x220:
-            case 0x221:
-            case 0x222:
-            case 0x223:
-                oc = Opcode.emt;
-                op1 = new ImmediateOperand(Constant.Byte((byte)opcode));
-                break;
-            case 0x224:
-            case 0x225:
-            case 0x226:
-            case 0x227:
-                oc = Opcode.trap;
-                iclass = InstrClass.Transfer;
-                op1 = new ImmediateOperand(Constant.Byte((byte)opcode));
-                break;
-            case 0x028:
-            case 0x228:
-                oc = dataWidth.Size == 1 ? Opcode.clrb : Opcode.clr;
-                op1 = dasm.DecodeOperand(opcode);
-                break;
-            case 0x029:
-            case 0x229:
-                oc = Opcode.com; op1 = dasm.DecodeOperand(opcode);
-                break;
-            case 0x02A:
-            case 0x22A:
-                oc = Opcode.inc; op1 = dasm.DecodeOperand(opcode);
-                break;
-            case 0x02B:
-            case 0x22B:
-                oc = Opcode.dec; op1 = dasm.DecodeOperand(opcode);
-                break;
-            case 0x02C:
-            case 0x22C:
-                oc = Opcode.neg; op1 = dasm.DecodeOperand(opcode);
-                break;
-            case 0x02D:
-            case 0x22D:
-                oc = Opcode.adc; op1 = dasm.DecodeOperand(opcode);
-                break;
-            case 0x02E:
-            case 0x22E:
-                oc = Opcode.sbc; op1 = dasm.DecodeOperand(opcode);
-                break;
-            case 0x02F:
-            case 0x22F:
-                oc = Opcode.tst; op1 = dasm.DecodeOperand(opcode);
-                break;
-            case 0x030:
-            case 0x230:
-                oc = Opcode.ror; op1 = dasm.DecodeOperand(opcode);
-                break;
-            case 0x031:
-            case 0x231:
-                oc = Opcode.rol; op1 = dasm.DecodeOperand(opcode);
-                break;
-            case 0x032:
-            case 0x232:
-                oc = Opcode.asr; op1 = dasm.DecodeOperand(opcode);
-                break;
-            case 0x033:
-            case 0x233:
-                oc = Opcode.asl; op1 = dasm.DecodeOperand(opcode);
-                break;
-            case 0x034:
-                oc = Opcode.mark;
-                op1 = new ImmediateOperand(Constant.Byte((byte)opcode));
-                break;
-            case 0x234:
-                oc = Opcode.mtps; op1 = dasm.DecodeOperand(opcode);
-                break;
-            case 0x035:
-                oc = Opcode.mfpi; op1 = dasm.DecodeOperand(opcode);
-                break;
-            case 0x235:
-                oc = Opcode.mfpd; op1 = dasm.DecodeOperand(opcode);
-                break;
-            case 0x036:
-                oc = Opcode.mtpi; op1 = dasm.DecodeOperand(opcode);
-                break;
-            case 0x236:
-                oc = Opcode.mtpd; op1 = dasm.DecodeOperand(opcode);
-                break;
-            case 0x037:
-                oc = Opcode.sxt; op1 = dasm.DecodeOperand(opcode);
-                break;
-            case 0x237:
-                oc = Opcode.mfps; op1 = dasm.DecodeOperand(opcode);
-                break;
-            }
-            if (cop > 0 && op1 == null ||
-                cop > 1 && op2 == null)
-            {
-                return new Pdp11Instruction
-                {
-                    Opcode = Opcode.illegal,
-                    InstructionClass = InstrClass.Invalid
-                };
-            }
-            return new Pdp11Instruction
-            {
-                Opcode = oc,
-                InstructionClass = iclass,
-                DataWidth = dataWidth,
-                op1 = op1,
-                op2 = op2,
-            };
         }
 
         private Pdp11Instruction DecodeCondCode(ushort opcode)
@@ -499,16 +383,17 @@ namespace Reko.Arch.Pdp11
             {
                 return new Pdp11Instruction
                 {
-                    Opcode = Opcode.nop,
-                    InstructionClass = InstrClass.Linear,
+                    Mnemonic = Mnemonic.nop,
+                    InstructionClass = InstrClass.Linear|InstrClass.Padding,
+                    Operands = new MachineOperand[0]
                 };
             } 
             return new Pdp11Instruction
             {
-                Opcode = ((opcode & 0x10) != 0) ? Opcode.setflags : Opcode.clrflags,
+                Mnemonic = ((opcode & 0x10) != 0) ? Mnemonic.setflags : Mnemonic.clrflags,
                 InstructionClass = InstrClass.Linear,
                 DataWidth = dataWidth,
-                op1 = new ImmediateOperand(Constant.Byte((byte)(opcode&0xF))),
+                Operands = new MachineOperand[] { new ImmediateOperand(Constant.Byte((byte) (opcode & 0xF))) },
             };
         }
 
@@ -517,19 +402,14 @@ namespace Reko.Arch.Pdp11
             return new RegisterOperand(dasm.arch.GetRegister(bits & 7));
         }
 
-        private MachineOperand Imm3(ushort opcode)
-        {
-            throw new NotImplementedException();
-        }
-
-        private Pdp11Instruction BranchInstruction(ushort opcode, Opcode oc, InstrClass iclass = InstrClass.ConditionalTransfer)
+        private Pdp11Instruction BranchInstruction(ushort opcode, Mnemonic oc, InstrClass iclass = InstrClass.ConditionalTransfer)
         {
             return new Pdp11Instruction
             {
-                Opcode = oc,
+                Mnemonic = oc,
                 InstructionClass = iclass,
                 DataWidth = PrimitiveType.Word16,
-                op1 = new AddressOperand(this.rdr.Address + 2 * (sbyte)(opcode & 0xFF)),
+                Operands = new MachineOperand[] { new AddressOperand(this.rdr.Address + 2 * (sbyte) (opcode & 0xFF)) },
             };
         }
 

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -76,13 +76,15 @@ namespace Reko.Core.Types
 		
 		private PrimitiveType(Domain dom, int bitSize, string name)
 		{
-			this.Domain = dom;
+            this.Domain = dom;
 			this.bitSize = bitSize;
             this.byteSize = (bitSize + (BitsPerByte-1)) / BitsPerByte;
 			this.Name = name;
 		}
 
         public Domain Domain { get; private set; }
+
+        public override bool IsPointer { get { return Domain == Domain.Pointer; } }
 
         public override void Accept(IDataTypeVisitor v)
         {
@@ -252,7 +254,7 @@ namespace Reko.Core.Types
         /// <summary>
         /// True if the type can only be some kind of integral numeric type
         /// </summary>
-		public bool IsIntegral
+		public override bool IsIntegral
 		    => (Domain & Domain.Integer) != 0 && (Domain & ~Domain.Integer) == 0; 
 
         /// <summary>

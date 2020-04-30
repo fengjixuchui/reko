@@ -1,8 +1,9 @@
 // fn0C00_0000
 // Return size: 2
-void fn0C00_0000()
+define fn0C00_0000
 fn0C00_0000_entry:
 	sp = fp
+	Top = 0
 	// succ:  l0C00_0000
 l0C00_0000:
 	cx = 0x002A
@@ -43,9 +44,10 @@ fn0C00_0000_exit:
 
 // fn0C00_0023
 // Return size: 2
-void fn0C00_0023()
+define fn0C00_0023
 fn0C00_0023_entry:
 	sp = fp
+	Top = 0
 	// succ:  l0C00_0023
 l0C00_0023:
 	sp = fp - 2
@@ -67,9 +69,10 @@ fn0C00_0023_exit:
 
 // fn0C00_0034
 // Return size: 2
-void fn0C00_0034()
+define fn0C00_0034
 fn0C00_0034_entry:
 	sp = fp
+	Top = 0
 	// succ:  l0C00_0034
 l0C00_0034:
 	sp = fp - 2
@@ -113,9 +116,10 @@ fn0C00_0034_exit:
 
 // fn0C00_005D
 // Return size: 2
-void fn0C00_005D()
+define fn0C00_005D
 fn0C00_005D_entry:
 	sp = fp
+	Top = 0
 	// succ:  l0C00_005D
 l0C00_005D:
 	sp = fp - 2
@@ -136,9 +140,10 @@ fn0C00_005D_exit:
 
 // fn0C00_0069
 // Return size: 2
-void fn0C00_0069()
+define fn0C00_0069
 fn0C00_0069_entry:
 	sp = fp
+	Top = 0
 	// succ:  l0C00_0069
 l0C00_0069:
 	Mem0[ds:0x0200:word16] = bx

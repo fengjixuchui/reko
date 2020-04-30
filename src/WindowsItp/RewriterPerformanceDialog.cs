@@ -33,6 +33,19 @@ namespace Reko.WindowsItp
                 this.ppp = new Dictionary<string, PseudoProcedure>();
             }
 
+            public Expression CallIntrinsic(string name, FunctionType fnType, params Expression[] args)
+            {
+                if (!ppp.TryGetValue(name, out var intrinsic))
+                {
+                    intrinsic = new PseudoProcedure(name, fnType);
+                    ppp.Add(name, intrinsic);
+                }
+                return new Application(
+                    new ProcedureConstant(PrimitiveType.Ptr32, intrinsic),
+                    fnType.ReturnValue.DataType,
+                    args);
+            }
+
             public PseudoProcedure EnsurePseudoProcedure(string name, DataType returnType, int arity)
             {
                 if (ppp.TryGetValue(name, out var p))
@@ -73,7 +86,7 @@ namespace Reko.WindowsItp
 
             public Expression GetImport(Address addrThunk, Address addrInstruction)
             {
-                throw new NotImplementedException();
+                return null;
             }
 
             public ExternalProcedure GetImportedProcedure(IProcessorArchitecture arch, Address addrThunk, Address addrInstruction)

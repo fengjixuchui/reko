@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John KÃ¤llÃ©n.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@
 
 using NUnit.Framework;
 using Reko.Arch.X86;
-using Reko.Assemblers.x86;
+using Reko.Arch.X86.Assembler;
 using Reko.Core;
 using Reko.Core.Code;
 using Reko.Core.Services;
@@ -78,12 +78,13 @@ namespace Reko.UnitTests.Scanning
             var arch = new X86ArchitectureReal("x86-real-16");
             Program program = ldr.AssembleExecutable(
                  FileUnitTester.MapTestPath(sourceFile),
-                 new X86TextAssembler(sc, arch),
+                 new X86TextAssembler(arch),
+                 new DefaultPlatform(sc, arch),
                 addr);
             var project = new Project { Programs = { program } };
 			var scan = new Scanner(
                 program, 
-                new ImportResolver(project, program, null), null);
+                new DynamicLinker(project, program, null), null);
 			foreach (ImageSymbol ep in program.EntryPoints.Values)
 			{
 				scan.EnqueueImageSymbol(ep, true);
@@ -94,10 +95,10 @@ namespace Reko.UnitTests.Scanning
 
 		private void RunTest(string sourceFile, Address addr, string outputFile)
 		{
-			Program prog = AssembleFile(sourceFile, addr);
+			Program program = AssembleFile(sourceFile, addr);
 			using (FileUnitTester fut = new FileUnitTester(outputFile))
 			{
-				foreach (Procedure proc in prog.Procedures.Values)
+				foreach (Procedure proc in program.Procedures.Values)
 				{
 					fut.TextWriter.WriteLine("= Before ==========");
 					proc.Write(true, fut.TextWriter);

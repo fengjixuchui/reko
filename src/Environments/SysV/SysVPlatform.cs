@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,6 +50,11 @@ namespace Reko.Environments.SysV
             get { return ""; }
         }
 
+        public override IPlatformEmulator CreateEmulator(SegmentMap segmentMap, Dictionary<Address, ImportReference> importReferences)
+        {
+            throw new NotImplementedException();
+        }
+
         public override CallingConvention GetCallingConvention(string ccName)
         {
             switch (Architecture.Name)
@@ -62,6 +67,9 @@ namespace Reko.Environments.SysV
             case "ppc-be-32":
             case "ppc-le-32":
                 return new PowerPcCallingConvention(Architecture);
+            case "ppc-be-64":
+            case "ppc-le-64":
+                return new PowerPc64CallingConvention(Architecture);
             case "sparc32":
                 return new SparcCallingConvention(Architecture);
             case "x86-protected-32":
@@ -105,14 +113,11 @@ namespace Reko.Environments.SysV
                 return new AlphaCallingConvention(Architecture);
             case "zSeries":
                 return new zSeriesCallingConvention(Architecture);
+            case "blackfin":
+                return new BlackfinCallingConvention(Architecture);
             default:
                 throw new NotImplementedException(string.Format("ELF calling convention for {0} not implemented yet.", Architecture.Description));
             }
-        }
-
-        public override HashSet<RegisterStorage> CreateImplicitArgumentRegisters()
-        {
-            return new HashSet<RegisterStorage>();
         }
 
         public override HashSet<RegisterStorage> CreateTrashedRegisters()
@@ -120,7 +125,7 @@ namespace Reko.Environments.SysV
             return this.trashedRegs.ToHashSet();
         }
 
-        public override SystemService FindService(int vector, ProcessorState state)
+        public override SystemService FindService(int vector, ProcessorState state, SegmentMap segmentMap)
         {
             return null;
         }
@@ -144,37 +149,35 @@ namespace Reko.Environments.SysV
             }
         }
 
-        public override ProcedureBase GetTrampolineDestination(IEnumerable<RtlInstructionCluster> rw, IRewriterHost host)
+        public override ProcedureBase GetTrampolineDestination(Address addrInstr, IEnumerable<RtlInstruction> rw, IRewriterHost host)
         {
-            var rtlc = rw.FirstOrDefault();
-            if (rtlc == null || rtlc.Instructions.Length == 0)
+            var instr = rw.FirstOrDefault();
+            if (instr == null)
                 return null;
 
             // Match x86 pattern.
             // jmp [destination]
             Address addrTarget = null;
-            if (rtlc.Instructions[0] is RtlGoto jump)
+            if (instr is RtlGoto jump)
             {
                 if (jump.Target is ProcedureConstant pc)
                     return pc.Procedure;
-                var access = jump.Target as MemoryAccess;
-                if (access == null)
+                if (!(jump.Target is MemoryAccess access))
                     return null;
                 addrTarget = access.EffectiveAddress as Address;
                 if (addrTarget == null)
                 {
-                    var wAddr = access.EffectiveAddress as Constant;
-                    if (wAddr == null)
+                    if (!(access.EffectiveAddress is Constant wAddr))
                     {
                         return null;
                     }
-                    addrTarget = MakeAddressFromConstant(wAddr);
+                    addrTarget = MakeAddressFromConstant(wAddr, true);
                 }
             }
             if (addrTarget == null)
                 return null;
             var arch = this.Architecture;
-            ProcedureBase proc = host.GetImportedProcedure(arch, addrTarget, rtlc.Address);
+            ProcedureBase proc = host.GetImportedProcedure(arch, addrTarget, addrInstr);
             if (proc != null)
                 return proc;
             return host.GetInterceptedCall(arch, addrTarget);
@@ -187,14 +190,25 @@ namespace Reko.Environments.SysV
             case "mips-be-32":
             case "mips-le-32":
                 // MIPS ELF ABI: r25 is _always_ set to the address of a procedure on entry.
-                m.Assign(proc.Frame.EnsureRegister(Architecture.GetRegister(25)), Constant.Word32((uint)addr.ToLinear()));
+                m.Assign(proc.Frame.EnsureRegister(Architecture.GetRegister("r25")), Constant.Word32((uint)addr.ToLinear()));
+                break;
+            case "mips-be-64":
+            case "mips-le-64":
+                // MIPS ELF ABI: r25 is _always_ set to the address of a procedure on entry.
+                m.Assign(proc.Frame.EnsureRegister(Architecture.GetRegister("r25")), Constant.Word64((uint) addr.ToLinear()));
+                break;
+            case "x86-protected-32":
+            case "x86-protected-64":
+                m.Assign(
+                    proc.Frame.EnsureRegister(Architecture.FpuStackRegister),
+                    0);
                 break;
             case "zSeries":
                 // Stack parameters are passed in starting at offset +160 from the 
                 // stack; everything at lower addresses is local to the called procedure's
                 // frame.
                 m.Assign(
-                    proc.Frame.EnsureRegister(Architecture.GetRegister(15)),
+                    proc.Frame.EnsureRegister(Architecture.GetRegister("r15")),
                     m.ISub(
                         proc.Frame.FramePointer,
                         Constant.Int(proc.Frame.FramePointer.DataType, 160)));

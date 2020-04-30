@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,6 +28,7 @@ using Reko.Environments.Windows;
 using Reko.UnitTests.Mocks;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Reko.UnitTests.Environments.Windows
 {
@@ -51,14 +52,14 @@ namespace Reko.UnitTests.Environments.Windows
             var services = new Mock<IServiceProvider>();
             var arch = new Mock<IProcessorArchitecture>();
             var addr = Address.Ptr32(0x00031234);
-            arch.Setup(a => a.MakeAddressFromConstant(It.IsNotNull<Constant>())).Returns(addr);
+            arch.Setup(a => a.MakeAddressFromConstant(It.IsNotNull<Constant>(), It.IsAny<bool>())).Returns(addr);
             host.Setup(h => h.GetImportedProcedure(
                 It.IsNotNull<IProcessorArchitecture>(),
                 addr,
                 It.IsNotNull<Address>())).Returns(new ExternalProcedure("foo", new FunctionType()));
 
             var platform = new Win32MipsPlatform(services.Object, arch.Object);
-            var result = platform.GetTrampolineDestination(rtl, host.Object);
+            var result = platform.GetTrampolineDestination(rtl.StartAddress, rtl.SelectMany(c => c.Instructions), host.Object);
             Assert.IsNotNull(result);
         }
     }

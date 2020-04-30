@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 Pavel Tomin.
+ * Copyright (C) 1999-2020 Pavel Tomin.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -89,7 +89,7 @@ namespace Reko.UnitTests.Mocks
         public void Given_PlatformTypes(Dictionary<string, DataType> types)
         {
             this.platformMetadata = new TypeLibrary(
-                types, new Dictionary<string, FunctionType>(), new Dictionary<string, DataType>()
+                false, types, new Dictionary<string, FunctionType>(), new Dictionary<string, DataType>()
             );
         }
 
@@ -168,7 +168,7 @@ namespace Reko.UnitTests.Mocks
                 signatures = new Dictionary<string, FunctionType>();
             if (globals == null)
                 globals = new Dictionary<string, DataType>();
-            var loaderMetadata = new TypeLibrary(types, signatures, globals);
+            var loaderMetadata = new TypeLibrary(false, types, signatures, globals);
             if (module != null)
                 loaderMetadata.Modules.Add(moduleName, module);
 

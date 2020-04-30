@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -364,7 +364,7 @@ namespace Reko.Arch.Vax
                     return;
                 }
             }
-            rtlc = InstrClass.Invalid;
+            iclass = InstrClass.Invalid;
             m.Invalid();
         }
 
@@ -420,7 +420,7 @@ namespace Reko.Arch.Vax
             if (width.Size == 8)
             {
                 var r1 = binder.EnsureRegister(Registers.r1);
-                ret = binder.EnsureSequence(r1.Storage, ret.Storage, width);
+                ret = binder.EnsureSequence(width, r1.Storage, ret.Storage);
             }
             var grf = FlagGroup(FlagM.ZF | FlagM.NF);
             m.Assign(

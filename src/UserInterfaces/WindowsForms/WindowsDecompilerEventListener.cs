@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -254,9 +254,9 @@ namespace Reko.UserInterfaces.WindowsForms
             return new StatementNavigator(program, stm, sp);
         }
 
-        ICodeLocation DecompilerEventListener.CreateJumpTableNavigator(Program program, Address addrIndirectJump, Address addrVector, int stride)
+        ICodeLocation DecompilerEventListener.CreateJumpTableNavigator(Program program, IProcessorArchitecture arch, Address addrIndirectJump, Address addrVector, int stride)
         {
-            return new JumpVectorNavigator(program, addrIndirectJump, addrVector, stride, sp);
+            return new JumpVectorNavigator(program, arch, addrIndirectJump, addrVector, stride, sp);
         }
 
         private void ShowStatus(string newStatus)
@@ -274,10 +274,13 @@ namespace Reko.UserInterfaces.WindowsForms
             this.position = numerator;
             this.total = denominator;
             System.Threading.Interlocked.Exchange<string>(ref status, caption);
-            var percentDone = Math.Min(
-                100,
-                (int)((numerator * 100L) / denominator));
-            dlg.Worker.ReportProgress(percentDone);
+            if (denominator > 0)
+            {
+                var percentDone = Math.Min(
+                    100,
+                    (int) ((numerator * 100L) / denominator));
+                dlg.Worker.ReportProgress(percentDone);
+            }
         }
 
         void DecompilerEventListener.Advance(int count)

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -43,7 +43,7 @@ namespace Reko.UnitTests.Scanning
             base.Setup();
         }
 
-        private void AssertConflicts(string sExp, IEnumerable<Tuple<RtlBlock, RtlBlock>> conflicts)
+        private void AssertConflicts(string sExp, IEnumerable<(RtlBlock, RtlBlock)> conflicts)
         {
             var sActual = conflicts
                 .OrderBy(c => c.Item1.Address.ToLinear())

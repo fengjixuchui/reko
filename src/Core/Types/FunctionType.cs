@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -60,6 +60,11 @@ namespace Reko.Core.Types
             if (returnValue == null)
                 returnValue = new Identifier("", VoidType.Instance, null);
             this.ReturnValue = returnValue;
+        }
+
+        public static FunctionType Func(Identifier returnId, params Identifier[] formals)
+        {
+            return new FunctionType(returnId, formals);
         }
 
         /// <summary>
@@ -187,51 +192,61 @@ namespace Reko.Core.Types
 
         public void Emit(string fnName, EmitFlags f, Formatter fmt)
         {
-            Emit(fnName, f, fmt, new CodeFormatter(fmt), new TypeFormatter(fmt));
+            Emit(fnName, f, fmt, new CodeFormatter(fmt), new TypeReferenceFormatter(fmt));
         }
 
-        public void Emit(string fnName, EmitFlags f, Formatter fmt, CodeFormatter w, TypeFormatter t)
+        public void Emit(string fnName, EmitFlags f, Formatter fmt, CodeFormatter w, TypeReferenceFormatter t)
         {
             bool emitStorage = (f & EmitFlags.ArgumentKind) == EmitFlags.ArgumentKind;
-            if (emitStorage)
+           
+            if (ParametersValid)
             {
-                if (HasVoidReturn)
+                if (emitStorage)
                 {
-                    fmt.Write("void ");
+                    if (HasVoidReturn)
+                    {
+                        fmt.Write("void ");
+                    }
+                    else
+                    {
+                        w.WriteFormalArgumentType(ReturnValue, emitStorage);
+                        fmt.Write(" ");
+                    }
+                    fmt.Write("{0}(", fnName);
                 }
                 else
                 {
-                    w.WriteFormalArgumentType(ReturnValue, emitStorage);
-                    fmt.Write(" ");
+                    if (HasVoidReturn)
+                    {
+                        fmt.Write("void {0}", fnName);
+                    }
+                    else
+                    {
+                        t.WriteDeclaration(ReturnValue.DataType, fnName);           //$TODO: won't work with fn's that return pointers to functions or arrays.
+                    }
+                    fmt.Write("(");
                 }
-                fmt.Write("{0}(", fnName);
+                var sep = "";
+                if (Parameters != null)
+                {
+                    IEnumerable<Identifier> parms = this.IsInstanceMetod
+                        ? Parameters.Skip(1)
+                        : Parameters;
+                    foreach (var p in parms)
+                    {
+                        fmt.Write(sep);
+                        sep = ", ";
+                        w.WriteFormalArgument(p, emitStorage, t);
+                    }
+                }
+                fmt.Write(")");
             }
             else
             {
-                if (HasVoidReturn)
-                {
-                    fmt.Write("void {0}", fnName);
-                }
-                else
-                {
-                    t.Write(ReturnValue.DataType, fnName);           //$TODO: won't work with fn's that return pointers to functions or arrays.
-                }
-                fmt.Write("(");
+                fmt.WriteKeyword("define");
+                fmt.Write(" ");
+                fmt.Write(fnName);
             }
-            var sep = "";
-            if (Parameters != null)
-            {
-                IEnumerable<Identifier> parms = this.IsInstanceMetod
-                    ? Parameters.Skip(1)
-                    : Parameters;
-                foreach (var p in parms)
-                {
-                    fmt.Write(sep);
-                    sep = ", ";
-                    w.WriteFormalArgument(p, emitStorage, t);
-                }
-            }
-            fmt.Write(")");
 
             if ((f & EmitFlags.LowLevelInfo) == EmitFlags.LowLevelInfo)
             {
@@ -243,10 +258,10 @@ namespace Reko.Core.Types
 
         public string ToString(string name, EmitFlags flags = EmitFlags.ArgumentKind)
         {
-            StringWriter sw = new StringWriter();
-            TextFormatter f = new TextFormatter(sw);
-            CodeFormatter cf = new CodeFormatter(f);
-            TypeFormatter tf = new TypeFormatter(f);
+            var sw = new StringWriter();
+            var f = new TextFormatter(sw);
+            var cf = new CodeFormatter(f);
+            var tf = new TypeReferenceFormatter(f);
             Emit(name, flags, f, cf, tf);
             return sw.ToString();
         }

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -81,14 +81,17 @@ namespace Reko.Environments.MacOS.Classic
             throw new NotImplementedException();
         }
 
+        public Constant VisitFile(Core.Pascal.File file)
+        {
+            throw new NotImplementedException();
+        }
+
         public Constant VisitIdentifier(Id id)
         {
-            Constant c;
-            if (!this.evaluated.TryGetValue(id.Name, out c))
+            if (!this.evaluated.TryGetValue(id.Name, out Constant c))
             {
                 this.evaluated.Add(id.Name, Constant.Invalid);
-                Exp def;
-                if (constDefinitions.TryGetValue(id.Name, out def))
+                if (constDefinitions.TryGetValue(id.Name, out Exp def))
                 {
                     c = def.Accept(this);
                     this.evaluated[id.Name] = c;

@@ -103,8 +103,8 @@ namespace Reko.UnitTests.Core.Serialization.Json
                     "{'name':'l_nonneg','linaddr':4,'stms':[" +
                           "[0,['st',['m','Mem0',['+','r9',[8,'w32']],'r64'],['*f','f3',[2,'r64']]]]," +
                           "[1,'ret']]," +
-                   "'succ':['JpsTest_exit']}," +
-                "{'name':'l_neg','linaddr':2,'stms':[" +
+                     "'succ':['JpsTest_exit']}," +
+                   "{'name':'l_neg','linaddr':2,'stms':[" +
                           "[0,'=','f3',[0,'r64']]," +
                           "[1,'=','r1',['neg','r1']]]," +
                   "'succ':['l_nonneg']}]}";

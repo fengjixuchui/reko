@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -102,6 +102,8 @@ namespace Reko.Arch.M68k
 
     public class MemoryOperand : M68kOperandImpl
     {
+        public const string HexStringFormat = "{0}${1}";
+
         public AddressRegister Base;
         public Constant Offset;
 

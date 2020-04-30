@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -72,19 +72,25 @@ namespace Reko.UnitTests.Analysis
             Procedure proc = BuildSimpleLoop();
 
             var dom = proc.CreateBlockDominatorGraph();
-            SsaTransform ssa = new SsaTransform(new ProgramDataFlow(), proc, null, dom, new HashSet<RegisterStorage>());
-            LinearInductionVariableFinder lif = new LinearInductionVariableFinder(proc, ssa.SsaState.Identifiers, dom);
+            var sst = new SsaTransform(
+                new Program(),
+                proc, 
+                new HashSet<Procedure>(),
+                null,
+                new ProgramDataFlow());
+            sst.Transform();
+            var lif = new LinearInductionVariableFinder(sst.SsaState, dom);
             lif.Find();
 
             Assert.AreEqual(1, lif.InductionVariables.Count, "Should have found one induction variable");
             Assert.AreEqual(1, lif.Contexts.Count);
             LinearInductionVariableContext ctx = lif.Contexts[lif.InductionVariables[0]];
 
-            StrengthReduction str = new StrengthReduction(ssa.SsaState,lif.InductionVariables[0], ctx);
+            StrengthReduction str = new StrengthReduction(sst.SsaState,lif.InductionVariables[0], ctx);
             str.ClassifyUses();
             Assert.AreEqual(1, str.IncrementedUses.Count);
             str.ModifyUses();
-            Assert.AreEqual("(0x00003000 0x00000004 0x00007000)", lif.InductionVariables[0].ToString());
+            Assert.AreEqual("(0x3000<32> 4<32> 0x7000<32>)", lif.InductionVariables[0].ToString());
             using (FileUnitTester fut = new FileUnitTester("Analysis/SrtSimpleLoop.txt"))
             {
                 proc.Write(false, fut.TextWriter);
@@ -114,9 +120,9 @@ namespace Reko.UnitTests.Analysis
             m.Return();
 
             var dom = m.Procedure.CreateBlockDominatorGraph();
-            var lif = new LinearInductionVariableFinder(m.Procedure, m.Ssa.Identifiers, dom);
+            var lif = new LinearInductionVariableFinder(m.Ssa, dom);
             lif.Find();
-            Assert.AreEqual("(0 0x00000002 0x0000000C)", lif.InductionVariables[0].ToString());
+            Assert.AreEqual("(0<i32> 2<32> 0xC<32>)", lif.InductionVariables[0].ToString());
 
             var ctx = lif.Contexts[lif.InductionVariables[0]];
 

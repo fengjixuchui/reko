@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,6 +44,8 @@ namespace Reko.Core
             this.TextEncoding = Encoding.ASCII;
             this.RegisterValues = new SortedList<Address, List<UserRegisterValue>>();
             this.Segments = new List<UserSegment>();
+            this.ProcedureSourceFiles = new Dictionary<Address, string>();
+            this.Patches = new Dictionary<Address, CodePatch>();
         }
 
         // 'Oracular' information provided by the user.
@@ -93,6 +95,26 @@ namespace Reko.Core
         /// If set, extract any embedded resources.
         /// </summary>
         public bool ExtractResources { get; set; }
+
+        /// <summary>
+        /// Optionally maps a procedure (address) to the source code file in which its output 
+        /// is to be placed.
+        /// </summary>
+        /// <remarks>
+        /// The source file names are absolute paths.
+        /// </remarks>
+        public Dictionary<Address, string> ProcedureSourceFiles { get; set; }
+
+        /// <summary>
+        /// Maps patches to addresses. When the scanner encounters a patched
+        /// address, it replaces the patch with the IR instructions in the patch.
+        /// </summary>
+        public Dictionary<Address, CodePatch> Patches { get; set; }
+
+        /// <summary>
+        /// Selects the policy to use when generating output files.
+        /// </summary>
+        public string OutputFilePolicy { get; set; }
     }
 
     public class Annotation

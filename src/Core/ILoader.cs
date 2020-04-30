@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -75,10 +75,8 @@ namespace Reko.Core
         /// </returns>
         Program LoadRawImage(string fileName, byte[] image, Address loadAddress, LoadDetails details);
 
-
-        Program AssembleExecutable(string fileName, string asmName, Address loadAddress);
-        Program AssembleExecutable(string fileName, Assembler asm, Address loadAddress);
-        Program AssembleExecutable(string fileName, byte[] bytes, Assembler asm, Address loadAddress);
+        Program AssembleExecutable(string fileName, IAssembler asm, IPlatform platform, Address loadAddress);
+        Program AssembleExecutable(string fileName, byte[] bytes, IAssembler asm, IPlatform platform, Address loadAddress);
 
         /// <summary>
         /// Loads a file containing symbolic, type, or other metadata into a <see cref="Reko.Core.TypeLibrary>"/>.

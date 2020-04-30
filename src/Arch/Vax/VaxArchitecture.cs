@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -65,8 +65,8 @@ namespace Reko.Arch.Vax
 
         public VaxArchitecture(string name) : base(name)
         {
-            var x = Registers.r0;
-            InstructionBitSize = 8;
+            this.Endianness = EndianServices.Little;
+            this.InstructionBitSize = 8;
             this.FramePointerType = PrimitiveType.Ptr32;
             this.WordWidth = PrimitiveType.Word32;
             this.PointerType = PrimitiveType.Ptr32;
@@ -79,29 +79,9 @@ namespace Reko.Arch.Vax
             return new VaxDisassembler(this, imageReader);
         }
 
-        public override EndianImageReader CreateImageReader(MemoryArea img, ulong off)
+        public override IProcessorEmulator CreateEmulator(SegmentMap segmentMap, IPlatformEmulator envEmulator)
         {
-            return new LeImageReader(img, off);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea img, Address addr)
-        {
-            return new LeImageReader(img, addr);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea img, Address addrBegin, Address addrEnd)
-        {
-            return new LeImageReader(img, addrBegin, addrEnd);
-        }
-
-        public override ImageWriter CreateImageWriter()
-        {
-            return new LeImageWriter();
-        }
-
-        public override ImageWriter CreateImageWriter(MemoryArea mem, Address addr)
-        {
-            return new LeImageWriter(mem, addr);
+            throw new NotImplementedException();
         }
 
         public override IEqualityComparer<MachineInstruction> CreateInstructionComparer(Normalize norm)
@@ -129,7 +109,7 @@ namespace Reko.Arch.Vax
             throw new NotImplementedException();
         }
 
-        public override FlagGroupStorage GetFlagGroup(uint grf)
+        public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)
         {
             if (flagGroups.TryGetValue(grf, out var f))
             {
@@ -137,21 +117,21 @@ namespace Reko.Arch.Vax
             }
 
             PrimitiveType dt = Bits.IsSingleBitSet(grf) ? PrimitiveType.Bool : PrimitiveType.Byte;
-            var fl = new FlagGroupStorage(Registers.psw, grf, GrfToString(grf), dt);
+            var fl = new FlagGroupStorage(flagRegister, grf, GrfToString(Registers.psw, "", grf), dt);
             flagGroups.Add(grf, fl);
             return fl;
         }
 
-        public override SortedList<string, int> GetOpcodeNames()
+        public override SortedList<string, int> GetMnemonicNames()
         {
-            return Enum.GetValues(typeof(Opcode))
-                .Cast<Opcode>()
-                .ToSortedList(v => Enum.GetName(typeof(Opcode), v), v => (int)v);
+            return Enum.GetValues(typeof(Mnemonic))
+                .Cast<Mnemonic>()
+                .ToSortedList(v => Enum.GetName(typeof(Mnemonic), v), v => (int)v);
         }
 
-        public override int? GetOpcodeNumber(string name)
+        public override int? GetMnemonicNumber(string name)
         {
-            if (!Enum.TryParse(name, out Opcode result))
+            if (!Enum.TryParse(name, out Mnemonic result))
                 return null;
             return (int)result;
         }
@@ -161,7 +141,13 @@ namespace Reko.Arch.Vax
             throw new NotImplementedException();
         }
 
-        public override RegisterStorage GetRegister(int i)
+        public override RegisterStorage GetRegister(StorageDomain domain, BitRange range)
+        {
+            int i = domain - StorageDomain.Register;
+            return GetRegister(i);
+        }
+
+        public RegisterStorage GetRegister(int i)
         {
             if (0 <= i && i < regs.Length)
                 return regs[i];
@@ -174,15 +160,24 @@ namespace Reko.Arch.Vax
             return regs;
         }
 
+        public override IEnumerable<FlagGroupStorage> GetSubFlags(FlagGroupStorage flags)
+        {
+            foreach (var flag in flagRegisters)
+            {
+                if ((flags.FlagGroupBits & flag.FlagGroupBits) != 0)
+                    yield return flag;
+            }
+        }
+
         //$REVIEW: shouldn't this be flaggroup?
-        private static RegisterStorage[] flagRegisters = {
-            new RegisterStorage("C", 0, 0, PrimitiveType.Bool),
-            new RegisterStorage("V", 0, 0, PrimitiveType.Bool),
-            new RegisterStorage("Z", 0, 0, PrimitiveType.Bool),
-            new RegisterStorage("N", 0, 0, PrimitiveType.Bool),
+        private static readonly FlagGroupStorage[] flagRegisters = {
+            new FlagGroupStorage(Registers.psw, (uint)FlagM.CF, "C", PrimitiveType.Bool),
+            new FlagGroupStorage(Registers.psw, (uint)FlagM.VF, "V", PrimitiveType.Bool),
+            new FlagGroupStorage(Registers.psw, (uint)FlagM.ZF, "Z", PrimitiveType.Bool),
+            new FlagGroupStorage(Registers.psw, (uint)FlagM.NF, "N", PrimitiveType.Bool),
         };
 
-        public override string GrfToString(uint grf)
+        public override string GrfToString(RegisterStorage flagregister, string prefix, uint grf)
         {
             StringBuilder s = new StringBuilder();
             for (int r = 0; grf != 0; ++r, grf >>= 1)
@@ -193,7 +188,7 @@ namespace Reko.Arch.Vax
             return s.ToString();
         }
 
-        public override Address MakeAddressFromConstant(Constant c)
+        public override Address MakeAddressFromConstant(Constant c, bool codeAlign)
         {
             return Address.Ptr32(c.ToUInt32());
         }
@@ -220,11 +215,6 @@ namespace Reko.Arch.Vax
                 addr = Address.Ptr32(uAddr);
                 return true;
             }
-        }
-
-        public override bool TryRead(MemoryArea mem, Address addr, PrimitiveType dt, out Constant value)
-        {
-            return mem.TryReadLe(addr, dt, out value);
         }
     }
 }

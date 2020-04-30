@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -72,14 +72,18 @@ namespace Reko.Core.CLanguage
             { "__asm", CTokenType.__Asm },
             { "__cdecl", CTokenType.__Cdecl },
             { "__declspec", CTokenType.__Declspec },
+            { "__far", CTokenType._Far },
             { "__fastcall", CTokenType.__Fastcall },
             { "__forceinline", CTokenType.__ForceInline },
             { "__in", CTokenType.__In },
             { "__in_opt", CTokenType.__In_Opt },
             { "__inline", CTokenType.__Inline },
             { "__int64", CTokenType.__Int64 },
+            { "__loadds", CTokenType.__LoadDs },
+            { "__near", CTokenType._Near },
             { "__out", CTokenType.__Out},
             { "__out_bcount_opt", CTokenType.__Out_Bcount_Opt },
+            { "__pascal", CTokenType.__Pascal },
             { "__pragma", CTokenType.__Pragma },
             { "__ptr64", CTokenType.__Ptr64 },
             { "__stdcall", CTokenType.__Stdcall },
@@ -130,6 +134,8 @@ namespace Reko.Core.CLanguage
             DotDot,
             Colon,
             LineComment,
+            MultiLineComment,
+            MultiLineCommentStar,
         }
 
         public int LineNumber { get; private set; }
@@ -553,6 +559,7 @@ namespace Reko.Core.CLanguage
                     {
                     case '=': rdr.Read(); return Tok(CTokenType.DivAssign);
                     case '/': rdr.Read(); state = State.LineComment; break;
+                    case '*': rdr.Read(); state = State.MultiLineComment; break;
                     default: return Tok(CTokenType.Slash);
                     }
                     break;
@@ -662,6 +669,47 @@ namespace Reko.Core.CLanguage
                         rdr.Read(); break;
                     }
                     break;
+                case State.MultiLineComment:
+                    if (c < 0)
+                        throw new FormatException("Unterminated comment.");
+                    switch (ch)
+                    {
+                    case '\r':
+                    case '\n':
+                        EatWs();
+                        break;
+                    case '*':
+                        rdr.Read();
+                        state = State.MultiLineCommentStar;
+                        break;
+                    default:
+                        rdr.Read(); break;
+                    }
+                    break;
+                case State.MultiLineCommentStar:
+                    if (c < 0)
+                        throw new FormatException("Unterminated comment.");
+                    switch (ch)
+                    {
+                    case '\r':
+                    case '\n':
+                        EatWs();
+                        state = State.MultiLineComment;
+                        break;
+                    case '*':
+                        rdr.Read();
+                        state = State.MultiLineCommentStar;
+                        break;
+                    case '/':
+                        rdr.Read();
+                        if (!EatWs())
+                            return Tok(CTokenType.EOF);
+                        state = State.Start;
+                        break;
+                    default:
+                        rdr.Read(); break;
+                    }
+                    break;
                 default:
                     Nyi(state, ch);
                     break;
@@ -692,8 +740,7 @@ namespace Reko.Core.CLanguage
         private CToken LookupId()
         {
             string id = sb.ToString();
-            CTokenType type;
-            if (keywordHash.TryGetValue(id, out type))
+            if (keywordHash.TryGetValue(id, out CTokenType type))
             {
                 return new CToken(type);
             }
@@ -877,8 +924,10 @@ namespace Reko.Core.CLanguage
         __In_Opt,
         __Inline,
         __Int64,
+        __LoadDs,
         __Out,
         __Out_Bcount_Opt,
+        __Pascal,
         __Pragma,
         __Ptr64,
         __Stdcall,

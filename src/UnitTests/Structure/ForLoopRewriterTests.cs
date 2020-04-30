@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -61,7 +61,7 @@ namespace Reko.UnitTests.Structure
             sw.WriteLine("{0}()", proc.Name);
             sw.WriteLine("{");
 
-            CodeFormatter cf = new CodeFormatter(new TextFormatter(sw) { UseTabs = false });
+            var cf = new AbsynCodeFormatter(new TextFormatter(sw) { UseTabs = false });
             cf.WriteStatementList(proc.Body);
 
             sw.WriteLine("}");
@@ -492,5 +492,31 @@ namespace Reko.UnitTests.Structure
             });
         }
 
+        [Test]
+        public void Flr_CastingLoopVariable()
+        {
+            var sExp =
+            #region Expected
+@"test()
+{
+    for (i = 0; (real32) i <= arg; i = i + 1)
+        foo(i);
+}
+";
+            #endregion
+
+            RunTest(sExp, m =>
+            {
+                var i = Id("i", PrimitiveType.Int32);
+                var arg = Id("arg", PrimitiveType.Real32);
+                var foo = Id("foo", PrimitiveType.Ptr32);
+                m.Assign(i, m.Int32(0));
+                m.While(m.Le(m.Cast(PrimitiveType.Real32, i), arg), b =>
+                {
+                    b.SideEffect(b.Fn(foo, i));
+                    b.Assign(i, b.IAddS(i, 1));
+                });
+            });
+        }
     }
 }

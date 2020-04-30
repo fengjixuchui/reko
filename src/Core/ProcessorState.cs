@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,8 +35,8 @@ namespace Reko.Core
     /// </summary>
     public abstract class ProcessorState : EvaluationContext
     {
-        private Dictionary<RegisterStorage, Expression> linearDerived;
-        private SortedList<int, Expression> stackState;
+        private readonly Dictionary<RegisterStorage, Expression> linearDerived;
+        private readonly SortedList<int, Expression> stackState;
 
         public ProcessorState()
         {
@@ -57,11 +57,16 @@ namespace Reko.Core
         public Action<string> ErrorListener { get; set; }
 
         public abstract IProcessorArchitecture Architecture { get; }
+
+        /// <summary>
+        /// Current value of the instruction pointer.
+        /// </summary>
+        public virtual Address InstructionPointer { get; set; }
+
         public abstract ProcessorState Clone();
 
         public abstract Constant GetRegister(RegisterStorage r);
         public abstract void SetRegister(RegisterStorage r, Constant v);
-        public abstract void SetInstructionPointer(Address addr);
 
         public abstract void OnProcedureEntered();                 // Some registers need to be updated when a procedure is entered.
         public abstract void OnProcedureLeft(FunctionType procedureSignature);
@@ -141,7 +146,7 @@ namespace Reko.Core
             {
                 if (constAddr == Constant.Invalid)
                     return constAddr;
-                var ea = Architecture.MakeAddressFromConstant(constAddr);
+                var ea = Architecture.MakeAddressFromConstant(constAddr, false);
                 return GetMemoryValue(ea, access.DataType, segmentMap);
             }
             var addr = access.EffectiveAddress as Address;
@@ -161,13 +166,14 @@ namespace Reko.Core
         {
             if (GetStackOffset(access.EffectiveAddress, out var stackOffset))
             {
-                if (stackState.TryGetValue(stackOffset, out var value))
+                if (stackState.TryGetValue(stackOffset, out var value) && 
+                    value.DataType.BitSize == access.DataType.BitSize)
                     return value;
             }
             return Constant.Invalid;
         }
 
-        private Expression GetMemoryValue(Address addr, DataType dt, SegmentMap segmentMap)
+        public Expression GetMemoryValue(Address addr, DataType dt, SegmentMap segmentMap)
         {
             if (!(dt is PrimitiveType pt))
                 return Constant.Invalid;
@@ -203,6 +209,11 @@ namespace Reko.Core
         public Expression GetDefiningExpression(Identifier id)
         {
             return null;
+        }
+
+        public List<Statement> GetDefiningStatementClosure(Identifier id)
+        {
+            return new List<Statement>();
         }
 
         public Expression MakeSegmentedAddress(Constant seg, Constant off)

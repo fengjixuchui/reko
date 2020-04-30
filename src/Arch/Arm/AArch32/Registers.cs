@@ -1,4 +1,4 @@
-﻿using Reko.Core;
+using Reko.Core;
 using Reko.Core.Types;
 using System;
 using System.Collections.Generic;
@@ -81,21 +81,19 @@ namespace Reko.Arch.Arm.AArch32
         public static readonly RegisterStorage spsr_mon = new RegisterStorage("spsr_mon", 72, 0, PrimitiveType.Word32);
         public static readonly RegisterStorage spsr_hyp = new RegisterStorage("spsr_hyp", 73, 0, PrimitiveType.Word32);
 
-
-
         // We need to provide the coprocessors as named register storages even though
         // they more appropriately should be treated as symbols.
         public static readonly RegisterStorage[] Coprocessors = Enumerable.Range(0, 16)
             .Select(n => new RegisterStorage($"p{n}", 128 + n, 0, PrimitiveType.Byte))
             .ToArray();
         public static readonly RegisterStorage[] CoprocessorRegisters = Enumerable.Range(0, 16)
-            .Select(n => new RegisterStorage($"c{n}", 144 + n, 0, PrimitiveType.Word32))
+            .Select(n => new RegisterStorage($"cr{n}", 144 + n, 0, PrimitiveType.Word32))
             .ToArray();
 
         // The 'S..' floating point registers alias the 'D..' double floating point registers
         // which in turn alias the  128-bit 'Q..' registers 
         public static readonly RegisterStorage[] QRegs = Enumerable.Range(0, 16)
-            .Select(n => new RegisterStorage($"q{n}", 160, 0, PrimitiveType.Word128))
+            .Select(n => new RegisterStorage($"q{n}", 160 + n, 0, PrimitiveType.Word128))
             .ToArray();
         public static readonly RegisterStorage[] DRegs = Enumerable.Range(0, 32)
             .Select(n => new RegisterStorage($"d{n}", QRegs[n / 2].Number, (uint)(n & 1) * 64, PrimitiveType.Word64))
@@ -105,6 +103,9 @@ namespace Reko.Arch.Arm.AArch32
             .ToArray();
 
         public static readonly Dictionary<string, RegisterStorage> RegistersByName;
+        public static readonly Dictionary<StorageDomain, RegisterStorage> RegistersByDomain;
+
+        public static readonly HashSet<RegisterStorage> SIMDRegisters;
 
         static Registers()
         {
@@ -115,6 +116,13 @@ namespace Reko.Arch.Arm.AArch32
                 .Concat(DRegs)
                 .Concat(SRegs)
                 .ToDictionary(r => r.Name);
+
+            SIMDRegisters = QRegs.Concat(DRegs).Concat(SRegs).ToHashSet();
+            RegistersByDomain = GpRegs
+                .Concat(new[] { cpsr, fpscr, spsr })
+                .Concat(CoprocessorRegisters)
+                .Concat(QRegs)
+                .ToDictionary(r => r.Domain);
         }
     }
 }

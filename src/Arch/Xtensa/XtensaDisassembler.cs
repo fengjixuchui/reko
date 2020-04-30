@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,23 +25,32 @@ using Reko.Core.Machine;
 using System.Diagnostics;
 using System.Text;
 using Reko.Core.Expressions;
+using System.Linq;
+using Reko.Core.Lib;
+
+#pragma warning disable IDE1006 // Naming Styles
+
 
 namespace Reko.Arch.Xtensa
 {
-    public class XtensaDisassembler : DisassemblerBase<XtensaInstruction>
+    using Decoder = Reko.Core.Machine.Decoder<XtensaDisassembler, Mnemonic, XtensaInstruction>;
+
+    public class XtensaDisassembler : DisassemblerBase<XtensaInstruction, Mnemonic>
     {
-        private static readonly Decoder[] deocders;
+        private static readonly Decoder[] rootDecoder;
         private static readonly int[] b4const;
         private static readonly int[] b4constu;
 
         private readonly XtensaArchitecture arch;
         private readonly EndianImageReader rdr;
+        private readonly List<MachineOperand> ops;
         private State state;
 
         public XtensaDisassembler(XtensaArchitecture arch, EndianImageReader rdr)
         {
             this.arch = arch;
             this.rdr = rdr;
+            this.ops = new List<MachineOperand>();
         }
 
         private struct State
@@ -88,6 +97,7 @@ namespace Reko.Arch.Xtensa
             if (!this.rdr.TryReadByte(out byte b0)) return null;
             if (!this.rdr.TryReadByte(out byte b1)) return null;
             if (!this.rdr.TryReadByte(out byte b2)) return null;
+            ops.Clear();
 
             // Extract little endian pieces.
             state.op0 = (byte)(b0 & 0x0F);
@@ -99,135 +109,453 @@ namespace Reko.Arch.Xtensa
             state.imm8 = b2;
             state.imm12 = (ushort)((b2 << 4) | (b1 >> 4));
             state.imm16 = (ushort)((b2 << 8) | b1);
-            state.offset = (((b2 << 16) | (b1 << 8) | b0) >> 6);
+            state.offset = (int) Bits.SignExtend((ulong)((b2 << 16) | (b1 << 8) | b0) >> 6, 18);
 
-            XtensaInstruction instr;
-            try
-            {
-                instr = deocders[state.op0].Decode(this);
-            }
-            catch
-            {
-                Debug.Print("instr: {0:X2} {1:X2} {2:X2}", b0, b1, b2);
-                Debug.Print("{0}", state);
-                instr = new XtensaInstruction { Opcode = Opcodes.invalid };
-            };
+            var instr = rootDecoder[state.op0].Decode(0, this);
             instr.Address = state.addr;
             instr.Length = (int)(this.rdr.Address - state.addr);
             return instr;
         }
 
-        private XtensaInstruction DecodeOperands(Opcodes opcode, string fmt)
+        public override XtensaInstruction CreateInvalidInstruction()
         {
-            var ops = new List<MachineOperand>();
-            for (int i = 0; i < fmt.Length; ++i)
-            {
-                MachineOperand op;
-                switch (fmt[i++])
-                {
-                default: throw new NotImplementedException(
-                    string.Format("Operand type {0} not implemented.", fmt[i - 1]));
-                case ',':
-                    continue;
-                case '4': op = ImmediateOperand.Byte((byte)(state.r << fmt[i++] - '0')); break;
-                case '8': op = ImmediateOperand.UInt16((ushort)(state.imm8 << fmt[i++] - '0')); break;
-                case 'B': op = GetBoolRegister(fmt[i++]); break;
-                case 'F': op = GetFpuRegister(fmt[i++]); break;
-                case 'I': op = ImmediateOperand.Byte(FieldValue(fmt[i++])); break;
-                case 'J': op = LongJumpOffset(); break;
-                case 'R': op = GetAluRegister(fmt[i++]); break;
-                case 'a': op = ImmediateOperand.SByte(state.t == 0 ?(sbyte) -1 : (sbyte)state.t); break;
-                case 'b': op = ImmediateBranchOperand(fmt, ref i); break;
-                case 'c': op = CallOffset(state.offset); break;
-                case 'e': op = L32e_Value(state.r); break;
-                case 'i': op = SplitImmediate(); break;
-                case 'j': op = JumpOffset(state.imm8); break;
-                case 'm': op = Scaled256Immediate(fmt, ref i); break;
-                case 'p':
-                    op = NegativePcRelativeAddress();
-                    break;
-                case 'S': op = SpecialRegister((state.r << 4) | state.s); break;
-                }
-                ops.Add(op);
-            }
             return new XtensaInstruction
             {
-                Opcode = opcode,
+                InstructionClass = InstrClass.Invalid,
+                Mnemonic = Mnemonic.invalid,
+                Operands = MachineInstruction.NoOperands
+            };
+        }
+
+        public override XtensaInstruction MakeInstruction(InstrClass iclass, Mnemonic mnemonic)
+        {
+            return new XtensaInstruction
+            {
+                InstructionClass = iclass,
+                Mnemonic = mnemonic,
                 Operands = ops.ToArray()
             };
         }
 
-        private MachineOperand L32e_Value(byte r)
+        public override XtensaInstruction NotYetImplemented(uint wInstr, string message)
         {
-            var off = ~0x3F | (r << 2);
-            return ImmediateOperand.Int32(off);
-        }
+            var len = rdr.Address - this.state.addr;
+            var rdr2 = rdr.Clone();
+            rdr2.Offset -= len;
+            var hexBytes = string.Join("", rdr2.ReadBytes((int) len).Select(b => b.ToString("X2")));
 
-        private MachineOperand ImmediateBranchOperand(string fmt, ref int i)
-        {
-            switch (fmt[i++])
+            base.EmitUnitTest("Xtensa", hexBytes, message, "Xtdasm", this.state.addr, w =>
             {
-            case 'u': return ImmediateOperand.Word32(b4constu[state.r]);
-            case 's': return ImmediateOperand.Int32(b4const[state.r]);
-            default: throw new NotImplementedException();
-            }
+                w.WriteLine("AssertCode(\"@@@\", \"{0}\");", hexBytes);
+            });
+            return CreateInvalidInstruction();
         }
 
-        private byte FieldValue(char f)
+        // GP register
+        private static bool Rr(uint wInstr, XtensaDisassembler dasm)
         {
-            switch (f)
+            var reg = dasm.arch.GetAluRegister(dasm.state.r);
+            dasm.ops.Add(new RegisterOperand(reg));
+            return true;
+        }
+
+        private static bool Rs(uint wInstr, XtensaDisassembler dasm)
+        {
+            var reg = dasm.arch.GetAluRegister(dasm.state.s);
+            dasm.ops.Add(new RegisterOperand(reg));
+            return true;
+        }
+
+        private static bool Rt(uint wInstr, XtensaDisassembler dasm)
+        {
+            var reg = dasm.arch.GetAluRegister(dasm.state.t);
+            dasm.ops.Add(new RegisterOperand(reg));
+            return true;
+        }
+
+        // FPU register
+        private static bool Fr(uint wInstr, XtensaDisassembler dasm)
+        {
+            var freg = dasm.arch.GetFpuRegister(dasm.state.r);
+            dasm.ops.Add(new RegisterOperand(freg));
+            return true;
+        }
+
+        private static bool Fs(uint wInstr, XtensaDisassembler dasm)
+        {
+            var freg = dasm.arch.GetFpuRegister(dasm.state.s);
+            dasm.ops.Add(new RegisterOperand(freg));
+            return true;
+        }
+
+        private static bool Ft(uint wInstr, XtensaDisassembler dasm)
+        {
+            var freg = dasm.arch.GetFpuRegister(dasm.state.t);
+            dasm.ops.Add(new RegisterOperand(freg));
+            return true;
+        }
+
+        // MAC16 register
+
+        private static bool Mr(uint _, XtensaDisassembler dasm)
+        {
+            var mac16reg = dasm.arch.GetMac16Register(dasm.state.r & 3);
+            if (mac16reg == null)
+                return false;
+            dasm.ops.Add(new RegisterOperand(mac16reg));
+            return true;
+        }
+
+        // Mr operand can be m0 or m1.
+        private static bool Mr_01(uint _, XtensaDisassembler dasm)
+        {
+            var mac16reg = dasm.arch.GetMac16Register((dasm.state.r >> 2) & 1);
+            if (mac16reg == null)
+                return false;
+            dasm.ops.Add(new RegisterOperand(mac16reg));
+            return true;
+        }
+
+        private static bool Mt(uint wInstr, XtensaDisassembler dasm)
+        {
+            var mac16reg = dasm.arch.GetMac16Register(dasm.state.t);
+            if (mac16reg == null)
+                return false;
+            dasm.ops.Add(new RegisterOperand(mac16reg));
+            return true;
+        }
+
+        // Mt operand can be m2 or m3.
+
+        private static bool Mt_23(uint wInstr, XtensaDisassembler dasm)
+        {
+            var mac16reg = dasm.arch.GetMac16Register((dasm.state.t >> 2) | 0b10);
+            if (mac16reg == null)
+                return false;
+            dasm.ops.Add(new RegisterOperand(mac16reg));
+            return true;
+        }
+
+        // Special register
+        private static bool S(uint wInstr, XtensaDisassembler dasm)
+        {
+            //$REVIEW: Is this correct in bigendian?
+            var reg = dasm.arch.GetSpecialRegister((dasm.state.r << 4) | dasm.state.s);
+            if (reg == null)
+                return false;
+            dasm.ops.Add(new RegisterOperand(reg));
+            return true;
+        }
+
+        // User register
+        private static bool Ust(uint wINstr, XtensaDisassembler dasm)
+        {
+            var reg = dasm.arch.GetUserRegister((dasm.state.s << 4) | dasm.state.t);
+            dasm.ops.Add(new RegisterOperand(reg));
+            return true;
+        }
+
+        private static bool Usr(uint wINstr, XtensaDisassembler dasm)
+        {
+            var reg = dasm.arch.GetUserRegister((dasm.state.s << 4) | dasm.state.r);
+            dasm.ops.Add(new RegisterOperand(reg));
+            return true;
+        }
+
+        // 'e'
+        private static bool e(uint wInstr, XtensaDisassembler dasm)
+        {
+            var off = ~0x3F | (dasm.state.r << 2);
+            dasm.ops.Add(ImmediateOperand.Int32(off));
+            return true;
+        }
+
+        // Bool register
+        private static bool Br(uint wInstr, XtensaDisassembler dasm)
+        {
+            var reg = dasm.arch.GetBoolRegister(dasm.state.r);
+            dasm.ops.Add(new RegisterOperand(reg));
+            return true;
+        }
+
+        private static bool Bs(uint wInstr, XtensaDisassembler dasm)
+        {
+            var reg = dasm.arch.GetBoolRegister(dasm.state.s);
+            dasm.ops.Add(new RegisterOperand(reg));
+            return true;
+        }
+
+        private static Mutator<XtensaDisassembler> Bs_MultipleOf(int multiple)
+        {
+            return (uint wInstr, XtensaDisassembler dasm) =>
             {
-            default:  throw new NotImplementedException();
-            case 'r': return state.r;
-            case 's': return state.s;
-            case 't': return state.t;
-            case '1': return state.op1;
-            case '2': return state.op2;
-            case 'S': return (byte)(state.t | ((state.op2 & 1) << 4)); // used by slli
-            case 'R': return (byte)(state.s | ((state.op2 & 1) << 4)); // used by srai
-            case 'I': return (byte)(state.s | ((state.r & 1) << 4));   // used by ssai
-            }
+                var iReg = dasm.state.s;
+                if (iReg % multiple != 0)
+                    return false;
+                var reg = dasm.arch.GetBoolRegister(iReg);
+                dasm.ops.Add(new RegisterOperand(reg));
+                return true;
+            };
+        }
+        
+        private static bool Bt(uint wInstr, XtensaDisassembler dasm)
+        {
+            var reg = dasm.arch.GetBoolRegister(dasm.state.t);
+            dasm.ops.Add(new RegisterOperand(reg));
+            return true;
         }
 
-        private ImmediateOperand Scaled256Immediate(string fmt, ref int i)
+
+        // Immediate
+        private static bool Is(uint wInstr, XtensaDisassembler dasm)
         {
-            int n = (sbyte)state.imm8;
-            n <<= (fmt[i++] - '0');
-            return ImmediateOperand.Word32(n);
+            var op = ImmediateOperand.Byte(dasm.state.s);
+            dasm.ops.Add(op);
+            return true;
         }
 
-        private MachineOperand CallOffset(int offset)
+        private static bool It(uint wInstr, XtensaDisassembler dasm)
         {
-            return AddressOperand.Ptr32((uint)((state.addr.ToUInt32() & ~3) + (offset << 2) + 4));
+            var op = ImmediateOperand.Byte(dasm.state.t);
+            dasm.ops.Add(op);
+            return true;
         }
 
-        private AddressOperand LongJumpOffset()
+        // Immediate from t field, offset by 7.
+        private static bool It_7(uint wInstr, XtensaDisassembler dasm)
         {
-            return AddressOperand.Ptr32((uint)((int)state.addr.ToLinear() + (state.offset + 4)));
+            var n = (byte) (dasm.state.t + 7);
+            var op = ImmediateOperand.Byte(n);
+            dasm.ops.Add(op);
+            return true;
         }
 
-        private MachineOperand JumpOffset(byte offset)
+        // Immediate from t field, offset by -8.
+        private static bool It_m8(uint wInstr, XtensaDisassembler dasm)
         {
-            int dst = (int)state.addr.ToUInt32() + (sbyte)offset + 4;
-            return AddressOperand.Ptr32((uint)dst);
+            var n = (sbyte) (dasm.state.t - 8);
+            var op = ImmediateOperand.SByte(n);
+            dasm.ops.Add(op);
+            return true;
         }
 
-        private ImmediateOperand SplitImmediate()
+        private static bool Iop2(uint wInstr, XtensaDisassembler dasm)
         {
-            int n = ((state.imm8 | (state.s << 8)) << 20) >> 20;
-            return new ImmediateOperand(Constant.Word32(n));
+            var n = dasm.state.op2;
+            var op = ImmediateOperand.Byte(n);
+            dasm.ops.Add(op);
+            return true;
         }
 
-        private MachineOperand GetAluRegister(char pos)
+        private static bool Iop2_4(uint wInstr, XtensaDisassembler dasm)
         {
-            RegisterStorage reg = arch.GetAluRegister(this.FieldValue(pos));
-            return new RegisterOperand(reg);
+            var n = dasm.state.op2 << 4;
+            var op = ImmediateOperand.Byte((byte)n);
+            dasm.ops.Add(op);
+            return true;
         }
-    
-        private MachineOperand GetFpuRegister(char pos)
+
+
+        // Floating point constant (in 't' field)
+
+        private static readonly float[] floatImms = new float[16]
         {
-            var freg = arch.GetFpuRegister(this.FieldValue(pos));
-            return new RegisterOperand(freg);
+            1.0F,
+            2.0F,
+            4.0F,
+            8.0F,
+
+            16.0F,
+            32.0F,
+            64.0F,
+            128.0F,
+
+            256.0F,
+            512.0F,
+            1024.0F,
+            2048.0F,
+
+            4096.0F,
+            8192.0F,
+            16384.0F,
+            32768.0F,
+        };
+
+        private static bool Ift(uint wInstr, XtensaDisassembler dasm)
+        {
+            var op = new ImmediateOperand(Constant.Real32(floatImms[dasm.state.t]));
+            dasm.ops.Add(op);
+            return true;
+        }
+
+        // Immediate shift amount used by slli
+        private static bool IS(uint wInstr, XtensaDisassembler dasm)
+        {
+            var op = ImmediateOperand.Byte((byte) (dasm.state.t | ((dasm.state.op2 & 1) << 4)));
+            dasm.ops.Add(op);
+            return true;
+        }
+
+        // Immediate shift amount used by srai
+        private static bool IR(uint wInstr, XtensaDisassembler dasm)
+        {
+            var op = ImmediateOperand.Byte((byte) (dasm.state.s | ((dasm.state.op2 & 1) << 4)));
+            dasm.ops.Add(op);
+            return true;
+        }
+
+
+        // Immediate shift amount used by ssai
+        private static bool II(uint wInstr, XtensaDisassembler dasm)
+        { 
+            var op = ImmediateOperand.Byte((byte) (dasm.state.s | ((dasm.state.r & 1) << 4)));
+            dasm.ops.Add(op);
+            return true;
+        }
+
+
+        private static bool I4_2(uint wInstr, XtensaDisassembler dasm)
+        {
+            var op = ImmediateOperand.Byte((byte)(dasm.state.r << 2)); 
+            dasm.ops.Add(op);
+            return true;
+        }
+
+        private static bool I8_0(uint wInstr, XtensaDisassembler dasm)
+        {
+            var op = ImmediateOperand.UInt16((ushort)dasm.state.imm8);
+            dasm.ops.Add(op);
+            return true;
+        }
+
+        private static bool I8_1(uint wInstr, XtensaDisassembler dasm)
+        {
+            var op = ImmediateOperand.UInt16((ushort) (dasm.state.imm8 << 1));
+            dasm.ops.Add(op);
+            return true;
+        }
+
+        private static bool I8_2(uint wInstr, XtensaDisassembler dasm)
+        {
+            var op = ImmediateOperand.UInt16((ushort) (dasm.state.imm8 << 2));
+            dasm.ops.Add(op);
+            return true;
+        }
+
+        private static bool I12_3(uint wInstr, XtensaDisassembler dasm)
+        {
+            var op = ImmediateOperand.UInt16((ushort) (dasm.state.imm12 << 3));
+            dasm.ops.Add(op);
+            return true;
+        }
+
+        private static bool Irt(uint wInstr, XtensaDisassembler dasm)
+        {
+            var op = ImmediateOperand.Byte((byte) (((dasm.state.r & 1) << 4) | dasm.state.t));
+            dasm.ops.Add(op);
+            return true;
+        }
+
+        private static bool a(uint wInstr, XtensaDisassembler dasm)
+        {
+            var op = ImmediateOperand.SByte(dasm.state.t == 0 ? (sbyte) -1 : (sbyte) dasm.state.t);
+            dasm.ops.Add(op);
+            return true;
+        }
+
+        // Scaled immediates
+        private static bool m0(uint wInstr, XtensaDisassembler dasm)
+        {
+            int n = (sbyte) dasm.state.imm8;
+            var op = ImmediateOperand.Word32(n);
+            dasm.ops.Add(op);
+            return true;
+        }
+
+        private static bool m8(uint wInstr, XtensaDisassembler dasm)
+        {
+            int n = (sbyte) dasm.state.imm8;
+            n <<= 8;
+            var op = ImmediateOperand.Word32(n);
+            dasm.ops.Add(op);
+            return true;
+        }
+
+        // Split immediate
+        private static bool i(uint wInstr, XtensaDisassembler dasm)
+        {
+            int n = ((dasm.state.imm8 | (dasm.state.s << 8)) << 20) >> 20;
+            dasm.ops.Add(ImmediateOperand.Word32(n));
+            return true;
+        }
+
+        // 'bs'
+        private static bool bs(uint wInstr, XtensaDisassembler dasm)
+        {
+            var op = ImmediateOperand.Int32(b4const[dasm.state.r]);
+            dasm.ops.Add(op);
+            return true;
+        }
+
+        private static bool bu(uint wInstr, XtensaDisassembler dasm)
+        {
+            var op = ImmediateOperand.Word32(b4constu[dasm.state.r]);
+            dasm.ops.Add(op);
+            return true;
+        }
+
+        // Jump
+        private static bool j(uint wInstr, XtensaDisassembler dasm)
+        { 
+            int dst = (int) dasm.state.addr.ToUInt32() + (sbyte) dasm.state.imm8 + 4;
+            dasm.ops.Add(AddressOperand.Ptr32((uint) dst));
+            return true;
+        }
+
+        private static bool ju(uint wInstr, XtensaDisassembler dasm)
+        {
+            uint dst = dasm.state.addr.ToUInt32() + (byte) dasm.state.imm8 + 4;
+            dasm.ops.Add(AddressOperand.Ptr32(dst));
+            return true;
+        }
+
+
+        private static bool jrt(uint wInstr, XtensaDisassembler dasm)
+        {
+            var n =
+                dasm.state.r |
+                ((dasm.state.t & 0x3) << 4);
+            int dst = (int) dasm.state.addr.ToUInt32() + (sbyte) n + 4;
+            dasm.ops.Add(AddressOperand.Ptr32((uint) dst));
+            return true;
+        }
+
+
+
+        private static bool J(uint wInstr, XtensaDisassembler dasm)
+        {
+            var op = AddressOperand.Ptr32((uint) ((int) dasm.state.addr.ToLinear() + (dasm.state.offset + 4)));
+            dasm.ops.Add(op);
+            return true;
+        }
+
+        // Call offset
+        private static bool c(uint wInstr, XtensaDisassembler dasm)
+        {
+            var op = AddressOperand.Ptr32((uint) ((dasm.state.addr.ToUInt32() & ~3) + (dasm.state.offset << 2) + 4));
+            dasm.ops.Add(op);
+            return true;
+        }
+
+        // NegativePcRelativeAddress();
+        private static bool p(uint wInstr, XtensaDisassembler dasm)
+        {
+            var nAddr =
+                ((0xFFFF0000 | dasm.state.imm16) << 2) +
+                 (int) (dasm.rdr.Address.ToUInt32() & ~3);
+            var op = AddressOperand.Ptr32((uint) nAddr);
+            dasm.ops.Add(op);
+            return true;
         }
 
         private MachineOperand GetAluRegister(byte r)
@@ -235,189 +563,154 @@ namespace Reko.Arch.Xtensa
             return new RegisterOperand(arch.GetAluRegister(r));
         }
 
-        private MachineOperand GetBoolRegister(char pos)
-        {
-            RegisterStorage reg;
-            switch (pos)
-            {
-            case 'r': reg =  arch.GetBoolRegister(state.r); break;
-            case 's': reg =  arch.GetBoolRegister(state.s); break;
-            case 't': reg =  arch.GetBoolRegister(state.t); break;
-            default: throw new ArgumentOutOfRangeException();
-            }
-            return new RegisterOperand(reg);
-        }
-
-        private MachineOperand SpecialRegister(int sr)
-        {
-            return new RegisterOperand(arch.GetSpecialRegister(sr));
-        }
-
-        private MachineOperand NegativePcRelativeAddress()
-        {
-            var nAddr = 
-                ((0xFFFF0000 | state.imm16) << 2) +
-                 (int)(rdr.Address.ToUInt32() & ~3);
-            return AddressOperand.Ptr32((uint)nAddr);
-        }
-
-        public abstract class Decoder
-        {
-            public abstract XtensaInstruction Decode(XtensaDisassembler dasm);
-        }
-
         public class Op1Decoder : Decoder
         {
-            private Decoder[] aOprecs;
+            private readonly Decoder[] decoders;
 
-            public Op1Decoder(params Decoder [] aOprecs)
+            public Op1Decoder(params Decoder [] decoders)
             {
-                Debug.Assert(aOprecs.Length == 16);
-                this.aOprecs = aOprecs;
+                Debug.Assert(decoders.Length == 16);
+                this.decoders = decoders;
             }
 
-            public override XtensaInstruction Decode(XtensaDisassembler dasm)
+            public override XtensaInstruction Decode(uint wInstr, XtensaDisassembler dasm)
             {
-                return aOprecs[dasm.state.op1].Decode(dasm);
+                return decoders[dasm.state.op1].Decode(wInstr, dasm);
             }
         }
 
         public class Op2Decoder : Decoder
         {
-            private Decoder[] aOprecs;
+            private readonly Decoder[] decoders;
 
-            public Op2Decoder(params Decoder[] aOprecs)
+            public Op2Decoder(params Decoder[] decoders)
             {
-                Debug.Assert(aOprecs.Length == 16);
-                this.aOprecs = aOprecs;
+                Debug.Assert(decoders.Length == 16);
+                this.decoders = decoders;
             }
 
-            public override XtensaInstruction Decode(XtensaDisassembler dasm)
+            public override XtensaInstruction Decode(uint wInstr, XtensaDisassembler dasm)
             {
-                return aOprecs[dasm.state.op2].Decode(dasm);
-            }
-        }
-
-
-        public class r_Rec : Decoder
-        {
-            private Decoder[] aOprecs;
-
-            public r_Rec(params Decoder[] aOprecs)
-            {
-                Debug.Assert(aOprecs.Length == 16);
-                this.aOprecs = aOprecs;
-            }
-
-            public override XtensaInstruction Decode(XtensaDisassembler dasm)
-            {
-                return aOprecs[dasm.state.r].Decode(dasm);
+                return decoders[dasm.state.op2].Decode(wInstr, dasm);
             }
         }
 
-        public class m_Rec : Decoder
-        {
-            private Decoder[] aOprecs;
 
-            public m_Rec(params Decoder[] aOprecs)
+        public class r_Decoder : Decoder
+        {
+            private readonly Decoder[] decoders;
+
+            public r_Decoder(params Decoder[] decoders)
             {
-                Debug.Assert(aOprecs.Length == 4);
-                this.aOprecs = aOprecs;
+                Debug.Assert(decoders.Length == 16);
+                this.decoders = decoders;
             }
 
-            public override XtensaInstruction Decode(XtensaDisassembler dasm)
+            public override XtensaInstruction Decode(uint wInstr, XtensaDisassembler dasm)
             {
-                return aOprecs[dasm.state.t >> 2].Decode(dasm);
+                return decoders[dasm.state.r].Decode(wInstr, dasm);
+            }
+        }
+
+        public class m_Decoder : Decoder
+        {
+            private readonly Decoder[] decoders;
+
+            public m_Decoder(params Decoder[] decoders)
+            {
+                Debug.Assert(decoders.Length == 4);
+                this.decoders = decoders;
+            }
+
+            public override XtensaInstruction Decode(uint wInstr, XtensaDisassembler dasm)
+            {
+                return decoders[dasm.state.t >> 2].Decode(wInstr, dasm);
             }
         }
 
         public class n_Rec : Decoder
         {
-            private Decoder[] aOprecs;
+            private readonly Decoder[] decoders;
 
-            public n_Rec(params Decoder[] aOprecs)
+            public n_Rec(params Decoder[] decoders)
             {
-                Debug.Assert(aOprecs.Length == 4);
-                this.aOprecs = aOprecs;
+                Debug.Assert(decoders.Length == 4);
+                this.decoders = decoders;
             }
 
-            public override XtensaInstruction Decode(XtensaDisassembler dasm)
+            public override XtensaInstruction Decode(uint wInstr, XtensaDisassembler dasm)
             {
-                return aOprecs[dasm.state.t & 0x03].Decode(dasm);
+                return decoders[dasm.state.t & 0x03].Decode(wInstr, dasm);
             }
         }
 
         public class s_Rec : Decoder
         {
-            private Decoder[] aOprecs;
+            private readonly Decoder[] decoders;
 
-            public s_Rec(params Decoder[] aOprecs)
+            public s_Rec(params Decoder[] decoders)
             {
-                Debug.Assert(aOprecs.Length == 16);
-                this.aOprecs = aOprecs;
+                Debug.Assert(decoders.Length == 16);
+                this.decoders = decoders;
             }
 
-            public override XtensaInstruction Decode(XtensaDisassembler dasm)
+            public override XtensaInstruction Decode(uint wInstr, XtensaDisassembler dasm)
             {
-                return aOprecs[dasm.state.s].Decode(dasm);
-            }
-        }
-
-        public class t_Rec : Decoder
-        {
-            private Decoder[] aOprecs;
-
-            public t_Rec(params Decoder[] aOprecs)
-            {
-                Debug.Assert(aOprecs.Length == 16);
-                this.aOprecs = aOprecs;
-            }
-
-            public override XtensaInstruction Decode(XtensaDisassembler dasm)
-            {
-                return aOprecs[dasm.state.t].Decode(dasm);
+                return decoders[dasm.state.s].Decode(wInstr, dasm);
             }
         }
 
-        public class OpRec : Decoder
+        public class t_Decoder : Decoder
         {
-            private Opcodes opcode;
-            private InstrClass iclass;
-            private string fmt;
-            private bool twoByte;
+            private readonly Decoder[] decoders;
 
-            public OpRec(Opcodes opcode, string fmt)
+            public t_Decoder(params Decoder[] decoders)
             {
-                this.opcode = opcode;
-                this.fmt = fmt;
+                Debug.Assert(decoders.Length == 16);
+                this.decoders = decoders;
             }
 
-            public OpRec(Opcodes opcode, InstrClass iclass, string fmt)
+            public override XtensaInstruction Decode(uint wInstr, XtensaDisassembler dasm)
             {
-                this.opcode = opcode;
+                return decoders[dasm.state.t].Decode(wInstr, dasm);
+            }
+        }
+
+        public class InstrDecoder : Decoder<XtensaDisassembler, Mnemonic, XtensaInstruction>
+        {
+            private readonly InstrClass iclass;
+            private readonly Mnemonic mnemonic;
+            private readonly bool twoByte;
+            private readonly Mutator<XtensaDisassembler>[] mutators;
+
+            public InstrDecoder(InstrClass iclass, Mnemonic mnemonic, bool twoByte, params Mutator<XtensaDisassembler> [] mutators)
+            {
                 this.iclass = iclass;
-                this.fmt = fmt;
-            }
-
-            public OpRec(Opcodes opcode, string fmt, bool twoByte)
-            {
-                this.opcode = opcode;
-                this.fmt = fmt;
+                this.mnemonic = mnemonic;
                 this.twoByte = twoByte;
+                this.mutators = mutators;
             }
 
-            public override XtensaInstruction Decode(XtensaDisassembler dasm)
+            public override XtensaInstruction Decode(uint wInstr, XtensaDisassembler dasm)
             {
                 if (this.twoByte)
                     dasm.rdr.Offset -= 1;
-                return dasm.DecodeOperands(opcode, fmt);
+                foreach (var m in mutators)
+                {
+                    if (!m(wInstr, dasm))
+                        return dasm.CreateInvalidInstruction();
+                }
+                return dasm.MakeInstruction(iclass, mnemonic);
             }
         }
 
-        public class OpRecMovi_n : Decoder
+
+
+        public class Movi_nDecoder : Decoder
         {
-            public override XtensaInstruction Decode(XtensaDisassembler dasm)
+            public override XtensaInstruction Decode(uint wInstr, XtensaDisassembler dasm)
             {
+                Rs(wInstr, dasm);
                 var n = 
                     dasm.state.r |
                     ((dasm.state.t & 0x7) << 4) |
@@ -425,32 +718,24 @@ namespace Reko.Arch.Xtensa
                         ? ~0x1F
                         : 0);
                 var imm = ImmediateOperand.SByte((sbyte)n);
+                dasm.ops.Add(imm);
 
                 // this is a 2-byte instruction, so back up one byte.
                 dasm.rdr.Offset -= 1;
-
-                return new XtensaInstruction
-                {
-                    Opcode = Opcodes.movi_n,
-                    Operands = new MachineOperand[]
-                    {
-                        dasm.GetAluRegister(dasm.state.s),
-                        imm,
-                    }
-                };
+                return dasm.MakeInstruction(InstrClass.Linear, Mnemonic.movi_n);
             }
         }
 
-        public class OpRec_bz : Decoder
+        public class bz_Decoder : Decoder
         {
-            private Opcodes opcode;
+            private readonly Mnemonic mnemonic;
 
-            public OpRec_bz(Opcodes opcode)
+            public bz_Decoder(Mnemonic mnemonic)
             {
-                this.opcode = opcode;
+                this.mnemonic = mnemonic;
             }
 
-            public override XtensaInstruction Decode(XtensaDisassembler dasm)
+            public override XtensaInstruction Decode(uint wInstr, XtensaDisassembler dasm)
             {
                 int shoff = dasm.state.imm12;
                 if (shoff > 0x7FF)
@@ -460,7 +745,7 @@ namespace Reko.Arch.Xtensa
 
                 return new XtensaInstruction
                 {
-                    Opcode = opcode,
+                    Mnemonic = mnemonic,
                     Operands = new MachineOperand[]
                     {
                         dasm.GetAluRegister(dasm.state.s),
@@ -471,67 +756,13 @@ namespace Reko.Arch.Xtensa
             }
         }
 
-        public class OpRecBeqxx_n : Decoder
+        public class ExtuiDecoder : Decoder
         {
-            private Opcodes opcode;
-
-            public OpRecBeqxx_n(Opcodes opcode)
-            {
-                this.opcode = opcode;
-            }
-
-            public override XtensaInstruction Decode(XtensaDisassembler dasm)
-            {
-                var n =
-                    dasm.state.r |
-                    ((dasm.state.t & 0x3) << 4);
-                var dst = dasm.JumpOffset((byte)n);
-
-                // this is a 2-byte instruction, so back up one byte.
-                dasm.rdr.Offset -= 1;
-
-                return new XtensaInstruction
-                {
-                    Opcode = opcode,
-                    Operands = new MachineOperand[]
-                    {
-                        dasm.GetAluRegister(dasm.state.s),
-                        dst,
-                    }
-                };
-            }
-        }
-
-        public class OpRec_bbxi : Decoder
-        {
-            private Opcodes opcode;
-
-            public OpRec_bbxi(Opcodes opcode)
-            {
-                this.opcode = opcode;
-            }
-
-            public override XtensaInstruction Decode(XtensaDisassembler dasm)
+            public override XtensaInstruction Decode(uint wInstr, XtensaDisassembler dasm)
             {
                 return new XtensaInstruction
                 {
-                    Opcode = this.opcode,
-                    Operands = new MachineOperand[] {
-                        dasm.GetAluRegister(dasm.state.s),
-                        ImmediateOperand.Byte((byte)(((dasm.state.r & 1) << 4) | dasm.state.t)),
-                        dasm.JumpOffset(dasm.state.imm8)
-                    }
-                };
-            }
-        }
-
-        public class ExtuiOpRec : Decoder
-        {
-            public override XtensaInstruction Decode(XtensaDisassembler dasm)
-            {
-                return new XtensaInstruction
-                {
-                    Opcode = Opcodes.extui,
+                    Mnemonic = Mnemonic.extui,
                     Operands = new MachineOperand[]
                     {
                         dasm.GetAluRegister(dasm.state.r),
@@ -541,6 +772,27 @@ namespace Reko.Arch.Xtensa
                     }
                 };
             }
+        }
+
+        private static InstrDecoder Instr(Mnemonic mnemonic, params Mutator<XtensaDisassembler> [] mutators)
+        {
+            return new InstrDecoder(InstrClass.Linear, mnemonic, false, mutators);
+        }
+
+        private static InstrDecoder Instr(Mnemonic mnemonic, InstrClass iclass, params Mutator<XtensaDisassembler>[] mutators)
+        {
+            return new InstrDecoder(iclass, mnemonic, false, mutators);
+        }
+
+        private static InstrDecoder Instr2byte(Mnemonic mnemonic, InstrClass iclass, params Mutator<XtensaDisassembler>[] mutators)
+        {
+            return new InstrDecoder(iclass, mnemonic, true, mutators);
+        }
+
+
+        private static Decoder Nyi(string message)
+        {
+            return new NyiDecoder<XtensaDisassembler, Mnemonic, XtensaInstruction>(message);
         }
 
         static XtensaDisassembler()
@@ -571,37 +823,16 @@ namespace Reko.Arch.Xtensa
                 0x100,
             };
 
-            var reserved = new OpRec(Opcodes.reserved, "");
+            var reserved = Instr(Mnemonic.reserved);
 
-            var oprecLSCX = new Op1Decoder(
-                new OpRec(Opcodes.lsx,"T,Rs,Rr"),
-                null,
-                reserved,
-                reserved,
-
-                null,
-                null,
+            var decoderLSCX = new Op1Decoder(
+                Instr(Mnemonic.lsx, Fr,Rs,Rt),
+                Instr(Mnemonic.lsxu, Fr,Rs,Rt),
                 reserved,
                 reserved,
 
-                reserved,
-                reserved,
-                reserved,
-                reserved,
-
-                reserved,
-                reserved,
-                reserved,
-                reserved);
-
-            var oprecLSC4 = new Op2Decoder(
-                new OpRec(Opcodes.l32e, "Rt,Rs,e"),
-                reserved,
-                reserved,
-                reserved,
-
-                new OpRec(Opcodes.s32e, "Rt,Rs,e"),
-                reserved,
+                Instr(Mnemonic.ssx, Fr, Rs, Rt),
+                Instr(Mnemonic.ssxu, Fr, Rs, Rt),
                 reserved,
                 reserved,
 
@@ -615,115 +846,13 @@ namespace Reko.Arch.Xtensa
                 reserved,
                 reserved);
 
-            var oprecFP0 = new Op2Decoder(
-                new OpRec(Opcodes.add_s, "Fr,Fs,Ft"),
-                new OpRec(Opcodes.sub_s, "Fr,Fs,Ft"),
-                new OpRec(Opcodes.mul_s, "Fr,Fs,Ft"),
-                reserved,
-
-                null,
-                null,
-                null,
-                null,
-
-                null,
-                null,
-                null,
-                new OpRec(Opcodes.floor_s, "Rr,Fs,It"),
-
-                null,
-                null,
-                null,
-                null);
-
-            var oprecFP1 = new Op2Decoder(
-                reserved,
-                null,
-                null,
-                new OpRec(Opcodes.ueq_s, "Br,Fs,Ft"),
-
-                null,
-                null,
-                null,
-                null,
-
-                new OpRec(Opcodes.moveqz_s, "Fr,Fs,Rt"),
-                null,
-                null,
-                null,
-
-                null,
-                null,
-                reserved,
-                reserved);
-
-            var oprecJR = new n_Rec(
-                new OpRec(Opcodes.ret, ""),
-                null,
-                new OpRec(Opcodes.jx, "Rs"),
-                reserved);
-
-            var oprecCALLX = new n_Rec(
-                new OpRec(Opcodes.callx0, "Rs"),
-                new OpRec(Opcodes.callx4, "Rs"),
-                new OpRec(Opcodes.callx8, "Rs"),
-                new OpRec(Opcodes.callx12, "Rs"));
-
-            var oprecSNM0 = new m_Rec(
-                new OpRec(Opcodes.ill, InstrClass.Invalid|InstrClass.Zero, ""),
-                null,
-                oprecJR,
-                oprecCALLX);
-
-            var oprecSYNC = new t_Rec(
-                new OpRec(Opcodes.isync, ""),
-                null,
-                null,
-                null,
-
-                null,
-                null,
-                null,
-                null,
-
-                null,
-                null,
-                null,
-                null,
-
-                new OpRec(Opcodes.memw, ""),
-                null,
-                null,
-                null);
-
-            var oprecRFET = new s_Rec(
-                new OpRec(Opcodes.rfe, ""),
-                null,
-                null,
-                reserved,
-
-                null,
-                null,
-                reserved,
-                reserved,
-
-                reserved,
+            var decoderLSC4 = new Op2Decoder(
+                Instr(Mnemonic.l32e, Rt,Rs,e),
                 reserved,
                 reserved,
                 reserved,
 
-                reserved,
-                reserved,
-                reserved,
-                reserved);
-
-            var oprecRFEI = new t_Rec(
-                oprecRFET,
-                new OpRec(Opcodes.rfi, "Is"),
-                null,
-                reserved,
-
-                reserved,
+                Instr(Mnemonic.s32e, Rt,Rs,e),
                 reserved,
                 reserved,
                 reserved,
@@ -738,119 +867,127 @@ namespace Reko.Arch.Xtensa
                 reserved,
                 reserved);
 
-
-            var oprecBZ = new m_Rec(
-                new OpRec_bz(Opcodes.beqz),
-                new OpRec_bz(Opcodes.bnez),
-                new OpRec_bz(Opcodes.bltz),
-                new OpRec_bz(Opcodes.bgez));
-
-            var oprecBI0 = new m_Rec(
-                new OpRec(Opcodes.beqi, "Rs,bs,j"),
-                new OpRec(Opcodes.bnei, "Rs,bs,j"),
-                new OpRec(Opcodes.blti, "Rs,bs,j"),
-                new OpRec(Opcodes.bgei, "Rs,bs,j"));
-
-            var oprecBI1 = new m_Rec(
-                null,
-                null,
-                new OpRec(Opcodes.bltui, "Rs,bu,j"),
-                new OpRec(Opcodes.bgeui, "Rs,bu,j"));
-
-            var oprecSI = new n_Rec(
-                new OpRec(Opcodes.j, "J"),
-                oprecBZ,
-                oprecBI0,
-                oprecBI1);
-
-            var oprecB = new r_Rec(
-               new OpRec(Opcodes.bnone, "Rs,Rt,j"),
-               new OpRec(Opcodes.beq, "Rs,Rt,j"),
-               new OpRec(Opcodes.blt, "Rs,Rt,j"),
-               new OpRec(Opcodes.bltu, "Rs,Rt,j"),
-
-               new OpRec(Opcodes.ball, "Rs,Rt,j"),
-               new OpRec(Opcodes.bbc, "Rs,Rt,j"),
-               new OpRec_bbxi(Opcodes.bbci),
-               new OpRec_bbxi(Opcodes.bbci),
-
-               new OpRec(Opcodes.bany, "Rs,Rt,j"),
-               new OpRec(Opcodes.bne, "Rs,Rt,j"),
-               new OpRec(Opcodes.bge, "Rs,Rt,j"),
-               new OpRec(Opcodes.bgeu, "Rs,Rt,j"),
-
-               new OpRec(Opcodes.bnall, "Rs,Rt,j"),
-               new OpRec(Opcodes.bbs, "Rs,Rt,j"),
-               new OpRec_bbxi(Opcodes.bbsi),
-               new OpRec_bbxi(Opcodes.bbsi));
-
-            var oprecST0 = new r_Rec(
-                oprecSNM0,
-                null,
-                oprecSYNC,
-                oprecRFEI,
-
-                new OpRec(Opcodes.@break, "Is,It"),
-                null,
-                new OpRec(Opcodes.rsil, "Rt,Is"),
-                null,
-
-                null,
-                null,
-                null,
-                null,
-
-                null,
-                null,
-                null,
-                null);
-
-            var oprecST1 = new r_Rec(
-                new OpRec(Opcodes.ssr, "Rs"),
-                new OpRec(Opcodes.ssl, "Rs"),
-                new OpRec(Opcodes.ssa8l, "Rs"),
-                null,
-
-                new OpRec(Opcodes.ssai, "II"),
+            var decoderFP1OP = new t_Decoder(
+                Instr(Mnemonic.mov_s, Fr, Fs),
+                Instr(Mnemonic.abs_s, Fr, Fs),
                 reserved,
-                null,
-                null,
-
-                null,
                 reserved,
+                
+                Instr(Mnemonic.rfr, Rr, Fs),
+                Instr(Mnemonic.wfr, Fr, Rs),
+                Instr(Mnemonic.neg_s, Fr, Fs),
+                reserved,
+
+                reserved, reserved, reserved, reserved,
+                reserved, reserved, reserved, reserved
+                );
+
+            var decoderFP0 = new Op2Decoder(
+                Instr(Mnemonic.add_s, Fr, Fs, Ft),
+                Instr(Mnemonic.sub_s, Fr, Fs, Ft),
+                Instr(Mnemonic.mul_s, Fr, Fs, Ft),
+                reserved,
+
+                Instr(Mnemonic.madd_s, Fr, Fs, Ft),
+                Instr(Mnemonic.msub_s, Fr, Fs, Ft),
                 reserved,
                 reserved,
 
+                Instr(Mnemonic.round_s, Rr, Fs, Ift),
+                Instr(Mnemonic.trunc_s, Rr, Fs, Ift),
+                Instr(Mnemonic.floor_s, Rr, Fs, Ift),
+                Instr(Mnemonic.ceil_s, Rr, Fs, Ift),
+
+                Instr(Mnemonic.float_s, Fr, Rs, Ift),
+                Instr(Mnemonic.ufloat_s, Fr, Rs, Ift),
+                Instr(Mnemonic.utrunc_s, Rr, Fs, Ift),
+                decoderFP1OP);
+
+            var decoderFP1 = new Op2Decoder(
+                reserved,
+                Instr(Mnemonic.un_s, Br,Fs,Ft),
+                Instr(Mnemonic.oeq_s, Br,Fs,Ft),
+                Instr(Mnemonic.ueq_s, Br,Fs,Ft),
+
+                Instr(Mnemonic.olt_s, Br,Fs,Ft),
+                Instr(Mnemonic.ult_s, Br,Fs,Ft),
+                Instr(Mnemonic.ole_s, Br,Fs,Ft),
+                Instr(Mnemonic.ule_s, Br,Fs,Ft),
+
+                Instr(Mnemonic.moveqz_s, Fr,Fs,Rt),
+                Instr(Mnemonic.movnez_s, Fr,Fs,Rt),
+                Instr(Mnemonic.movltz_s, Fr,Fs,Rt),
+                Instr(Mnemonic.movgez_s, Fr,Fs,Rt),
+
+                Instr(Mnemonic.movf_s, Fr,Fs,Bt),
+                Instr(Mnemonic.movt_s, Fr,Fs,Bt),
+                reserved,
+                reserved);
+
+            var decoderJR = new n_Rec(
+                Instr(Mnemonic.ret, InstrClass.Transfer),
+                Instr(Mnemonic.retw, InstrClass.Transfer),
+                Instr(Mnemonic.jx, InstrClass.Transfer, Rs),
+                reserved);
+
+            var decoderCALLX = new n_Rec(
+                Instr(Mnemonic.callx0,  InstrClass.Transfer|InstrClass.Call, Rs),
+                Instr(Mnemonic.callx4,  InstrClass.Transfer|InstrClass.Call, Rs),
+                Instr(Mnemonic.callx8,  InstrClass.Transfer|InstrClass.Call, Rs),
+                Instr(Mnemonic.callx12, InstrClass.Transfer|InstrClass.Call, Rs));
+
+            var decoderSNM0 = new m_Decoder(
+                Instr(Mnemonic.ill, InstrClass.Invalid|InstrClass.Zero),
+                reserved,
+                decoderJR,
+                decoderCALLX);
+
+            var decoderSYNC = new t_Decoder(
+                Instr(Mnemonic.isync),
+                Instr(Mnemonic.rsync),
+                Instr(Mnemonic.esync),
+                Instr(Mnemonic.dsync),
+
                 reserved,
                 reserved,
-                new OpRec(Opcodes.nsa, "Rt,Rs"),
-                new OpRec(Opcodes.nsau, "Rt,Rs"));
-
-            var oprecST2 = new t_Rec(
-                new OpRecMovi_n(),
-                new OpRecMovi_n(),
-                new OpRecMovi_n(),
-                new OpRecMovi_n(),
-
-                new OpRecMovi_n(),
-                new OpRecMovi_n(),
-                new OpRecMovi_n(),
-                new OpRecMovi_n(),
-
-                new OpRecBeqxx_n(Opcodes.beqz_n),
-                new OpRecBeqxx_n(Opcodes.beqz_n),
-                new OpRecBeqxx_n(Opcodes.beqz_n),
-                new OpRecBeqxx_n(Opcodes.beqz_n),
-
-                new OpRecBeqxx_n(Opcodes.bnez_n),
-                new OpRecBeqxx_n(Opcodes.bnez_n),
-                new OpRecBeqxx_n(Opcodes.bnez_n),
-                new OpRecBeqxx_n(Opcodes.bnez_n));
-
-            var oprecS3 = new t_Rec(
-                new OpRec(Opcodes.ret_n, "", true),
                 reserved,
                 reserved,
+
+                Instr(Mnemonic.excw),
+                reserved,
+                reserved,
+                reserved,
+
+                Instr(Mnemonic.memw),
+                Instr(Mnemonic.extw),
+                reserved,
+                reserved);
+
+            var decoderRFET = new s_Rec(
+                Instr(Mnemonic.rfe),
+                Instr(Mnemonic.rfue),
+                Instr(Mnemonic.rfde),
+                reserved,
+
+                Instr(Mnemonic.rfwo),
+                Instr(Mnemonic.rfwu),
+                reserved,
+                reserved,
+
+                reserved,
+                reserved,
+                reserved,
+                reserved,
+
+                reserved,
+                reserved,
+                reserved,
+                reserved);
+
+            var decoderRFEI = new t_Decoder(
+                decoderRFET,
+                Instr(Mnemonic.rfi, Is),
+                Instr(Mnemonic.rfme),
                 reserved,
 
                 reserved,
@@ -868,8 +1005,138 @@ namespace Reko.Arch.Xtensa
                 reserved,
                 reserved);
 
-            var oprecST3 = new r_Rec(
-                new OpRec(Opcodes.mov_n, "Rt,Rs", true),
+
+            var decoderBZ = new m_Decoder(
+                new bz_Decoder(Mnemonic.beqz),
+                new bz_Decoder(Mnemonic.bnez),
+                new bz_Decoder(Mnemonic.bltz),
+                new bz_Decoder(Mnemonic.bgez));
+
+            var decoderBI0 = new m_Decoder(
+                Instr(Mnemonic.beqi, InstrClass.ConditionalTransfer, Rs,bs,j),
+                Instr(Mnemonic.bnei, InstrClass.ConditionalTransfer, Rs,bs,j),
+                Instr(Mnemonic.blti, InstrClass.ConditionalTransfer, Rs,bs,j),
+                Instr(Mnemonic.bgei, InstrClass.ConditionalTransfer, Rs,bs,j));
+
+            var decoderB1 = new r_Decoder(
+                Instr(Mnemonic.bf, Bs, j),
+                Instr(Mnemonic.bt, Bs, j),
+                reserved,
+                reserved,
+
+                reserved,
+                reserved,
+                reserved,
+                reserved,
+
+                Instr(Mnemonic.loop, Rs,ju),
+                Instr(Mnemonic.loopnez, Rs,ju),
+                Instr(Mnemonic.loopgtz, Rs,ju),
+                reserved,
+
+                reserved,
+                reserved,
+                reserved,
+                reserved);
+
+            var decoderBI1 = new m_Decoder(
+                Instr(Mnemonic.entry, Rs, I12_3),
+                decoderB1,
+                Instr(Mnemonic.bltui, InstrClass.ConditionalTransfer, Rs,bu,j),
+                Instr(Mnemonic.bgeui, InstrClass.ConditionalTransfer, Rs,bu,j));
+
+            var decoderSI = new n_Rec(
+                Instr(Mnemonic.j, J),
+                decoderBZ,
+                decoderBI0,
+                decoderBI1);
+
+            var decoderB = new r_Decoder(
+               Instr(Mnemonic.bnone, InstrClass.ConditionalTransfer, Rs,Rt,j),
+               Instr(Mnemonic.beq, InstrClass.ConditionalTransfer, Rs,Rt,j),
+               Instr(Mnemonic.blt, InstrClass.ConditionalTransfer, Rs,Rt,j),
+               Instr(Mnemonic.bltu, InstrClass.ConditionalTransfer, Rs,Rt,j),
+
+               Instr(Mnemonic.ball, InstrClass.ConditionalTransfer, Rs, Rt,j),
+               Instr(Mnemonic.bbc,  InstrClass.ConditionalTransfer, Rs, Rt,j),
+               Instr(Mnemonic.bbci, InstrClass.ConditionalTransfer, Rs, Irt, j),
+               Instr(Mnemonic.bbci, InstrClass.ConditionalTransfer, Rs, Irt, j),
+
+               Instr(Mnemonic.bany, InstrClass.ConditionalTransfer, Rs,Rt,j),
+               Instr(Mnemonic.bne, InstrClass.ConditionalTransfer, Rs,Rt,j),
+               Instr(Mnemonic.bge, InstrClass.ConditionalTransfer, Rs,Rt,j),
+               Instr(Mnemonic.bgeu, InstrClass.ConditionalTransfer, Rs,Rt,j),
+
+               Instr(Mnemonic.bnall, InstrClass.ConditionalTransfer, Rs,Rt,j),
+               Instr(Mnemonic.bbs,  InstrClass.ConditionalTransfer, Rs,Rt,j),
+               Instr(Mnemonic.bbsi, InstrClass.ConditionalTransfer, Rs, Irt, j),
+               Instr(Mnemonic.bbsi, InstrClass.ConditionalTransfer, Rs, Irt, j));
+
+            var decoderST0 = new r_Decoder(
+                decoderSNM0,
+                Instr(Mnemonic.movsp, Rt, Rs),
+                decoderSYNC,
+                decoderRFEI,
+
+                Instr(Mnemonic.@break, Is,It),
+                Instr(Mnemonic.syscall, InstrClass.Transfer|InstrClass.Call),
+                Instr(Mnemonic.rsil, Rt,Is),
+                Instr(Mnemonic.waiti, Is),
+
+                Instr(Mnemonic.any4, Bt, Bs_MultipleOf(4)),
+                Instr(Mnemonic.all4, Bt, Bs_MultipleOf(4)),
+                Instr(Mnemonic.any8, Bt, Bs_MultipleOf(8)),
+                Instr(Mnemonic.all8, Bt, Bs_MultipleOf(8)),
+
+                reserved,
+                reserved,
+                reserved,
+                reserved);
+
+            var decoderST1 = new r_Decoder(
+                Instr(Mnemonic.ssr, Rs),
+                Instr(Mnemonic.ssl, Rs),
+                Instr(Mnemonic.ssa8l, Rs),
+                Instr(Mnemonic.ssa8b, Rs),
+
+                Instr(Mnemonic.ssai, II),
+                reserved,
+                Instr(Mnemonic.rer, Rt,Rs),
+                Instr(Mnemonic.wer, Rt,Rs),
+
+                Instr(Mnemonic.rotw, It_m8),
+                reserved,
+                reserved,
+                reserved,
+
+                reserved,
+                reserved,
+                Instr(Mnemonic.nsa, Rt,Rs),
+                Instr(Mnemonic.nsau, Rt,Rs));
+
+            var decoderST2 = new t_Decoder(
+                new Movi_nDecoder(),
+                new Movi_nDecoder(),
+                new Movi_nDecoder(),
+                new Movi_nDecoder(),
+
+                new Movi_nDecoder(),
+                new Movi_nDecoder(),
+                new Movi_nDecoder(),
+                new Movi_nDecoder(),
+
+                Instr2byte(Mnemonic.beqz_n, InstrClass.ConditionalTransfer, Rs, jrt),
+                Instr2byte(Mnemonic.beqz_n, InstrClass.ConditionalTransfer, Rs, jrt),
+                Instr2byte(Mnemonic.beqz_n, InstrClass.ConditionalTransfer, Rs, jrt),
+                Instr2byte(Mnemonic.beqz_n, InstrClass.ConditionalTransfer, Rs, jrt),
+
+                Instr2byte(Mnemonic.bnez_n, InstrClass.ConditionalTransfer, Rs, jrt),
+                Instr2byte(Mnemonic.bnez_n, InstrClass.ConditionalTransfer, Rs, jrt),
+                Instr2byte(Mnemonic.bnez_n, InstrClass.ConditionalTransfer, Rs, jrt),
+                Instr2byte(Mnemonic.bnez_n, InstrClass.ConditionalTransfer, Rs, jrt));
+
+            var decoderS3 = new t_Decoder(
+                Instr2byte(Mnemonic.ret_n, InstrClass.Transfer),
                 reserved,
                 reserved,
                 reserved,
@@ -887,11 +1154,32 @@ namespace Reko.Arch.Xtensa
                 reserved,
                 reserved,
                 reserved,
-                oprecS3);
+                reserved);
 
-            var oprecRT0 = new s_Rec(
-                new OpRec(Opcodes.neg, "Rr,Rt"),
-                new OpRec(Opcodes.abs, "Rr,Rt"),
+            var decoderST3 = new r_Decoder(
+                Instr2byte(Mnemonic.mov_n, InstrClass.Linear, Rt,Rs),
+                reserved,
+                reserved,
+                reserved,
+
+                reserved,
+                reserved,
+                reserved,
+                reserved,
+
+                reserved,
+                reserved,
+                reserved,
+                reserved,
+
+                reserved,
+                reserved,
+                reserved,
+                decoderS3);
+
+            var decoderRT0 = new s_Rec(
+                Instr(Mnemonic.neg, Rr,Rt),
+                Instr(Mnemonic.abs, Rr,Rt),
                 reserved,
                 reserved,
                 
@@ -910,165 +1198,330 @@ namespace Reko.Arch.Xtensa
                 reserved,
                 reserved);
 
-            var oprecRST0 = new Op2Decoder(
-                oprecST0,
-                new OpRec(Opcodes.and, "Rr,Rs,Rt"),
-                new OpRec(Opcodes.or, "Rr,Rs,Rt"),
-                new OpRec(Opcodes.xor, "Rr,Rs,Rt"),
+            var decoderTLB = new r_Decoder(
+                reserved,
+                reserved,
+                reserved,
+                Instr(Mnemonic.ritlb0, Rt,Rs),
 
-                oprecST1,
-                null,
-                oprecRT0,
-                reserved,
-
-                new OpRec(Opcodes.add, "Rr,Rs,Rt"),
-                new OpRec(Opcodes.addx2, "Rr,Rs,Rt"),
-                new OpRec(Opcodes.addx4, "Rr,Rs,Rt"),
-                new OpRec(Opcodes.addx8, "Rr,Rs,Rt"),
-
-                new OpRec(Opcodes.sub, "Rr,Rs,Rt"),
-                new OpRec(Opcodes.subx2, "Rr,Rs,Rt"),
-                new OpRec(Opcodes.subx4, "Rr,Rs,Rt"),
-                new OpRec(Opcodes.subx8, "Rr,Rs,Rt"));
-
-            var oprecIMP = new r_Rec(
-                reserved,
-                reserved,
-                reserved,
-                reserved,
+                Instr(Mnemonic.iitlb, Rs),
+                Instr(Mnemonic.pitlb, Rt,Rs),
+                Instr(Mnemonic.witlb, Rt,Rs),
+                Instr(Mnemonic.ritlb1, Rt,Rs),
 
                 reserved,
                 reserved,
                 reserved,
+                Instr(Mnemonic.rdtlb0, Rt,Rs),
+
+                Instr(Mnemonic.idtlb, Rs),
+                Instr(Mnemonic.pdtlb, Rt,Rs),
+                Instr(Mnemonic.wdtlb, Rt,Rs),
+                Instr(Mnemonic.rdtlb1, Rt,Rs));
+
+            var decoderRST0 = new Op2Decoder(
+                decoderST0,
+                Instr(Mnemonic.and, Rr,Rs,Rt),
+                Instr(Mnemonic.or, Rr,Rs,Rt),
+                Instr(Mnemonic.xor, Rr,Rs,Rt),
+
+                decoderST1,
+                decoderTLB,
+                decoderRT0,
                 reserved,
 
-                reserved,
-                reserved,
-                reserved,
-                reserved,
+                Instr(Mnemonic.add, Rr,Rs,Rt),
+                Instr(Mnemonic.addx2, Rr,Rs,Rt),
+                Instr(Mnemonic.addx4, Rr,Rs,Rt),
+                Instr(Mnemonic.addx8, Rr,Rs,Rt),
 
-                reserved,
-                reserved,
-                reserved,
-                new OpRec(Opcodes.ldpte, ""));       //$TODO: doesn't appear to be documented
+                Instr(Mnemonic.sub, Rr,Rs,Rt),
+                Instr(Mnemonic.subx2, Rr,Rs,Rt),
+                Instr(Mnemonic.subx4, Rr,Rs,Rt),
+                Instr(Mnemonic.subx8, Rr,Rs,Rt));
 
-            var oprecRST1 = new Op2Decoder(
-                new OpRec(Opcodes.slli, "Rr,Rs,IS"),
-                new OpRec(Opcodes.slli, "Rr,Rs,IS"),
-                new OpRec(Opcodes.srai, "Rr,Rt,IR"),
-                new OpRec(Opcodes.srai, "Rr,Rt,IR"),
-
-                new OpRec(Opcodes.srli, "Rr,Rt,Is"),
-                reserved,
-                null,
-                null,
-
-                new OpRec(Opcodes.src, "Rr,Rs,Rt"),
-                new OpRec(Opcodes.srl, "Rr,Rt"),
-                new OpRec(Opcodes.sll, "Rr,Rs"),
-                new OpRec(Opcodes.sra, "Rr,Rs"),
-
-                new OpRec(Opcodes.mul16u, "Rr,Rs,Rt"),
-                new OpRec(Opcodes.mul16s, "Rr,Rs,Rt"),
-                reserved,
-                oprecIMP);
-
-            var oprecRST2 = new Op2Decoder(
-                new OpRec(Opcodes.andb, "Br,Bs,Bt"),
-                new OpRec(Opcodes.andbc, "Br,Bs,Bt"),
-                new OpRec(Opcodes.orb, "Br,Bs,Bt"),
-                new OpRec(Opcodes.orbc, "Br,Bs,Bt"),
-
-                new OpRec(Opcodes.xorb, "Br,Bs,Bt"),
-                reserved,
-                reserved,
-                reserved,
-
-                new OpRec(Opcodes.mull, "Rr,Rs,Rt"),
-                reserved,
-                null,
-                null,
-
-                new OpRec(Opcodes.quou, "Rr,Rs,Rt"),
-                new OpRec(Opcodes.quos, "Rr,Rs,Rt"),
-                new OpRec(Opcodes.remu, "Rr,Rs,Rt"),
-                new OpRec(Opcodes.rems, "Rr,Rs,Rt"));
-
-            var oprecRST3 = new Op2Decoder(
-               new OpRec(Opcodes.rsr, "Rt,S"),
-               new OpRec(Opcodes.wsr, "Rt,S"),
-               null,
-               null,
-
-               new OpRec(Opcodes.min, "Rr,Rs,Rt"),
-               new OpRec(Opcodes.max, "Rr,Rs,Rt"),
-               new OpRec(Opcodes.minu, "Rr,Rs,Rt"),
-               new OpRec(Opcodes.maxu, "Rr,Rs,Rt"),
-
-               new OpRec(Opcodes.moveqz, "Rr,Rs,Rt"),
-               new OpRec(Opcodes.movnez, "Rr,Rs,Rt"),
-               new OpRec(Opcodes.movltz, "Rr,Rs,Rt"),
-               new OpRec(Opcodes.movgez, "Rr,Rs,Rt"),
-
-               null,
-               null,
-               null,
-               null);
-
-            var oprecQRST = new Op1Decoder(
-                oprecRST0,
-                oprecRST1,
-                oprecRST2,
-                oprecRST3,
-
-                new ExtuiOpRec(),
-                new ExtuiOpRec(),
-                new OpRec(Opcodes.cust0, ""),
-                new OpRec(Opcodes.cust1, ""),
-
-                oprecLSCX,
-                oprecLSC4,
-                oprecFP0,
-                oprecFP1,
-
-                new OpRec(Opcodes.reserved, ""),
-                new OpRec(Opcodes.reserved, ""),
-                new OpRec(Opcodes.reserved, ""),
-                new OpRec(Opcodes.reserved, ""));
-
-            var oprecLSAI = new r_Rec(
-                new OpRec(Opcodes.l8ui, "Rt,Rs,80"),
-                new OpRec(Opcodes.l16ui, "Rt,Rs,81"),
-                new OpRec(Opcodes.l32i, "Rt,Rs,82"),
-                reserved,
-
-                new OpRec(Opcodes.s8i, "Rt,Rs,80"),
-                new OpRec(Opcodes.s16i, "Rt,Rs,81"),
-                new OpRec(Opcodes.s32i, "Rt,Rs,82"),
-                null,
-
-                null,
-                new OpRec(Opcodes.l16si, "Rt,Rs,81"),
-                new OpRec(Opcodes.movi, "Rt,i"),
-                null,
-
-                new OpRec(Opcodes.addi, "Rt,Rs,m0"),
-                new OpRec(Opcodes.addmi, "Rt,Rs,m8"),
-                null,
-                new OpRec(Opcodes.s32ri, "Rt,Rs,82"));
-
-            var oprecLSCI = new r_Rec(
+            var decoderIMP = new r_Decoder(
                 reserved,
                 reserved,
                 reserved,
                 reserved,
 
-                new OpRec(Opcodes.ssi, "Ft,Rs,82"),
+                reserved,
                 reserved,
                 reserved,
                 reserved,
 
-                new OpRec(Opcodes.lsiu, "Ft,Rs,82"),
+                reserved,
+                reserved,
+                reserved,
+                reserved,
+
+                reserved,
+                reserved,
+                reserved,
+                Instr(Mnemonic.ldpte));       //$TODO: doesn't appear to be documented
+
+            var decoderRST1 = new Op2Decoder(
+                Instr(Mnemonic.slli, Rr,Rs,IS),
+                Instr(Mnemonic.slli, Rr,Rs,IS),
+                Instr(Mnemonic.srai, Rr,Rt,IR),
+                Instr(Mnemonic.srai, Rr,Rt,IR),
+
+                Instr(Mnemonic.srli, Rr,Rt,Is),
+                reserved,
+                Instr(Mnemonic.xsr,Rt,S),
+                Nyi("Table ACCER"),
+
+                Instr(Mnemonic.src, Rr,Rs,Rt),
+                Instr(Mnemonic.srl, Rr,Rt),
+                Instr(Mnemonic.sll, Rr,Rs),
+                Instr(Mnemonic.sra, Rr,Rs),
+
+                Instr(Mnemonic.mul16u, Rr,Rs,Rt),
+                Instr(Mnemonic.mul16s, Rr,Rs,Rt),
+                reserved,
+                decoderIMP);
+
+            var decoderRST2 = new Op2Decoder(
+                Instr(Mnemonic.andb, Br,Bs,Bt),
+                Instr(Mnemonic.andbc, Br,Bs,Bt),
+                Instr(Mnemonic.orb, Br,Bs,Bt),
+                Instr(Mnemonic.orbc, Br,Bs,Bt),
+
+                Instr(Mnemonic.xorb, Br,Bs,Bt),
+                reserved,
+                reserved,
+                reserved,
+
+                Instr(Mnemonic.mull, Rr,Rs,Rt),
+                reserved,
+                Instr(Mnemonic.muluh, Rr,Rs,Rt),
+                Instr(Mnemonic.mulsh, Rr,Rs,Rt),
+
+                Instr(Mnemonic.quou, Rr,Rs,Rt),
+                Instr(Mnemonic.quos, Rr,Rs,Rt),
+                Instr(Mnemonic.remu, Rr,Rs,Rt),
+                Instr(Mnemonic.rems, Rr,Rs,Rt));
+
+            var decoderRST3 = new Op2Decoder(
+               Instr(Mnemonic.rsr, Rt,S),
+               Instr(Mnemonic.wsr, Rt,S),
+               Instr(Mnemonic.sext, Rr,Rs,It_7),
+               Instr(Mnemonic.clamps, Rr,Rs,It_7),
+
+               Instr(Mnemonic.min, Rr,Rs,Rt),
+               Instr(Mnemonic.max, Rr,Rs,Rt),
+               Instr(Mnemonic.minu, Rr,Rs,Rt),
+               Instr(Mnemonic.maxu, Rr,Rs,Rt),
+
+               Instr(Mnemonic.moveqz, Rr,Rs,Rt),
+               Instr(Mnemonic.movnez, Rr,Rs,Rt),
+               Instr(Mnemonic.movltz, Rr,Rs,Rt),
+               Instr(Mnemonic.movgez, Rr,Rs,Rt),
+
+               Instr(Mnemonic.movf, Rr,Rs,Bt),
+               Instr(Mnemonic.movt, Rr,Rs,Bt),
+               Instr(Mnemonic.rur, Rr,Ust),
+               Instr(Mnemonic.wur, Rt,Usr));
+
+            var decoderQRST = new Op1Decoder(
+                decoderRST0,
+                decoderRST1,
+                decoderRST2,
+                decoderRST3,
+
+                new ExtuiDecoder(),
+                new ExtuiDecoder(),
+                Instr(Mnemonic.cust0),
+                Instr(Mnemonic.cust1),
+
+                decoderLSCX,
+                decoderLSC4,
+                decoderFP0,
+                decoderFP1,
+
+                Instr(Mnemonic.reserved),
+                Instr(Mnemonic.reserved),
+                Instr(Mnemonic.reserved),
+                Instr(Mnemonic.reserved));
+
+            var decoderDCE = new Op1Decoder(
+                Instr(Mnemonic.dpfl, Rs, Iop2_4),
+                reserved,
+                Instr(Mnemonic.dhu, Rs, Iop2),
+                Instr(Mnemonic.diu, Rs, Iop2),
+
+                Instr(Mnemonic.diwb, Rs, Iop2_4),
+                Instr(Mnemonic.diwbi, Rs, Iop2_4),
+                reserved,
+                reserved,
+
+                reserved, reserved, reserved, reserved,
+                reserved, reserved, reserved, reserved
+                );
+
+            var decoderICE = new Op1Decoder(
+                Instr(Mnemonic.ipfl, Rs,Iop2_4),
+                reserved, 
+                Instr(Mnemonic.ihu, Rs,Iop2_4),
+                Instr(Mnemonic.iiu, Rs,Iop2_4),
+                
+                reserved, reserved, reserved, reserved,
+                reserved, reserved, reserved, reserved,
+                reserved, reserved, reserved, reserved
+            );
+
+            var decoderCACHE = new t_Decoder(
+                Instr(Mnemonic.dpfr, Rs,I8_2),
+                Instr(Mnemonic.dpfw, Rs,I8_2),
+                Instr(Mnemonic.dpfro, Rs,I8_2),
+                Instr(Mnemonic.dpfwo, Rs,I8_2),
+
+                Instr(Mnemonic.dhwb, Rs,I8_2),
+                Instr(Mnemonic.dhwbi, Rs,I8_2),
+                Instr(Mnemonic.dhi, Rs,I8_2),
+                Instr(Mnemonic.dii, Rs,I8_2),
+
+                decoderDCE,
+                reserved,
+                reserved,
+                reserved,
+                
+                Instr(Mnemonic.ipf, Rs,I8_2),
+                decoderICE,
+                Instr(Mnemonic.ihi, Rs, I8_2),
+                Instr(Mnemonic.iii, Rs, I8_2));
+
+            var decoderLSAI = new r_Decoder(
+                Instr(Mnemonic.l8ui, Rt,Rs,I8_0),
+                Instr(Mnemonic.l16ui, Rt,Rs,I8_1),
+                Instr(Mnemonic.l32i, Rt,Rs,I8_2),
+                reserved,
+
+                Instr(Mnemonic.s8i, Rt,Rs,I8_0),
+                Instr(Mnemonic.s16i, Rt,Rs,I8_1),
+                Instr(Mnemonic.s32i, Rt,Rs,I8_2),
+                decoderCACHE,
+
+                reserved,
+                Instr(Mnemonic.l16si, Rt,Rs,I8_1),
+                Instr(Mnemonic.movi, Rt,i),
+                Instr(Mnemonic.l32ai, Rt,Rs,I8_2),
+
+                Instr(Mnemonic.addi, Rt,Rs,m0),
+                Instr(Mnemonic.addmi, Rt,Rs,m8),
+                Instr(Mnemonic.s32c1i, Rt,Rs,I8_2),
+                Instr(Mnemonic.s32ri, Rt,Rs,I8_2));
+
+            var decoderLSCI = new r_Decoder(
+                reserved,
+                reserved,
+                reserved,
+                reserved,
+
+                Instr(Mnemonic.ssi, Ft,Rs,I8_2),
+                reserved,
+                reserved,
+                reserved,
+
+                Instr(Mnemonic.lsiu, Ft,Rs,I8_2),
+                reserved,
+                reserved,
+                reserved,
+
+                reserved,
+                reserved,
+                reserved,
+                reserved);
+
+            var decoderMACID = new Op1Decoder(
+                reserved,
+                reserved,
+                reserved,
+                reserved,
+
+                reserved,
+                reserved,
+                reserved,
+                reserved,
+
+                Instr(Mnemonic.mula_da_ll_ldinc, Mr, Rs, Mr_01, Rt),
+                Instr(Mnemonic.mula_da_hl_ldinc, Mr, Rs, Mr_01, Rt),
+                Instr(Mnemonic.mula_da_lh_ldinc, Mr, Rs, Mr_01, Rt),
+                Instr(Mnemonic.mula_da_hh_ldinc, Mr, Rs, Mr_01, Rt),
+
+                reserved,
+                reserved,
+                reserved,
+                reserved);
+
+            var decoderMACAD = new Op1Decoder(
+                reserved, reserved, reserved, reserved,
+                Instr(Mnemonic.mul_ad_ll, Rs, Mt_23),
+                Instr(Mnemonic.mul_ad_hl, Rs, Mt_23),
+                Instr(Mnemonic.mul_ad_lh, Rs, Mt_23),
+                Instr(Mnemonic.mul_ad_hh, Rs, Mt_23),
+
+                Instr(Mnemonic.mula_ad_ll, Rs, Mt_23),
+                Instr(Mnemonic.mula_ad_hl, Rs, Mt_23),
+                Instr(Mnemonic.mula_ad_lh, Rs, Mt_23),
+                Instr(Mnemonic.mula_ad_hh, Rs, Mt_23),
+
+                Instr(Mnemonic.muls_ad_ll, Rs, Mt_23),
+                Instr(Mnemonic.muls_ad_hl, Rs, Mt_23),
+                Instr(Mnemonic.muls_ad_lh, Rs, Mt_23),
+                Instr(Mnemonic.muls_ad_hh, Rs, Mt_23));
+
+            var decoderMACCD = new Op1Decoder(
+                reserved, reserved, reserved, reserved,
+                reserved, reserved, reserved, reserved,
+
+                Instr(Mnemonic.mula_dd_ll_lddec, Mr, Rs, Mr_01, Rt),
+                Instr(Mnemonic.mula_dd_hl_lddec, Mr, Rs, Mr_01, Rt),
+                Instr(Mnemonic.mula_dd_lh_lddec, Mr, Rs, Mr_01, Rt),
+                Instr(Mnemonic.mula_dd_hh_lddec, Mr, Rs, Mr_01, Rt),
+
+                reserved, reserved, reserved, reserved);
+
+            var decoderMACDD = new Op1Decoder(
+                reserved,
+                reserved,
+                reserved,
+                reserved,
+
+                Instr(Mnemonic.mul_dd_ll, Mr_01, Mt_23),
+                Instr(Mnemonic.mul_dd_hl, Mr_01, Mt_23),
+                Instr(Mnemonic.mul_dd_lh, Mr_01, Mt_23),
+                Instr(Mnemonic.mul_dd_hh, Mr_01, Mt_23),
+
+                Instr(Mnemonic.mula_dd_ll, Mr_01, Mt_23),
+                Instr(Mnemonic.mula_dd_hl, Mr_01, Mt_23),
+                Instr(Mnemonic.mula_dd_lh, Mr_01, Mt_23),
+                Instr(Mnemonic.mula_dd_hh, Mr_01, Mt_23),
+
+                Instr(Mnemonic.muls_dd_ll, Mr_01, Mt_23),
+                Instr(Mnemonic.muls_dd_hl, Mr_01, Mt_23),
+                Instr(Mnemonic.muls_dd_lh, Mr_01, Mt_23),
+                Instr(Mnemonic.muls_dd_hh, Mr_01, Mt_23));
+
+            var decoderMACI = new Op1Decoder(
+                Instr(Mnemonic.ldinc, Mr,Rs), reserved, reserved, reserved,
+                reserved, reserved, reserved, reserved,
+                reserved, reserved, reserved, reserved,
+                reserved, reserved, reserved, reserved);
+
+            var decoderMACC = new Op1Decoder(
+                Instr(Mnemonic.lddec, Mr,Rs),
+                reserved,
+                reserved,
+                reserved,
+
+                reserved,
+                reserved,
+                reserved,
+                reserved,
+
+                reserved,
                 reserved,
                 reserved,
                 reserved,
@@ -1078,81 +1531,72 @@ namespace Reko.Arch.Xtensa
                 reserved,
                 reserved);
 
-            var oprecMACID = new Op1Decoder(
-                reserved,
-                reserved,
-                reserved,
-                reserved,
+            var decoderMACIA = new Op1Decoder(
+                reserved, reserved, reserved, reserved,
+                reserved, reserved, reserved, reserved,
+                Instr(Mnemonic.mula_da_ll_ldinc, Mr, Rs, Mr_01, Rt),
+                Instr(Mnemonic.mula_da_hl_ldinc, Mr, Rs, Mr_01, Rt),
+                Instr(Mnemonic.mula_da_lh_ldinc, Mr, Rs, Mr_01, Rt),
+                Instr(Mnemonic.mula_da_hh_ldinc, Mr, Rs, Mr_01, Rt),
+                reserved, reserved, reserved, reserved);
 
-                reserved,
-                reserved,
-                reserved,
-                reserved,
+            var decoderMACCA = new Op1Decoder(
+                reserved, reserved, reserved, reserved,
+                reserved, reserved, reserved, reserved,
+                Instr(Mnemonic.mula_da_ll_lddec, Mr, Rs, Mr_01, Rt),
+                Instr(Mnemonic.mula_da_hl_lddec, Mr, Rs, Mr_01, Rt),
+                Instr(Mnemonic.mula_da_lh_lddec, Mr, Rs, Mr_01, Rt),
+                Instr(Mnemonic.mula_da_hh_lddec, Mr, Rs, Mr_01, Rt),
+                reserved, reserved, reserved, reserved);
 
-                null,
-                null,
-                null,
-                null,
+            var decoderMACDA = new Op1Decoder(
+                reserved, reserved, reserved, reserved,
+                Instr(Mnemonic.mul_da_ll, Mr_01, Rt),
+                Instr(Mnemonic.mul_da_hl, Mr_01, Rt),
+                Instr(Mnemonic.mul_da_lh, Mr_01, Rt),
+                Instr(Mnemonic.mul_da_hh, Mr_01, Rt),
 
-                reserved,
-                reserved,
-                reserved,
-                reserved);
-            var oprecMACDD = new Op1Decoder(
-                reserved,
-                reserved,
-                reserved,
-                reserved,
+                Instr(Mnemonic.mula_da_ll, Mr_01, Rt),
+                Instr(Mnemonic.mula_da_hl, Mr_01, Rt),
+                Instr(Mnemonic.mula_da_lh, Mr_01, Rt),
+                Instr(Mnemonic.mula_da_hh, Mr_01, Rt),
 
-                null,
-                null,
-                null,
-                null,
+                Instr(Mnemonic.muls_da_ll, Mr_01, Rt),
+                Instr(Mnemonic.muls_da_hl, Mr_01, Rt),
+                Instr(Mnemonic.muls_da_lh, Mr_01, Rt),
+                Instr(Mnemonic.muls_da_hh, Mr_01, Rt));
 
-                null,
-                null,
-                null,
-                null,
+            var decoderMACAA = new Op1Decoder(
+                Instr(Mnemonic.umul_aa_ll, Rs, Rt),
+                Instr(Mnemonic.umul_aa_hl, Rs, Rt),
+                Instr(Mnemonic.umul_aa_lh, Rs, Rt),
+                Instr(Mnemonic.umul_aa_hh, Rs, Rt),
+                Instr(Mnemonic.mul_aa_ll, Rs,Rt),
+                Instr(Mnemonic.mul_aa_hl, Rs,Rt),
+                Instr(Mnemonic.mul_aa_lh, Rs,Rt),
+                Instr(Mnemonic.mul_aa_hh, Rs,Rt),
+                Instr(Mnemonic.mula_aa_ll, Rs,Rt),
+                Instr(Mnemonic.mula_aa_hl, Rs,Rt),
+                Instr(Mnemonic.mula_aa_lh, Rs,Rt),
+                Instr(Mnemonic.mula_aa_hh, Rs,Rt),
+                Instr(Mnemonic.muls_aa_ll, Rs,Rt),
+                Instr(Mnemonic.muls_aa_hl, Rs,Rt),
+                Instr(Mnemonic.muls_aa_lh, Rs,Rt),
+                Instr(Mnemonic.muls_aa_hh, Rs,Rt));
 
-                null,
-                null,
-                null,
-                null);
+            var decoderMAC16 = new Op2Decoder(
+                decoderMACID,
+                decoderMACCD,
+                decoderMACDD,
+                decoderMACAD,
 
-            var oprecMACC = new Op1Decoder(
-                reserved,
-                reserved,
-                reserved,
-                reserved,
+                decoderMACIA,
+                decoderMACCA,
+                decoderMACDA,
+                decoderMACAA,
 
-                reserved,
-                reserved,
-                reserved,
-                reserved,
-
-                reserved,
-                reserved,
-                reserved,
-                reserved,
-
-                reserved,
-                reserved,
-                reserved,
-                reserved);
-
-            var oprecMAC16 = new Op2Decoder(
-                oprecMACID,
-                null,
-                oprecMACDD,
-                null,
-
-                null,
-                null,
-                null,
-                null,
-
-                null,
-                oprecMACC,
+                decoderMACI,
+                decoderMACC,
                 reserved,
                 reserved,
 
@@ -1161,31 +1605,31 @@ namespace Reko.Arch.Xtensa
                 reserved,
                 reserved);
 
-            var oprecCALLN = new n_Rec(
-                new OpRec(Opcodes.call0, "c"),
-                new OpRec(Opcodes.call4, "c"),
-                new OpRec(Opcodes.call8, "c"),
-                new OpRec(Opcodes.call12, "c"));
+            var decoderCALLN = new n_Rec(
+                Instr(Mnemonic.call0, c),
+                Instr(Mnemonic.call4, c),
+                Instr(Mnemonic.call8, c),
+                Instr(Mnemonic.call12, c));
 
-            deocders = new Decoder[]
+            rootDecoder = new Decoder[]
             {
-                oprecQRST,
-                new OpRec(Opcodes.l32r, "Rt,p"),
-                oprecLSAI,
-                oprecLSCI,
+                decoderQRST,
+                Instr(Mnemonic.l32r, Rt,p),
+                decoderLSAI,
+                decoderLSCI,
 
-                oprecMAC16,
-                oprecCALLN,
-                oprecSI,
-                oprecB,
+                decoderMAC16,
+                decoderCALLN,
+                decoderSI,
+                decoderB,
 
-                new OpRec(Opcodes.l32i_n, "Rt,Rs,42", true),
-                new OpRec(Opcodes.s32i_n, "Rt,Rs,42", true),
-                new OpRec(Opcodes.add_n, "Rr,Rs,Rt", true),
-                new OpRec(Opcodes.addi_n, "Rr,Rs,a", true),
+                Instr2byte(Mnemonic.l32i_n,InstrClass.Linear, Rt,Rs,I4_2),
+                Instr2byte(Mnemonic.s32i_n,InstrClass.Linear, Rt,Rs,I4_2),
+                Instr2byte(Mnemonic.add_n, InstrClass.Linear, Rr,Rs,Rt),
+                Instr2byte(Mnemonic.addi_n,InstrClass.Linear, Rr,Rs,a),
 
-                oprecST2,
-                oprecST3,
+                decoderST2,
+                decoderST3,
                 reserved,
                 reserved,
             };

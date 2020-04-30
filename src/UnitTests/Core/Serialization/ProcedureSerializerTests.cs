@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -99,7 +99,7 @@ namespace Reko.UnitTests.Core.Serialization
         public void X86ps_SerializeSequence()
         {
             Identifier seq = new Identifier("es_bx", PrimitiveType.Word32,
-                new SequenceStorage(Registers.es, Registers.bx, PrimitiveType.SegPtr32));
+                new SequenceStorage(PrimitiveType.SegPtr32, Registers.es, Registers.bx));
             Given_ProcedureSerializer("stdapi");
 
             SerializedSignature ssig = ser.Serialize(new FunctionType(seq, new Identifier[0]));

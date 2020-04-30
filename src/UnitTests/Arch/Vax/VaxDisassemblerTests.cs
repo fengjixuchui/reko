@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,11 +45,6 @@ namespace Reko.UnitTests.Arch.Vax
         }
 
         public override Address LoadAddress { get { return Address.Ptr32(0x00100000); } }
-
-        protected override ImageWriter CreateImageWriter(byte[] bytes)
-        {
-            return new LeImageWriter(bytes);
-        }
 
         private void AssertCode(string sExp, params byte[] bytes)
         {
@@ -128,7 +123,7 @@ namespace Reko.UnitTests.Arch.Vax
         [Test]
         public void VaxDis_InvalidWriteToConstant()
         {
-            AssertCode("Invalid\t", 0xD0, 0x50, 0x03);
+            AssertCode("Invalid", 0xD0, 0x50, 0x03);
         }
 
         [Test]

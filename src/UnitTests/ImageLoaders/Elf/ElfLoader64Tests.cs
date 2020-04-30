@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -52,8 +52,8 @@ namespace Reko.UnitTests.ImageLoaders.Elf
             this.sc = new ServiceContainer();
             var cfgSvc = new Mock<IConfigurationService>();
             var arch = new Mock<IProcessorArchitecture>();
-            platform.Setup(p => p.MakeAddressFromLinear(It.IsAny<ulong>()))
-                .Returns((ulong u) => Address.Ptr64(u));
+            platform.Setup(p => p.MakeAddressFromLinear(It.IsAny<ulong>(), It.IsAny<bool>()))
+                .Returns((ulong u, bool b) => Address.Ptr64(u));
             cfgSvc.Setup(c => c.GetArchitecture("x86-protected-64")).Returns(arch.Object);
             sc.AddService<IConfigurationService>(cfgSvc.Object);
         }

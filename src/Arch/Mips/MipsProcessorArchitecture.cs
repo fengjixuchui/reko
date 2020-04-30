@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -48,10 +48,15 @@ namespace Reko.Arch.Mips
         public RegisterStorage LinkRegister;
         public RegisterStorage hi;
         public RegisterStorage lo;
+        public RegisterStorage pc;
+        private string instructionSetEncoding;
         private Dictionary<string, RegisterStorage> mpNameToReg;
+        private Dictionary<string, object> options;
+        private Decoder<MipsDisassembler, Mnemonic, MipsInstruction> rootDecoder;
 
-        public MipsProcessorArchitecture(string archId, PrimitiveType wordSize, PrimitiveType ptrSize) : base(archId)
+        public MipsProcessorArchitecture(string archId, EndianServices endianness, PrimitiveType wordSize, PrimitiveType ptrSize) : base(archId)
         {
+            this.Endianness = endianness;
             this.WordWidth = wordSize;
             this.PointerType = ptrSize;
             this.FramePointerType = ptrSize;
@@ -62,6 +67,7 @@ namespace Reko.Arch.Mips
 
             this.hi = new RegisterStorage("hi", 32, 0, wordSize);
             this.lo = new RegisterStorage("lo", 33, 0, wordSize);
+            this.pc = new RegisterStorage("pc", 34, 0, wordSize);
             this.fpuRegs = CreateFpuRegisters();
             this.FCSR = RegisterStorage.Reg32("FCSR", 0x201F);
             this.ccRegs = CreateCcRegs();
@@ -77,14 +83,13 @@ namespace Reko.Arch.Mips
                 .Concat(ccRegs)
                 .Concat(new[] { hi, lo })
                 .ToDictionary(k => k.Name);
+        }
 
-    }
-
-    /// <summary>
-    /// If the architecture name contains "v6" we are a MIPS v6, which
-    /// has different instruction encodings.
-    /// </summary>
-    private bool IsVersion6OrLater
+        /// <summary>
+        /// If the architecture name contains "v6" we are a MIPS v6, which
+        /// has different instruction encodings.
+        /// </summary>
+        private bool IsVersion6OrLater
         {
             get { return this.Name.Contains("v6"); }
         }
@@ -93,7 +98,29 @@ namespace Reko.Arch.Mips
 
         public override IEnumerable<MachineInstruction> CreateDisassembler(EndianImageReader imageReader)
         {
-            return new MipsDisassembler(this, imageReader, this.IsVersion6OrLater);
+            return CreateDisassemblerInternal(imageReader);
+        }
+
+        public override IProcessorEmulator CreateEmulator(SegmentMap segmentMap, IPlatformEmulator envEmulator)
+        {
+            throw new NotImplementedException();
+        }
+
+        private IEnumerable<MipsInstruction> CreateDisassemblerInternal(EndianImageReader imageReader)
+        {
+            switch (this.instructionSetEncoding)
+            {
+            case "micro": return new MicroMipsDisassembler(this, imageReader);
+            case "mips16e": return new Mips16eDisassembler(this, imageReader);
+            case "nano": return new NanoMipsDisassembler(this, imageReader);
+            default:
+                if (rootDecoder == null)
+                {
+                    var factory = new MipsDisassembler.DecoderFactory(this.instructionSetEncoding);
+                    rootDecoder = factory.CreateRootDecoder();
+                }
+                return new MipsDisassembler(this, rootDecoder, imageReader);
+            }
         }
 
         public override IEqualityComparer<MachineInstruction> CreateInstructionComparer(Normalize norm)
@@ -108,12 +135,24 @@ namespace Reko.Arch.Mips
 
         public override IEnumerable<RtlInstructionCluster> CreateRewriter(EndianImageReader rdr, ProcessorState state, IStorageBinder binder, IRewriterHost host)
         {
-            return new MipsRewriter(
-                this,
-                rdr,
-                new MipsDisassembler(this, rdr, IsVersion6OrLater),
-                binder,
-                host);
+            if (instructionSetEncoding == "mips16e")
+            {
+                return new Mips16eRewriter(
+                    this,
+                    rdr,
+                    CreateDisassemblerInternal(rdr),
+                    binder, 
+                    host);
+            }
+            else
+            {
+                return new MipsRewriter(
+                    this,
+                    rdr,
+                    CreateDisassemblerInternal(rdr),
+                    binder,
+                    host);
+            }
         }
 
         public override IEnumerable<Address> CreatePointerScanner(SegmentMap map, EndianImageReader rdr, IEnumerable<Address> knownAddresses, PointerScannerFlags flags)
@@ -122,24 +161,32 @@ namespace Reko.Arch.Mips
             return new MipsPointerScanner32(rdr, knownLinAddresses, flags).Select(l => Address.Ptr32(l));
         }
 
-        public override SortedList<string, int> GetOpcodeNames()
+        // MIPS uses a link register
+        public override int ReturnAddressOnStack => 0;
+
+        public override SortedList<string, int> GetMnemonicNames()
         {
-            return Enum.GetValues(typeof(Opcode))
-                .Cast<Opcode>()
+            return Enum.GetValues(typeof(Mnemonic))
+                .Cast<Mnemonic>()
                 .ToSortedList(
                     v => v.ToString(),
                     v => (int)v);
         }
 
-        public override int? GetOpcodeNumber(string name)
+        public override int? GetMnemonicNumber(string name)
         {
-            Opcode result;
-            if (!Enum.TryParse(name, true, out result))
+            if (!Enum.TryParse(name, true, out Mnemonic result))
                 return null;
             return (int)result;
         }
 
-        public override RegisterStorage GetRegister(int i)
+        public override RegisterStorage GetRegister(StorageDomain domain, BitRange range)
+        {
+            var i = domain - StorageDomain.Register;
+            return GetRegister(i);
+        }
+
+        public RegisterStorage GetRegister(int i)
         {
             if (i >= GeneralRegs.Length)
                 return null;
@@ -161,7 +208,7 @@ namespace Reko.Arch.Mips
             return mpNameToReg.TryGetValue(name, out reg);
         }
 
-        public override FlagGroupStorage GetFlagGroup(uint grf)
+        public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)
         {
             throw new NotImplementedException();
         }
@@ -169,6 +216,28 @@ namespace Reko.Arch.Mips
         public override FlagGroupStorage GetFlagGroup(string name)
         {
             throw new NotImplementedException();
+        }
+
+        public override void LoadUserOptions(Dictionary<string, object> options)
+        {
+            this.options = options;
+            if (options.TryGetValue("decoder", out var oDecoderName) && 
+                oDecoderName is string decoderName)
+            {
+                this.instructionSetEncoding = decoderName;
+                switch (decoderName)
+                {
+                case "micro":
+                case "mips16e":
+                case "nano":
+                    this.InstructionBitSize = 16;
+                    break;
+                default:
+                    this.InstructionBitSize = 32;
+                    break;
+                }
+            }
+            this.rootDecoder = null;
         }
 
         public override Address ReadCodeAddress(int size, EndianImageReader rdr, ProcessorState state)
@@ -183,7 +252,7 @@ namespace Reko.Arch.Mips
             }
         }
 
-        public override string GrfToString(uint grf)
+        public override string GrfToString(RegisterStorage flagregister, string prefix, uint grf)
         {
             if (grf != 0)   // MIPS has no traditional status register.
                 throw new NotSupportedException();
@@ -219,7 +288,7 @@ namespace Reko.Arch.Mips
                     string.Format("f{0}", i),
                     i + 64,
                     0,
-                    PrimitiveType.Word64))
+                    PrimitiveType.Word32))
                 .ToArray();
         }
 
@@ -248,164 +317,56 @@ namespace Reko.Arch.Mips
 
     public class MipsBe32Architecture : MipsProcessorArchitecture
     {
-        public MipsBe32Architecture(string archId) : base(archId, PrimitiveType.Word32, PrimitiveType.Ptr32) { }
+        public MipsBe32Architecture(string archId) : base(archId, EndianServices.Big,  PrimitiveType.Word32, PrimitiveType.Ptr32) { }
 
-        public override EndianImageReader CreateImageReader(MemoryArea image, Address addr)
+        public override Address MakeAddressFromConstant(Constant c, bool codeAlign)
         {
-            return new BeImageReader(image, addr);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea image, ulong offset)
-        {
-            return new BeImageReader(image, offset);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea image, Address addrBegin, Address addrEnd)
-        {
-            return new BeImageReader(image, addrBegin, addrEnd);
-        }
-
-        public override ImageWriter CreateImageWriter()
-        {
-            return new BeImageWriter();
-        }
-
-        public override ImageWriter CreateImageWriter(MemoryArea mem, Address addr)
-        {
-            return new BeImageWriter(mem, addr);
-        }
-
-        public override Address MakeAddressFromConstant(Constant c)
-        {
-            return Address.Ptr32(c.ToUInt32());
-        }
-
-        public override bool TryRead(MemoryArea mem, Address addr, PrimitiveType dt, out Constant value)
-        {
-            return mem.TryReadBe(addr, dt, out value);
+            var uAddr = c.ToUInt32();
+            if (codeAlign)
+                uAddr &= ~3u;
+            return Address.Ptr32(uAddr);
         }
     }
 
     public class MipsLe32Architecture : MipsProcessorArchitecture
     {
-        public MipsLe32Architecture(string archId) : base(archId, PrimitiveType.Word32, PrimitiveType.Ptr32) { }
+        public MipsLe32Architecture(string archId) : base(archId, EndianServices.Little, PrimitiveType.Word32, PrimitiveType.Ptr32) { }
 
-        public override EndianImageReader CreateImageReader(MemoryArea image, Address addr)
+        public override Address MakeAddressFromConstant(Constant c, bool codeAlign)
         {
-            return new LeImageReader(image, addr);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea image, ulong offset)
-        {
-            return new LeImageReader(image, offset);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea image, Address addrBegin, Address addrEnd)
-        {
-            return new LeImageReader(image, addrBegin, addrEnd);
-        }
-
-        public override ImageWriter CreateImageWriter()
-        {
-            return new LeImageWriter();
-        }
-
-        public override ImageWriter CreateImageWriter(MemoryArea mem, Address addr)
-        {
-            return new LeImageWriter(mem, addr);
-        }
-
-        public override Address MakeAddressFromConstant(Constant c)
-        {
-            return Address.Ptr32(c.ToUInt32());
-        }
-
-        public override bool TryRead(MemoryArea mem, Address addr, PrimitiveType dt, out Constant value)
-        {
-            return mem.TryReadLe(addr, dt, out value);
+            var uAddr = c.ToUInt32();
+            if (codeAlign)
+                uAddr &= ~3u;
+            return Address.Ptr32(uAddr);
         }
     }
 
     public class MipsBe64Architecture : MipsProcessorArchitecture
     {
-        public MipsBe64Architecture(string archId) : base(archId, PrimitiveType.Word64, PrimitiveType.Ptr64)
+        public MipsBe64Architecture(string archId) : base(archId, EndianServices.Big, PrimitiveType.Word64, PrimitiveType.Ptr64)
         { }
 
-        public override EndianImageReader CreateImageReader(MemoryArea image, Address addr)
+        public override Address MakeAddressFromConstant(Constant c, bool codeAlign)
         {
-            return new BeImageReader(image, addr);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea image, ulong offset)
-        {
-            return new BeImageReader(image, offset);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea image, Address addrBegin, Address addrEnd)
-        {
-            return new BeImageReader(image, addrBegin, addrEnd);
-        }
-
-        public override ImageWriter CreateImageWriter()
-        {
-            return new BeImageWriter();
-        }
-
-        public override ImageWriter CreateImageWriter(MemoryArea mem, Address addr)
-        {
-            return new BeImageWriter(mem, addr);
-        }
-
-        public override Address MakeAddressFromConstant(Constant c)
-        {
-            return Address.Ptr64(c.ToUInt64());
-        }
-
-        public override bool TryRead(MemoryArea mem, Address addr, PrimitiveType dt, out Constant value)
-        {
-            return mem.TryReadBe(addr, dt, out value);
+            var uAddr = c.ToUInt64();
+            if (codeAlign)
+                uAddr &= ~3u;
+            return Address.Ptr64(uAddr);
         }
     }
 
     public class MipsLe64Architecture : MipsProcessorArchitecture
     {
-        public MipsLe64Architecture(string archId) : base(archId, PrimitiveType.Word64, PrimitiveType.Ptr64)
+        public MipsLe64Architecture(string archId) : base(archId, EndianServices.Little, PrimitiveType.Word64, PrimitiveType.Ptr64)
         {
         }
 
-        public override EndianImageReader CreateImageReader(MemoryArea image, Address addr)
+        public override Address MakeAddressFromConstant(Constant c, bool codeAlign)
         {
-            return new LeImageReader(image, addr);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea image, ulong offset)
-        {
-            return new LeImageReader(image, offset);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea image, Address addrBegin, Address addrEnd)
-        {
-            return new LeImageReader(image, addrBegin, addrEnd);
-        }
-
-        public override ImageWriter CreateImageWriter()
-        {
-            return new LeImageWriter();
-        }
-
-        public override ImageWriter CreateImageWriter(MemoryArea mem, Address addr)
-        {
-            return new LeImageWriter(mem, addr);
-        }
-
-        public override Address MakeAddressFromConstant(Constant c)
-        {
-            return Address.Ptr64(c.ToUInt64());
-        }
-
-        public override bool TryRead(MemoryArea mem, Address addr, PrimitiveType dt, out Constant value)
-        {
-            return mem.TryReadLe(addr, dt, out value);
+            var uAddr = c.ToUInt64();
+            if (codeAlign)
+                uAddr &= ~3u;
+            return Address.Ptr64(uAddr);
         }
     }
 }

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,6 +31,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using Reko.Core.Lib;
+using Reko.Core.Output;
 
 namespace Reko.Core
 {
@@ -47,10 +48,12 @@ namespace Reko.Core
     {
         public event PropertyChangedEventHandler PropertyChanged;
 
+        public const string SingleFilePolicy = "SingleFile";
+        public const string SegmentFilePolicy = "Segment";
+
         private IProcessorArchitecture archDefault;
         private Identifier globals;
         private Encoding encoding;
-
 
         public Program()
         {
@@ -87,6 +90,10 @@ namespace Reko.Core
             this.Platform = platform;
         }
 
+
+        /// <summary>
+        /// The program's file name and extension, but not its path.
+        /// </summary>
         public string Name { get; set; }
 
         /// <summary>
@@ -107,7 +114,7 @@ namespace Reko.Core
 
         /// <summary>
         /// Contains the segments that the binary consists of. This data
-        /// is discovered by the loader, with optiona additional input
+        /// is discovered by the loader, with optional additional input
         /// from the user.
         /// </summary>
         public SegmentMap SegmentMap { get; set; }
@@ -125,7 +132,7 @@ namespace Reko.Core
         public CallGraph CallGraph { get; private set; }
 
         /// <summary>
-        /// Represents a _pointer_ to a structure that contains all the 
+        /// Represents a _fictitious_ pointer to a structure that contains all the 
         /// global variables of the program. 
         /// </summary>
         /// <remarks>
@@ -227,6 +234,22 @@ namespace Reko.Core
             return new SymbolTable(Platform, primitiveTypes, namedTypes);
         }
 
+        /// <summary>
+        /// Creates an output policy based on the user's preferences, defaulting to the old
+        /// <see cref="SingleFilePolicy"/>.
+        /// </summary>
+        public OutputFilePolicy CreateOutputPolicy()
+        {
+            switch (User.OutputFilePolicy)
+            {
+            case Program.SingleFilePolicy:
+                return new SingleFilePolicy(this);
+            case Program.SegmentFilePolicy:
+            default:
+                return new SegmentFilePolicy(this);
+            }
+        }
+
         public ProcedureSerializer CreateProcedureSerializer()
         {
             var typeLoader = new TypeLibraryDeserializer(Platform, true, EnvironmentMetadata.Clone());
@@ -238,8 +261,9 @@ namespace Reko.Core
             return new TypeLibraryDeserializer(Platform, true, EnvironmentMetadata.Clone());
         }
 
-
+        /// <summary>
         /// The processor architectures that exist in the Program. 
+        /// </summary>
         /// <remarks>
         /// Normally there is only one architecture. But there are examples
         /// of binaries that have two or more processor architectures. E.g.
@@ -253,7 +277,7 @@ namespace Reko.Core
         public SortedList<Address, ImageSymbol> EntryPoints { get; private set; }
 
         /// <summary>
-        /// The name of the file from which this Program was loaded.
+        /// Absolute path of the file from which this Program was loaded.
         /// </summary>
         public string Filename { get; set; }
 
@@ -315,44 +339,39 @@ namespace Reko.Core
         public UserData User { get; set; }
 
         /// <summary>
-        /// The name of the file in which disassemblies are dumped.
+        /// Absolute path of the directory into which disassemblies are dumped.
         /// </summary>
-        public string DisassemblyFilename { get; set; }
+        public string DisassemblyDirectory { get; set; }
 
         /// <summary>
-        /// The nsame of the file in which intermediate results are stored.
+        /// Absolute path of the directory into which final source code is stored
         /// </summary>
-        public string IntermediateFilename { get; set; }
+        public string SourceDirectory { get; set; }
 
         /// <summary>
-        /// The name of the file in which final output is stored
+        /// Absolute path of the directory into which type definitions are stored.
         /// </summary>
-        public string OutputFilename { get; set; }
+        public string IncludeDirectory { get; set; }
 
         /// <summary>
-        /// The name of the file in which recovered types are written.
-        /// </summary>
-        public string TypesFilename { get; set; }
-
-        /// <summary>
-        /// The name of the file in which the global variables are written.
-        /// </summary>
-        public string GlobalsFilename { get; set; }
-
-        /// <summary>
-        /// The name of the directory in which embedded resources will be written.
+        /// Absolute path the directory in which embedded resources will be written.
         /// </summary>
         public string ResourcesDirectory { get; set; }
 
-        public void EnsureFilenames(string fileName)
+        /// <summary>
+        /// Given the absolute file name of a binary being decompiled, make sure that 
+        /// absolute file names for each of the output directories.
+        /// </summary>
+        /// <param name="absFileName">Absolute file name of the binary being decompiled.</param>
+        public void EnsureDirectoryNames(string absFileName)
         {
-            var dir = Path.GetDirectoryName(fileName) ?? "";
-            this.DisassemblyFilename = DisassemblyFilename ?? Path.ChangeExtension(fileName, ".asm");
-            this.IntermediateFilename = IntermediateFilename ?? Path.ChangeExtension(fileName, ".dis");
-            this.OutputFilename = OutputFilename ?? Path.ChangeExtension(fileName, ".c");
-            this.TypesFilename = TypesFilename ?? Path.ChangeExtension(fileName, ".h");
-            this.GlobalsFilename = GlobalsFilename ?? Path.ChangeExtension(fileName, ".globals.c");
-            this.ResourcesDirectory = ResourcesDirectory ?? Path.Combine(dir, "resources");
+            var dir = Path.GetDirectoryName(absFileName) ?? "";
+            var filename = Path.GetFileName(absFileName);
+            var outputDir = Path.Combine(dir, Path.ChangeExtension(filename, ".reko"));
+            this.DisassemblyDirectory = DisassemblyDirectory ?? outputDir;
+            this.SourceDirectory = SourceDirectory ?? outputDir;
+            this.IncludeDirectory = IncludeDirectory ?? outputDir;
+            this.ResourcesDirectory = ResourcesDirectory ?? Path.Combine(outputDir, "resources");
         }
 
         /// <summary>
@@ -381,6 +400,17 @@ namespace Reko.Core
                 throw new ArgumentException(string.Format("The address {0} is invalid.", addr));
             return arch.CreateDisassembler(
                 arch.CreateImageReader(segment.MemoryArea, addr));
+        }
+
+        public Dictionary<ImageSegment, List<ImageMapItem>> GetItemsBySegment()
+        {
+            return (from seg in this.SegmentMap.Segments.Values
+                    from item in this.ImageMap.Items.Values
+                    where seg.IsInRange(item.Address) && !seg.IsHidden
+                    group new { seg, item } by seg into g
+                    orderby g.Key.Address
+                    select new { g.Key, Items = g.Select(gg => gg.item) })
+                .ToDictionary(a => a.Key, a => a.Items.OrderBy(i => i.Address).ToList());
         }
 
         // Mutators /////////////////////////////////////////////////////////////////
@@ -534,18 +564,26 @@ namespace Reko.Core
             if (this.Procedures.TryGetValue(addr, out Procedure proc))
                 return proc;
 
-            var generatedName = procedureName ?? this.NamingPolicy.ProcedureName(addr);
-            proc = Procedure.Create(arch, generatedName, addr, arch.CreateFrame());
-            if (procedureName == null && this.ImageSymbols.TryGetValue(addr, out ImageSymbol sym))
+            bool deduceSignatureFromName = procedureName != null;
+            if (this.ImageSymbols.TryGetValue(addr, out ImageSymbol sym))
             {
-                procedureName = sym.Name;
+                deduceSignatureFromName |= sym.Name != null;
+                var generatedName = procedureName ?? sym.Name ?? this.NamingPolicy.ProcedureName(addr);
+                proc = Procedure.Create(arch, generatedName, addr, arch.CreateFrame());
                 if (sym.Signature != null)
                 {
                     var sser = this.CreateProcedureSerializer();
                     proc.Signature = sser.Deserialize(sym.Signature, proc.Frame);
+                    deduceSignatureFromName = proc.Signature != null;
                 }
             }
-            if (procedureName != null)
+            else
+            {
+                var generatedName = procedureName ?? this.NamingPolicy.ProcedureName(addr);
+                proc = Procedure.Create(arch, generatedName, addr, arch.CreateFrame());
+            }
+
+            if (deduceSignatureFromName)
             {
                 var sProc = this.Platform.SignatureFromName(procedureName);
                 if (sProc != null)
@@ -555,10 +593,6 @@ namespace Reko.Core
                     proc.Name = exp.Name;
                     proc.Signature = exp.Signature;
                     proc.EnclosingType = exp.EnclosingType;
-                }
-                else
-                {
-                    proc.Name = procedureName;
                 }
             }
             this.Procedures.Add(addr, proc);

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,17 +38,23 @@ namespace Reko.Environments.C64
     /// </summary>
     public class C64Basic : ProcessorArchitecture
     {
-        private SortedList<ushort, C64BasicInstruction> program;
-        private RegisterStorage stackRegister = new RegisterStorage("sp", 1, 0, PrimitiveType.Ptr16);
+        private static RegisterStorage stackRegister = new RegisterStorage("sp", 1, 0, PrimitiveType.Ptr16);
 
-        public C64Basic(SortedList<ushort, C64BasicInstruction> program) : base("c64Basic")
+        private SortedList<ushort, C64BasicInstruction> program;
+
+        public C64Basic(string archId) : base(archId)
         {
             this.Description = "Commodore 64 Basic";
-            this.program = program;
+            this.Endianness = EndianServices.Little;
             this.PointerType = PrimitiveType.Ptr16;
             this.InstructionBitSize = 8;
             this.StackRegister = stackRegister;
             this.FramePointerType = PrimitiveType.Ptr16;
+        }
+
+        public C64Basic(SortedList<ushort, C64BasicInstruction> program) : this("c64Basic")
+        {
+            this.program = program;
         }
 
         public override IEnumerable<MachineInstruction> CreateDisassembler(EndianImageReader imageReader)
@@ -62,29 +68,9 @@ namespace Reko.Environments.C64
             }
         }
 
-        public override EndianImageReader CreateImageReader(MemoryArea img, Address addr)
+        public override IProcessorEmulator CreateEmulator(SegmentMap segmentMap, IPlatformEmulator envEmulator)
         {
-            return new LeImageReader(img, addr);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea image, Address addrBegin, Address addrEnd)
-        {
-            return new LeImageReader(image, addrBegin, addrEnd);
-        }
-
-        public override EndianImageReader CreateImageReader(MemoryArea mem, ulong off)
-        {
-            return new LeImageReader(mem, off);
-        }
-
-        public override ImageWriter CreateImageWriter()
-        {
-            return new LeImageWriter();
-        }
-
-        public override ImageWriter CreateImageWriter(MemoryArea mem, Address addr)
-        {
-            return new LeImageWriter(mem, addr);
+            throw new NotImplementedException();
         }
 
         public override IEqualityComparer<MachineInstruction> CreateInstructionComparer(Normalize norm)
@@ -107,7 +93,7 @@ namespace Reko.Environments.C64
             throw new NotImplementedException();
         }
 
-        public override RegisterStorage GetRegister(int i)
+        public override RegisterStorage GetRegister(StorageDomain domain, BitRange range)
         {
             throw new NotImplementedException();
         }
@@ -122,17 +108,12 @@ namespace Reko.Environments.C64
             return new RegisterStorage[0];
         }
 
-        public override RegisterStorage GetSubregister(RegisterStorage reg, int offset, int width)
-        {
-            throw new NotImplementedException();
-        }
-
         public override bool TryGetRegister(string name, out RegisterStorage reg)
         {
             throw new NotImplementedException();
         }
 
-        public override FlagGroupStorage GetFlagGroup(uint grf)
+        public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)
         {
             throw new NotImplementedException();
         }
@@ -142,7 +123,7 @@ namespace Reko.Environments.C64
             throw new NotImplementedException();
         }
 
-        public override SortedList<string, int> GetOpcodeNames()
+        public override SortedList<string, int> GetMnemonicNames()
         {
             return Enumerable.Range(0, C64BasicInstruction.TokenMax - C64BasicInstruction.TokenMin)
                 .ToSortedList(
@@ -150,7 +131,7 @@ namespace Reko.Environments.C64
                     v => v);
         }
 
-        public override int? GetOpcodeNumber(string name)
+        public override int? GetMnemonicNumber(string name)
         {
             int i = Array.IndexOf(C64BasicInstruction.TokenStrs, name);
             if (i < 0)
@@ -169,12 +150,12 @@ namespace Reko.Environments.C64
             throw new NotImplementedException();
         }
 
-        public override Address MakeAddressFromConstant(Constant c)
+        public override Address MakeAddressFromConstant(Constant c, bool codeAlign)
         {
             return Address.Ptr16(c.ToUInt16());
         }
 
-        public override string GrfToString(uint grf)
+        public override string GrfToString(RegisterStorage flagregister, string prefix, uint grf)
         {
             throw new NotImplementedException();
         }
@@ -182,11 +163,6 @@ namespace Reko.Environments.C64
         public override bool TryParseAddress(string txtAddress, out Address addr)
         {
             return Address.TryParse16(txtAddress, out addr);
-        }
-
-        public override bool TryRead(MemoryArea mem, Address addr, PrimitiveType dt, out Constant value)
-        {
-            return mem.TryReadLe(addr, dt, out value);
         }
 
         public class C64BasicState : ProcessorState
@@ -216,10 +192,6 @@ namespace Reko.Environments.C64
             }
 
             public override void SetRegister(RegisterStorage r, Core.Expressions.Constant v)
-            {
-            }
-
-            public override void SetInstructionPointer(Address addr)
             {
             }
 

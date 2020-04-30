@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,10 +29,11 @@ using System.Text;
 
 namespace Reko.Arch.Vax
 {
-    public partial class VaxDisassembler : DisassemblerBase<VaxInstruction>
-    {
-        private delegate bool Mutator(VaxDisassembler dasm);
+    using Decoder = Decoder<VaxDisassembler, Mnemonic, VaxInstruction>;
+    using Mutator = Mutator<VaxDisassembler>;
 
+    public partial class VaxDisassembler : DisassemblerBase<VaxInstruction, Mnemonic>
+    {
         private VaxArchitecture arch;
         private EndianImageReader rdr;
         private List<MachineOperand> ops;
@@ -52,14 +53,11 @@ namespace Reko.Arch.Vax
             VaxInstruction instr;
             try
             {
-                instr = oneByteInstructions[op].Decode(this);
+                instr = oneByteInstructions[op].Decode(op, this);
             }
             catch
             {
-                instr = new VaxInstruction {
-                    Opcode = Opcode.Invalid,
-                    InstructionClass = InstrClass.Invalid,
-                    Operands = new MachineOperand[0] };
+                instr = CreateInvalidInstruction();
             }
             if (instr == null)
                 return null;
@@ -67,6 +65,27 @@ namespace Reko.Arch.Vax
             instr.Length = (int)(rdr.Address - addr);
             ops.Clear();
             return instr;
+        }
+
+        public override VaxInstruction MakeInstruction(InstrClass iclass, Mnemonic mnemonic)
+        {
+            var instr = new VaxInstruction
+            {
+                Mnemonic = mnemonic,
+                InstructionClass = iclass,
+                Operands = this.ops.ToArray()
+            };
+            return instr;
+        }
+
+        public override VaxInstruction CreateInvalidInstruction()
+        {
+            return new VaxInstruction
+            {
+                InstructionClass = InstrClass.Invalid,
+                Mnemonic = Mnemonic.Invalid,
+                Operands = MachineInstruction.NoOperands
+            };
         }
 
         private bool TryDecodeOperand(PrimitiveType width, out MachineOperand op)
@@ -222,59 +241,25 @@ namespace Reko.Arch.Vax
             return new ImmediateOperand(c);
         }
 
-        private class Decoder
+
+        public static Decoder Instr(Mnemonic mnemonic, params Mutator<VaxDisassembler> [] mutators)
         {
-            private readonly Opcode op;
-            private readonly InstrClass iclass;
-            private readonly Mutator[] mutators;
+            return new InstrDecoder<VaxDisassembler, Mnemonic, VaxInstruction>(InstrClass.Linear, mnemonic, mutators);
+        }
 
-            public Decoder(Opcode op, InstrClass iclass, params Mutator [] mutators)
-            {
-                this.op = op;
-                this.iclass = iclass;
-                this.mutators = mutators;
-            }
+        public static Decoder Instr(Mnemonic mnemonic, InstrClass iclass, params Mutator<VaxDisassembler>[] mutators)
+        {
+            return new InstrDecoder<VaxDisassembler, Mnemonic, VaxInstruction>(iclass, mnemonic, mutators);
+        }
 
-            public Decoder(Opcode op, params Mutator[] mutators)
-            {
-                this.op = op;
-                this.iclass = InstrClass.Linear;
-                this.mutators = mutators;
-            }
-
-            public Decoder(Opcode op, int args)
-            {
-                this.op = op;
-                this.mutators = new Mutator[0];
-            }
-
-            public virtual VaxInstruction Decode(VaxDisassembler dasm)
-            {
-                foreach (var m in mutators)
-                {
-                    if (!m(dasm))
-                    {
-                        return new VaxInstruction
-                        {
-                            Opcode = Opcode.Invalid,
-                            InstructionClass = InstrClass.Invalid,
-                            Operands = new MachineOperand[0]
-                        };
-                    }
-                }
-                var instr = new VaxInstruction
-                {
-                    Opcode = this.op,
-                    InstructionClass = this.iclass,
-                    Operands = dasm.ops.ToArray()
-                };
-                return instr;
-            }
+        public static Decoder Instr(Mnemonic mnemonic, int ignored)
+        {
+            return new InstrDecoder<VaxDisassembler, Mnemonic, VaxInstruction>(InstrClass.Linear, mnemonic);
         }
 
         private static Mutator a(PrimitiveType dt)
         {
-            return d =>
+            return (u, d) =>
             {
                 if (!d.TryDecodeOperand(dt, out var op))
                     return false;
@@ -291,7 +276,7 @@ namespace Reko.Arch.Vax
 
         private static Mutator b(PrimitiveType width)
         {
-            return d =>
+            return (u, d) =>
             {
                 long jOffset = d.rdr.ReadLeSigned(width);
                 uint uAddr = (uint) ((long) d.rdr.Address.Offset + jOffset);
@@ -307,7 +292,7 @@ namespace Reko.Arch.Vax
 
         private static Mutator r(PrimitiveType dt)
         {
-            return d =>
+            return (u, d) =>
             {
                 if (!d.TryDecodeOperand(dt, out var op))
                     return false;
@@ -330,7 +315,7 @@ namespace Reko.Arch.Vax
 
         private static Mutator w(PrimitiveType dt)
         {
-            return d =>
+            return (u, d) =>
             {
                 if (!d.TryDecodeOperand(dt, out var op))
                     return false;

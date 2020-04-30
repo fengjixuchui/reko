@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,7 @@
 using Moq;
 using NUnit.Framework;
 using Reko.Arch.M68k;
-using Reko.Assemblers.M68k;
+using Reko.Arch.M68k.Assembler;
 using Reko.Core;
 using Reko.Core.Services;
 using Reko.Scanning;
@@ -48,7 +48,7 @@ namespace Reko.UnitTests.Scanning
             sc = new ServiceContainer();
             listener = new Mock<DecompilerEventListener>();
             sc.AddService<DecompilerEventListener>(listener.Object);
-            sc.AddService<DecompilerHost>(new FakeDecompilerHost());
+            sc.AddService<IDecompiledFileService>(new FakeDecompiledFileService());
         }
 
         private void BuildTest32(Action<M68kAssembler> asmProg)
@@ -87,7 +87,7 @@ namespace Reko.UnitTests.Scanning
             var project = new Project { Programs = { program } };
             scanner = new Scanner(
                 program,
-                new ImportResolver(project, program, new FakeDecompilerEventListener()),
+                new DynamicLinker(project, program, new FakeDecompilerEventListener()),
                 sc);
             scanner.EnqueueImageSymbol(ImageSymbol.Procedure(arch, addrBase), true);
             scanner.ScanImage();
@@ -109,34 +109,34 @@ namespace Reko.UnitTests.Scanning
             string sExp =
 @"// fn00100000
 // Return size: 4
-// Mem0:Global memory
+// Mem0:Mem
 // fp:fp
 // a7:a7
 // d0:d0
 // v4:v4
-// CVZN:Flags
-// Z:Flags
-// C:Flags
-// N:Flags
-// V:Flags
+// CVZN:CVZN
+// Z:Z
+// C:C
+// N:N
+// V:V
 // v10:v10
 // return address size: 4
-void fn00100000()
+define fn00100000
 fn00100000_entry:
 	a7 = fp
 	// succ:  l00100000
 l00100000:
-	a7 = a7 - 4
+	a7 = a7 - 4<i32>
 	v4 = d0
 	Mem0[a7:word32] = v4
 	CVZN = cond(v4)
-	d0 = 0x00000000
+	d0 = 0<32>
 	Z = true
 	C = false
 	N = false
 	V = false
 	v10 = Mem0[a7:word32]
-	a7 = a7 + 4
+	a7 = a7 + 4<i32>
 	d0 = v10
 	CVZN = cond(d0)
 	return
@@ -151,51 +151,51 @@ fn00100000_exit:
         {
             BuildTest32(
                 Address.Ptr32(0x01020),
-                0x41, 0xF9 , 0x00 , 0x00 , 0x3E , 0x94
-                , 0x20 , 0x3C , 0x00 , 0x00 , 0x00 , 0x30
-                , 0x56 , 0x80 
-                , 0xE4 , 0x88
-                , 0x42 , 0x98
-                , 0x53 , 0x80
-                , 0x66 , 0xFA
-                , 0x4E , 0x75);
+                  0x41, 0xF9 , 0x00 , 0x00 , 0x3E , 0x94
+                , 0x20, 0x3C , 0x00 , 0x00 , 0x00 , 0x30
+                , 0x56, 0x80 
+                , 0xE4, 0x88
+                , 0x42, 0x98
+                , 0x53, 0x80
+                , 0x66, 0xFA
+                , 0x4E, 0x75);
             var sw = new StringWriter();
             program.Procedures.Values[0].Write(true, sw);
             string sExp = @"// fn00001020
 // Return size: 4
-// Mem0:Global memory
+// Mem0:Mem
 // fp:fp
 // a7:a7
 // a0:a0
 // d0:d0
-// CVZN:Flags
-// CVZNX:Flags
-// Z:Flags
-// C:Flags
-// N:Flags
-// V:Flags
+// CVZN:CVZN
+// CVZNX:CVZNX
+// Z:Z
+// C:C
+// N:N
+// V:V
 // return address size: 4
-void fn00001020()
+define fn00001020
 fn00001020_entry:
 	a7 = fp
 	// succ:  l00001020
 l00001020:
-	a0 = 0x00003E94
-	d0 = 0x00000030
+	a0 = 0x00003E94<p32>
+	d0 = 0x30<32>
 	CVZN = cond(d0)
-	d0 = d0 + 0x00000003
+	d0 = d0 + 3<32>
 	CVZNX = cond(d0)
-	d0 = d0 >>u 0x00000002
+	d0 = d0 >>u 2<32>
 	CVZNX = cond(d0)
 	// succ:  l00001030
 l00001030:
-	Mem0[a0:word32] = 0x00000000
-	a0 = a0 + 4
+	Mem0[a0:word32] = 0<32>
+	a0 = a0 + 4<i32>
 	Z = true
 	C = false
 	N = false
 	V = false
-	d0 = d0 - 0x00000001
+	d0 = d0 - 1<32>
 	CVZNX = cond(d0)
 	branch Test(NE,Z) l00001030
 	// succ:  l00001036 l00001030

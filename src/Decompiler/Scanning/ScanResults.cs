@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -195,8 +195,7 @@ namespace Reko.Scanning
 
             public override bool Equals(object obj)
             {
-                var that = obj as link;
-                if (that == null)
+                if (!(obj is link that))
                     return false;
                 return that.first == this.first && that.second == this.second;
             }

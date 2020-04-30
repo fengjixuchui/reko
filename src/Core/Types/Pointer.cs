@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,7 +30,7 @@ namespace Reko.Core.Types
 	public class Pointer : DataType
 	{
 		private DataType pointee;
-		private int bitSize;
+		private readonly int bitSize;
 
 		public Pointer(DataType pointee, int bitSize)
 		{
@@ -39,6 +39,8 @@ namespace Reko.Core.Types
 			this.Pointee = pointee;
 			this.bitSize = bitSize;
 		}
+
+        public override bool IsPointer {  get { return true; } }
 
         public override void Accept(IDataTypeVisitor v)
         {
@@ -68,8 +70,7 @@ namespace Reko.Core.Types
 			get { return pointee; }
 			set 
 			{
-				if (value == null) throw new ArgumentNullException("Pointee mustn't be null.");
-				pointee = value; 
+                pointee = value ?? throw new ArgumentNullException("Pointee mustn't be null."); 
 			}
 		}
 

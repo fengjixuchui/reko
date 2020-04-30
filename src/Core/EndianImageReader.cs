@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -77,11 +77,11 @@ namespace Reko.Core
         /// <returns></returns>
         public bool ReadNullCharTerminator(DataType charType)
 		{
-			switch (charType.Size)
+			switch (charType.BitSize)
 			{
-			case 1: return (char)ReadByte() == 0;
-			case 2: return (char)ReadUInt16() == 0;
-			default: throw new NotSupportedException(string.Format("Character size {0} not supported.", charType.Size));
+			case 8: return (char)ReadByte() == 0;
+			case 16: return (char)ReadUInt16() == 0;
+			default: throw new NotSupportedException(string.Format("Character bit size {0} not supported.", charType.BitSize));
 			}
 		}
 
@@ -114,12 +114,14 @@ namespace Reko.Core
 		{
 			int length = Read(lengthType).ToInt32();
 			int iStart = (int)Offset;
-			return new StringConstant(
+            var cStr = new StringConstant(
 				StringType.LengthPrefixedStringType(charType, lengthType),
 				encoding.GetString(
 					bytes,
 					iStart,
 					length * charType.Size));
+            Offset += length;
+            return cStr;
 		}
 
 		public abstract short ReadInt16();

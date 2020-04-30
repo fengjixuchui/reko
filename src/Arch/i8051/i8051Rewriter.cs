@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,15 +36,15 @@ namespace Reko.Arch.i8051
     // http://www.keil.com/support/man/docs/is51/is51_instructions.htm
     public class i8051Rewriter : IEnumerable<RtlInstructionCluster>
     {
-        private i8051Architecture arch;
-        private EndianImageReader rdr;
-        private ProcessorState state;
-        private IStorageBinder binder;
-        private IRewriterHost host;
-        private IEnumerator<i8051Instruction> dasm;
+        private readonly i8051Architecture arch;
+        private readonly EndianImageReader rdr;
+        private readonly ProcessorState state;
+        private readonly IStorageBinder binder;
+        private readonly IRewriterHost host;
+        private readonly IEnumerator<i8051Instruction> dasm;
         private i8051Instruction instr;
         private RtlEmitter m;
-        private InstrClass rtlc;
+        private InstrClass iclass;
 
         public i8051Rewriter(i8051Architecture arch, EndianImageReader rdr, ProcessorState state, IStorageBinder binder, IRewriterHost host)
         {
@@ -63,93 +63,93 @@ namespace Reko.Arch.i8051
                 this.instr = dasm.Current;
                 var rtls = new List<RtlInstruction>();
                 this.m = new RtlEmitter(rtls);
-                this.rtlc = InstrClass.Linear;
-                switch (instr.Opcode)
+                this.iclass = InstrClass.Linear;
+                switch (instr.Mnemonic)
                 {
                 default:
                     host.Warn(
                        instr.Address,
                        string.Format(
                            "i8051 instruction '{0}' not supported yet.",
-                           instr.Opcode));
-                    goto case Opcode.Invalid;
-                case Opcode.Invalid:
-                case Opcode.reserved:
+                           instr.Mnemonic));
+                    goto case Mnemonic.Invalid;
+                case Mnemonic.Invalid:
+                case Mnemonic.reserved:
                     Invalid();
                     break;
-                case Opcode.acall: RewriteCall(); break;
-                case Opcode.add: RewriteBinop(m.IAdd, FlagM.C | FlagM.AC | FlagM.OV | FlagM.P); break;
-                case Opcode.addc: RewriteAddcSubb(m.IAdd); break;
-                case Opcode.ajmp: RewriteJump(); break;
-                case Opcode.anl: RewriteLogical(m.And); break;
-                case Opcode.cjne: RewriteCjne(); break;
-                case Opcode.clr: RewriteClr(); break;
-                case Opcode.dec: RewriteIncDec(m.ISub); break;
-                case Opcode.djnz: RewriteDjnz(); break;
-                case Opcode.inc: RewriteIncDec(m.IAdd); break;
-                case Opcode.jb: RewriteJb(m.Ne0); break;
-                case Opcode.jbc: RewriteJbc(); break;
-                case Opcode.jc: RewriteJc(e => e); break;
-                case Opcode.jmp: RewriteJump(); break;
-                case Opcode.jnb: RewriteJb(m.Eq0); break;
-                case Opcode.jnc: RewriteJc(m.Not); break;
-                case Opcode.jnz: RewriteJz(m.Ne0); break;
-                case Opcode.jz: RewriteJz(m.Eq0); break;
-                case Opcode.lcall: RewriteCall(); break;
-                case Opcode.ljmp: RewriteJump(); break;
-                case Opcode.mov: RewriteMov(); break;
-                case Opcode.movc: RewriteMovc(); break;
-                case Opcode.movx: RewriteMovx(); break;
-                case Opcode.mul: RewriteMul(); break;
-                case Opcode.nop: m.Nop(); break;
-                case Opcode.orl: RewriteLogical(m.Or); break;
-                case Opcode.pop: RewritePop(); break;
-                case Opcode.push: RewritePush(); break;
-                case Opcode.ret: RewriteRet(); break;
-                case Opcode.reti: RewriteRet(); break;
-                case Opcode.rl: RewriteRotate(PseudoProcedure.Rol); break;
-                case Opcode.rr: RewriteRotate(PseudoProcedure.Ror); break;
-                case Opcode.setb: RewriteSetb(); break;
-                case Opcode.sjmp: RewriteJump(); break;
-                case Opcode.subb: RewriteAddcSubb(m.ISub); break;
-                case Opcode.swap: RewriteSwap(); break;
-                case Opcode.xrl: RewriteLogical(m.Xor); break;
-                case Opcode.xch: RewriteXch(); break;
+                case Mnemonic.acall: RewriteCall(); break;
+                case Mnemonic.add: RewriteBinop(m.IAdd, FlagM.C | FlagM.AC | FlagM.OV | FlagM.P); break;
+                case Mnemonic.addc: RewriteAddcSubb(m.IAdd); break;
+                case Mnemonic.ajmp: RewriteJump(); break;
+                case Mnemonic.anl: RewriteLogical(m.And); break;
+                case Mnemonic.cjne: RewriteCjne(); break;
+                case Mnemonic.clr: RewriteClr(); break;
+                case Mnemonic.dec: RewriteIncDec(m.ISub); break;
+                case Mnemonic.djnz: RewriteDjnz(); break;
+                case Mnemonic.inc: RewriteIncDec(m.IAdd); break;
+                case Mnemonic.jb: RewriteJb(m.Ne0); break;
+                case Mnemonic.jbc: RewriteJbc(); break;
+                case Mnemonic.jc: RewriteJc(ConditionCode.ULT); break;
+                case Mnemonic.jmp: RewriteJump(); break;
+                case Mnemonic.jnb: RewriteJb(m.Eq0); break;
+                case Mnemonic.jnc: RewriteJc(ConditionCode.UGE); break;
+                case Mnemonic.jnz: RewriteJz(m.Ne0); break;
+                case Mnemonic.jz: RewriteJz(m.Eq0); break;
+                case Mnemonic.lcall: RewriteCall(); break;
+                case Mnemonic.ljmp: RewriteJump(); break;
+                case Mnemonic.mov: RewriteMov(); break;
+                case Mnemonic.movc: RewriteMovc(); break;
+                case Mnemonic.movx: RewriteMovx(); break;
+                case Mnemonic.mul: RewriteMul(); break;
+                case Mnemonic.nop: m.Nop(); break;
+                case Mnemonic.orl: RewriteLogical(m.Or); break;
+                case Mnemonic.pop: RewritePop(); break;
+                case Mnemonic.push: RewritePush(); break;
+                case Mnemonic.ret: RewriteRet(); break;
+                case Mnemonic.reti: RewriteRet(); break;
+                case Mnemonic.rl: RewriteRotate(PseudoProcedure.Rol); break;
+                case Mnemonic.rr: RewriteRotate(PseudoProcedure.Ror); break;
+                case Mnemonic.setb: RewriteSetb(); break;
+                case Mnemonic.sjmp: RewriteJump(); break;
+                case Mnemonic.subb: RewriteAddcSubb(m.ISub); break;
+                case Mnemonic.swap: RewriteSwap(); break;
+                case Mnemonic.xrl: RewriteLogical(m.Xor); break;
+                case Mnemonic.xch: RewriteXch(); break;
 
-                case Opcode.cpl:
-                case Opcode.da:
-                case Opcode.div:
-                case Opcode.rrc:
-                case Opcode.rlc:
-                case Opcode.xchd:
+                case Mnemonic.cpl:
+                case Mnemonic.da:
+                case Mnemonic.div:
+                case Mnemonic.rrc:
+                case Mnemonic.rlc:
+                case Mnemonic.xchd:
                     EmitUnitTest();
                     Invalid();
                     break;
                 }
-                yield return new RtlInstructionCluster(instr.Address, instr.Length, rtls.ToArray())
-                {
-                    Class = rtlc
-                };
+                yield return m.MakeCluster(instr.Address, instr.Length, iclass);
             }
         }
 
-     
         private void RewriteJump()
         {
-            rtlc = InstrClass.Transfer;
-            var dst = OpSrc(instr.Operand1);
+            iclass = InstrClass.Transfer;
+            var dst = OpSrc(instr.Operands[0], null);
+            if (dst is MemoryAccess mem)
+            {
+                dst = mem.EffectiveAddress;
+            }
             dst.DataType = PrimitiveType.Ptr16;
             m.Goto(dst);
         }
 
         private void RewriteBinop(Func<Expression, Expression, BinaryExpression> fn, FlagM grf)
         {
-            var dst = OpSrc(instr.Operand1);
-            var src = OpSrc(instr.Operand2);
+            var dst = OpSrc(instr.Operands[0], arch.DataMemory);
+            var src = OpSrc(instr.Operands[1], arch.DataMemory);
             m.Assign(dst, fn(dst, src));
             if (grf != 0)
             {
-                var flg = arch.GetFlagGroup((uint)grf);
+                var flg = arch.GetFlagGroup(Registers.PSW, (uint)grf);
                 m.Assign(binder.EnsureFlagGroup(flg), m.Cond(dst));
             }
         }
@@ -158,9 +158,9 @@ namespace Reko.Arch.i8051
         {
             // We do not take the trouble of widening the CF to the word size
             // to simplify code analysis in later stages. 
-            var c = binder.EnsureFlagGroup(arch.GetFlagGroup((uint)FlagM.C));
-            var dst = OpSrc(instr.Operand1);
-            var src = OpSrc(instr.Operand2);
+            var c = binder.EnsureFlagGroup(arch.GetFlagGroup(Registers.PSW, (uint)FlagM.C));
+            var dst = OpSrc(instr.Operands[0], arch.DataMemory);
+            var src = OpSrc(instr.Operands[1], arch.DataMemory);
             m.Assign(
                 dst,
                 opr(
@@ -168,121 +168,121 @@ namespace Reko.Arch.i8051
                         dst,
                         src),
                     c));
-            var grf = binder.EnsureFlagGroup(arch.GetFlagGroup((uint)(FlagM.C | FlagM.AC | FlagM.OV | FlagM.P)));
+            var grf = binder.EnsureFlagGroup(arch.GetFlagGroup(Registers.PSW, (uint)(FlagM.C | FlagM.AC | FlagM.OV | FlagM.P)));
             m.Assign(grf, m.Cond(dst));
         }
 
         private void RewriteCall()
         {
-            rtlc = InstrClass.Transfer | InstrClass.Call;
-            var dst = OpSrc(instr.Operand1);
+            iclass = InstrClass.Transfer | InstrClass.Call;
+            var dst = OpSrc(instr.Operands[0], arch.DataMemory);
             dst.DataType = PrimitiveType.Ptr16;
             m.Call(dst, 2);
         }
 
         private void RewriteCjne()
         {
-            rtlc = InstrClass.ConditionalTransfer;
-            var a = OpSrc(instr.Operand1);
-            var b = OpSrc(instr.Operand2);
-            var addr = ((AddressOperand)instr.Operand3).Address;
-            m.Branch(m.Ne(a, b), addr, rtlc);
+            iclass = InstrClass.ConditionalTransfer;
+            var a = OpSrc(instr.Operands[0], arch.DataMemory);
+            var b = OpSrc(instr.Operands[1], arch.DataMemory);
+            var addr = ((AddressOperand)instr.Operands[2]).Address;
+            m.Branch(m.Ne(a, b), addr, iclass);
         }
 
         private void RewriteClr()
         {
-            var dst = OpSrc(instr.Operand1);
-            WriteDst(instr.Operand1, Constant.Zero(dst.DataType));
+            var dst = OpSrc(instr.Operands[0], arch.DataMemory);
+            WriteDst(instr.Operands[0], Constant.Zero(dst.DataType));
             if (dst is Identifier id && id.Storage is RegisterStorage)
             {
-                var flg = arch.GetFlagGroup((uint)FlagM.P);
+                var flg = arch.GetFlagGroup(Registers.PSW, (uint)FlagM.P);
                 m.Assign(binder.EnsureFlagGroup(flg), m.Cond(dst));
             }
         }
 
         private void RewriteDjnz()
         {
-            rtlc = InstrClass.ConditionalTransfer;
-            var dst = OpSrc(instr.Operand1);
-            var addr = ((AddressOperand)instr.Operand2).Address;
+            iclass = InstrClass.ConditionalTransfer;
+            var dst = OpSrc(instr.Operands[0], arch.DataMemory);
+            var addr = ((AddressOperand)instr.Operands[1]).Address;
             m.Assign(dst, m.ISub(dst, 1));
             m.Branch(m.Ne0(dst), addr, InstrClass.ConditionalTransfer);
         }
 
         private void RewriteIncDec(Func<Expression, Expression, Expression> fn)
         {
-            var dst = OpSrc(instr.Operand1);
+            var dst = OpSrc(instr.Operands[0], arch.DataMemory);
             m.Assign(dst, fn(dst, m.Const(dst.DataType, 1)));
             if (dst is Identifier id && id.Storage is RegisterStorage)
             {
-                var flg = arch.GetFlagGroup((uint)FlagM.P);
+                var flg = arch.GetFlagGroup(Registers.PSW, (uint)FlagM.P);
                 m.Assign(binder.EnsureFlagGroup(flg), m.Cond(dst));
             }
         }
 
         private void RewriteJb(Func<Expression, Expression> cmp)
         {
-            rtlc = InstrClass.ConditionalTransfer;
-            var src = OpSrc(instr.Operand1);
-            var addr = ((AddressOperand)instr.Operand2).Address;
+            iclass = InstrClass.ConditionalTransfer;
+            var src = OpSrc(instr.Operands[0], arch.DataMemory);
+            var addr = ((AddressOperand)instr.Operands[1]).Address;
             m.Branch(cmp(src), addr, InstrClass.ConditionalTransfer);
         }
 
-        private void RewriteJc(Func<Expression, Expression> cmp)
+        private void RewriteJc(ConditionCode cc)
         {
-            rtlc = InstrClass.ConditionalTransfer;
-            var src = binder.EnsureFlagGroup(arch.GetFlagGroup((uint)FlagM.C));
-            var addr = ((AddressOperand)instr.Operand1).Address;
-            m.Branch(cmp(src), addr, InstrClass.ConditionalTransfer);
+            iclass = InstrClass.ConditionalTransfer;
+            var src = binder.EnsureFlagGroup(arch.GetFlagGroup(Registers.PSW, (uint)FlagM.C));
+            var addr = ((AddressOperand)instr.Operands[0]).Address;
+            m.Branch(m.Test(cc, src), addr, InstrClass.ConditionalTransfer);
         }
 
         private void RewriteJbc()
         {
-            rtlc = InstrClass.ConditionalTransfer;
-            var src = OpSrc(instr.Operand1);
-            m.BranchInMiddleOfInstruction(m.Eq0(src), instr.Address + instr.Length, rtlc);
-            WriteDst(instr.Operand1, Constant.Zero(src.DataType));
-            m.Goto(OpSrc(instr.Operand2));
+            iclass = InstrClass.ConditionalTransfer;
+            var src = OpSrc(instr.Operands[0], arch.DataMemory);
+            m.BranchInMiddleOfInstruction(m.Eq0(src), instr.Address + instr.Length, iclass);
+            WriteDst(instr.Operands[0], Constant.Zero(src.DataType));
+            m.Goto(OpSrc(instr.Operands[1], null));
         }
 
         private void RewriteJz(Func<Expression, Expression> cmp)
         {
-            rtlc = InstrClass.ConditionalTransfer;
+            iclass = InstrClass.ConditionalTransfer;
             var src = binder.EnsureRegister(Registers.A);
-            var addr = ((AddressOperand)instr.Operand1).Address;
+            var addr = ((AddressOperand)instr.Operands[0]).Address;
             m.Branch(cmp(src), addr, InstrClass.ConditionalTransfer);
         }
 
         private void RewriteLogical(Func<Expression, Expression, Expression> fn)
         {
-            var dst = OpSrc(instr.Operand1);
-            var src = OpSrc(instr.Operand2);
+            var dst = OpSrc(instr.Operands[0], arch.DataMemory);
+            var src = OpSrc(instr.Operands[1], arch.DataMemory);
             m.Assign(dst, fn(dst, src));
             if (dst is Identifier id && id.Storage is RegisterStorage)
             {
-                var flg = arch.GetFlagGroup((uint)FlagM.P);
+                var flg = arch.GetFlagGroup(Registers.PSW, (uint)FlagM.P);
                 m.Assign(binder.EnsureFlagGroup(flg), m.Cond(dst));
             }
         }
 
         private void RewriteMov()
         {
-            var dst = OpSrc(instr.Operand1);
-            var src = OpSrc(instr.Operand2);
+            var dst = OpSrc(instr.Operands[0], arch.DataMemory);
+            var src = OpSrc(instr.Operands[1], arch.DataMemory);
             m.Assign(dst, src);
         }
 
         private void RewriteMovc()
         {
             var dst = binder.EnsureRegister(Registers.A);
-            var src = OpSrc(instr.Operand1);
+            var src = OpSrc(instr.Operands[0], null);
             m.Assign(dst, src);
         }
 
         private void RewriteMovx()
         {
-            var dst = OpSrc(instr.Operand1);
-            var src = OpSrc(instr.Operand2);
+            var dst = OpSrc(instr.Operands[0], arch.DataMemory);
+            var src = OpSrc(instr.Operands[1], arch.DataMemory);
             m.Assign(dst, src);
         }
 
@@ -290,43 +290,45 @@ namespace Reko.Arch.i8051
         {
             var a = binder.EnsureRegister(Registers.A);
             var b = binder.EnsureRegister(Registers.B);
-            var ab = binder.EnsureSequence(Registers.B, Registers.A, PrimitiveType.Word16);
+            var ab = binder.EnsureSequence(PrimitiveType.Word16, Registers.B, Registers.A);
             m.Assign(ab, m.UMul(a, b));
-            m.Assign(binder.EnsureFlagGroup(arch.GetFlagGroup((uint)FlagM.P)), m.Cond(ab));
-            m.Assign(binder.EnsureFlagGroup(arch.GetFlagGroup((uint)FlagM.OV)), m.Ugt(ab, m.Word16(0xFF)));
-            m.Assign(binder.EnsureFlagGroup(arch.GetFlagGroup((uint)FlagM.C)), Constant.False());
+            m.Assign(binder.EnsureFlagGroup(arch.GetFlagGroup(Registers.PSW, (uint)FlagM.P)), m.Cond(ab));
+            m.Assign(binder.EnsureFlagGroup(arch.GetFlagGroup(Registers.PSW, (uint)FlagM.OV)), m.Ugt(ab, m.Word16(0xFF)));
+            m.Assign(binder.EnsureFlagGroup(arch.GetFlagGroup(Registers.PSW, (uint)FlagM.C)), Constant.False());
         }
 
         private void RewritePop()
         {
-            var dst = OpSrc(instr.Operand1);
+            var dst = OpSrc(instr.Operands[0], arch.DataMemory);
             var sp = binder.EnsureRegister(Registers.SP);
-            m.Assign(dst, m.Mem(dst.DataType, sp));
+            var dataMemory = binder.EnsureRegister(arch.DataMemory);
+            m.Assign(dst, m.SegMem(dst.DataType, dataMemory, sp));
             m.Assign(sp, m.ISub(sp, 1));
         }
 
         private void RewritePush() {
-            var src = OpSrc(instr.Operand1);
+            var src = OpSrc(instr.Operands[0], arch.DataMemory);
             var sp = binder.EnsureRegister(Registers.SP);
             m.Assign(sp, m.IAdd(sp, 1));
-            m.Assign(m.Mem8(sp), src);
+            var dataMemory = binder.EnsureRegister(arch.DataMemory);
+            m.Assign(m.SegMem8(dataMemory, sp), src);
         }
 
         private void RewriteRotate(string rot)
         {
-            var dst = OpSrc(instr.Operand1);
+            var dst = OpSrc(instr.Operands[0], arch.DataMemory);
             m.Assign(dst, host.PseudoProcedure(rot, dst.DataType, dst, m.Byte(1)));
         }
 
         private void RewriteRet()
         {
-            rtlc = InstrClass.Transfer;
+            iclass = InstrClass.Transfer;
             m.Return(2, 0);
         }
 
         private void RewriteSetb()
         {
-            WriteDst(instr.Operand1, Constant.True());
+            WriteDst(instr.Operands[0], Constant.True());
         }
 
         private void RewriteSwap()
@@ -341,8 +343,8 @@ namespace Reko.Arch.i8051
         private void RewriteXch()
         {
             var tmp = binder.CreateTemporary(Registers.A.DataType);
-            var a = OpSrc(instr.Operand1);
-            var b = OpSrc(instr.Operand2);
+            var a = OpSrc(instr.Operands[0], arch.DataMemory);
+            var b = OpSrc(instr.Operands[1], arch.DataMemory);
             m.Assign(tmp, a);
             m.Assign(a, b);
             m.Assign(b, tmp);
@@ -351,15 +353,15 @@ namespace Reko.Arch.i8051
         [Conditional("DEBUG")]
         private void EmitUnitTest()
         {
-            //if (seen.Contains(dasm.Current.Opcode))
+            //if (seen.Contains(dasm.Current.Mnemonic))
             //    return;
-            //seen.Add(dasm.Current.Opcode);
+            //seen.Add(dasm.Current.Mnemonic);
 
             var r2 = rdr.Clone();
             r2.Offset -= dasm.Current.Length;
             var bytes = r2.ReadBytes(dasm.Current.Length);
             Debug.WriteLine("        [Test]");
-            Debug.WriteLine("        public void I8051_rw_" + dasm.Current.Opcode + "()");
+            Debug.WriteLine("        public void I8051_rw_" + dasm.Current.Mnemonic + "()");
             Debug.WriteLine("        {");
             Debug.Write("            BuildTest(");
             Debug.Write(string.Join(
@@ -376,7 +378,7 @@ namespace Reko.Arch.i8051
         private void Invalid()
         {
             m.Invalid();
-            rtlc = InstrClass.Invalid;
+            iclass = InstrClass.Invalid;
         }
 
         IEnumerator IEnumerable.GetEnumerator()
@@ -384,7 +386,7 @@ namespace Reko.Arch.i8051
             return GetEnumerator();
         }
 
-        private Expression OpSrc(MachineOperand op)
+        private Expression OpSrc(MachineOperand op, RegisterStorage dataMemory)
         {
             switch (op)
             {
@@ -403,6 +405,13 @@ namespace Reko.Arch.i8051
                     if (mem.Index != null)
                     {
                         ea = m.IAdd(mem.DirectAddress, binder.EnsureRegister(mem.Index));
+                    }
+                    else if (mem.DirectAddress is Address addr)
+                    {
+                        var alias = AliasedSpecialFunctionRegister(addr.ToUInt16());
+                        if (alias != null)
+                            return alias;
+                        ea =  addr;
                     }
                     else
                     {
@@ -434,7 +443,14 @@ namespace Reko.Arch.i8051
                 {
                     throw new NotImplementedException();
                 }
-                return m.Mem(mem.Width, ea);
+                if (dataMemory != null)
+                {
+                    return m.SegMem(mem.Width, binder.EnsureRegister(dataMemory), ea);
+                }
+                else
+                {
+                    return m.Mem(mem.Width, ea);
+                }
             case BitOperand bit:
                 Expression e = binder.EnsureRegister(bit.Register);
                 if (bit.Bit > 0)
@@ -448,12 +464,27 @@ namespace Reko.Arch.i8051
                 }
                 return e;
             case SequenceOperand seq:
-                return binder.EnsureSequence(seq.Sequence.Name, seq.Sequence.Head, seq.Sequence.Tail, seq.Sequence.DataType);
+                return binder.EnsureSequence(seq.Sequence.DataType, seq.Sequence.Name, seq.Sequence.Elements);
             default:
                 throw new NotImplementedException($"Not implemented {op.GetType().Name}.");
             }
         }
 
+        /// <summary>
+        /// Some 8051 registers are aliased to memory addresses.
+        /// </summary>
+        private Expression AliasedSpecialFunctionRegister(ushort uAddress)
+        {
+            switch (uAddress)
+            {
+            case 0x81: return binder.EnsureIdentifier(Registers.SP);
+            case 0x82: return binder.EnsureIdentifier(Registers.DPL);
+            case 0x83: return binder.EnsureIdentifier(Registers.DPH);
+            case 0xE0: return binder.EnsureIdentifier(Registers.A);
+            case 0xF0: return binder.EnsureIdentifier(Registers.B);
+            }
+            return null;
+        }
 
         private void WriteDst(MachineOperand op, Expression src)
         {

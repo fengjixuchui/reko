@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -71,7 +71,12 @@ namespace Reko.Arch.M68k
             case RegisterOperand reg:
                 r = binder.EnsureRegister(reg.Register);
                 if (DataWidth != null && DataWidth.Size != reg.Width.Size)
-                    r = m.Cast(DataWidth, r);
+                {
+                    if (DataWidth.Domain == Domain.Real)
+                        r = m.Cast(DataWidth, r);
+                    else
+                        r = m.Slice(DataWidth, r, 0);
+                }
                 return r;
             case M68kImmediateOperand imm:
                 if (imm.Width.Domain == Domain.Real)
@@ -197,36 +202,38 @@ namespace Reko.Arch.M68k
             case RegisterOperand reg:
                 {
                     var r = binder.EnsureRegister(reg.Register);
-                    Expression tmp = r;
+                    Expression tmpLo = r;
                     if (dataWidth != null &&
                         reg.Width.BitSize > dataWidth.BitSize &&
                         reg.Width.Domain != Domain.Real)
                     {
-                        Expression rSub = m.Cast(dataWidth, r);
+                        Expression rSub = m.Slice(dataWidth, r, 0);
                         var srcExp = opGen(src, rSub);
-                        if (srcExp is Identifier || srcExp is Constant || srcExp is DepositBits)
+                        if (srcExp is Identifier || srcExp is Constant || srcExp is MkSequence)
                         {
-                            tmp = srcExp;
+                            tmpLo = srcExp;
                         }
                         else
                         {
-                            tmp = binder.CreateTemporary(dataWidth);
-                            m.Assign(tmp, srcExp);
+                            tmpLo = binder.CreateTemporary(dataWidth);
+                            m.Assign(tmpLo, srcExp);
                         }
-                        src = m.Dpb(r, tmp, 0);
+                        var tmpHi = binder.CreateTemporary(PrimitiveType.CreateWord(reg.Width.BitSize - tmpLo.DataType.BitSize));
+                        m.Assign(tmpHi, m.Slice(tmpHi.DataType, r, tmpLo.DataType.BitSize));
+                        src = m.Seq(tmpHi, tmpLo);
                     }
                     else
                     {
                         src = opGen(src, r);
                     }
                     m.Assign(r, src);
-                    return tmp;
+                    return tmpLo;
                 }
             case DoubleRegisterOperand dbl:
                 {
                     Identifier h = binder.EnsureRegister(dbl.Register1);
                     Identifier l = binder.EnsureRegister(dbl.Register2);
-                    var d = binder.EnsureSequence(h.Storage, l.Storage, PrimitiveType.Word64);
+                    var d = binder.EnsureSequence(PrimitiveType.Word64, h.Storage, l.Storage);
                     var result = opGen(src, l);
                     m.Assign(d, result);
                     return d;
@@ -315,12 +322,14 @@ namespace Reko.Arch.M68k
             case RegisterOperand reg:
                 {
                     Expression r = binder.EnsureRegister(reg.Register);
-                    if (r.DataType.Size > dataWidth.Size)
+                    if (r.DataType.BitSize > dataWidth.BitSize)
                     {
-                        var tmp = binder.CreateTemporary(dataWidth);
-                        m.Assign(tmp, opGen(m.Cast(dataWidth, r)));
-                        m.Assign(r, m.Dpb(r, tmp, 0));
-                        return tmp;
+                        var tmpLo = binder.CreateTemporary(dataWidth);
+                        var tmpHi = binder.CreateTemporary(PrimitiveType.CreateWord(r.DataType.BitSize - dataWidth.BitSize));
+                        m.Assign(tmpLo, opGen(m.Cast(dataWidth, r)));
+                        m.Assign(tmpHi, m.Slice(tmpHi.DataType, r, dataWidth.BitSize));
+                        m.Assign(r, m.Seq(tmpHi, tmpLo));
+                        return tmpLo;
                     }
                     else
                     {
@@ -420,11 +429,13 @@ namespace Reko.Arch.M68k
             case RegisterOperand reg:
                 {
                     var r = binder.EnsureRegister(reg.Register);
-                    if (r.DataType.Size > dataWidth.Size)
+                    if (r.DataType.BitSize > src.DataType.BitSize)
                     {
-                        var tmp = binder.CreateTemporary(dataWidth);
-                        m.Assign(r, m.Dpb(r, src, 0));
-                        return tmp;
+                        var tmpLo = binder.CreateTemporary(src.DataType);
+                        var tmpHi = binder.CreateTemporary(PrimitiveType.CreateWord(r.DataType.BitSize - src.DataType.BitSize));
+                        m.Assign(tmpHi, m.Slice(tmpHi.DataType, r, dataWidth.BitSize));
+                        m.Assign(r, m.Seq(tmpHi, src));
+                        return tmpLo;
                     }
                     else
                     {
@@ -535,7 +546,7 @@ namespace Reko.Arch.M68k
 
         public Identifier FlagGroup(FlagM flags)
         {
-            return binder.EnsureFlagGroup(arch.GetFlagGroup((uint)flags));
+            return binder.EnsureFlagGroup(arch.GetFlagGroup(Registers.ccr, (uint)flags));
         }
     }
 }

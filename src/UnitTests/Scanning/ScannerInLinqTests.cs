@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,7 @@
 using Moq;
 using NUnit.Framework;
 using Reko.Arch.X86;
-using Reko.Assemblers.x86;
+using Reko.Arch.X86.Assembler;
 using Reko.Core;
 using Reko.Core.Expressions;
 using Reko.Core.Serialization;
@@ -72,14 +72,24 @@ namespace Reko.UnitTests.Scanning
             CreateProgram(image, arch);
         }
 
+        private void Given_Image(IProcessorArchitecture arch, params byte[] bytes)
+        {
+            var image = new MemoryArea(
+                Address.Ptr32(0x10000),
+                bytes);
+            this.rd = image.Relocations;
+            CreateProgram(image, arch);
+        }
+
         private void Given_x86_Image(Action<X86Assembler> asm)
         {
             var addrBase = Address.Ptr32(0x100000);
             var arch = new X86ArchitectureFlat32("x86-protected-32");
             var entry = ImageSymbol.Procedure(arch, addrBase);
-            var m = new X86Assembler(null, new DefaultPlatform(null, arch), addrBase, new List<ImageSymbol> { entry });
+            var m = new X86Assembler(arch, addrBase, new List<ImageSymbol> { entry });
             asm(m);
             this.program = m.GetImage();
+            this.program.Platform = new DefaultPlatform(null, arch);
         }
 
         private void CreateProgram(MemoryArea mem, IProcessorArchitecture arch)
@@ -98,6 +108,36 @@ namespace Reko.UnitTests.Scanning
                 segmentMap,
                 arch,
                 platform);
+        }
+
+        private void Given_CodeBlock(IProcessorArchitecture arch, uint uAddr, uint len)
+        {
+            var addr = Address.Ptr32(uAddr);
+            var proc = Procedure.Create(arch, addr, new Frame(PrimitiveType.Ptr32));
+            var block = new Block(proc, $"l{addr}");
+            program.ImageMap.AddItem(addr, new ImageMapBlock {
+                Address = addr,
+                Block = block,
+                Size = len
+            });
+        }
+
+        private void Given_UnknownBlock(uint uAddr, uint len)
+        {
+            var addr = Address.Ptr32(uAddr);
+            var item = new ImageMapItem { Address = addr, Size = len };
+            program.ImageMap.AddItem(addr, item);
+        }
+
+        private void Given_DataBlock(uint uAddr, uint len)
+        {
+            var addr = Address.Ptr32(uAddr);
+            var item = new ImageMapItem {
+                Address = addr,
+                Size = len,
+                DataType = new ArrayType(PrimitiveType.Byte, 0) };
+            program.ImageMap.AddItem(addr, item);
+
         }
 
         private void Inst(int uAddr, int len, InstrClass rtlc)
@@ -125,7 +165,7 @@ namespace Reko.UnitTests.Scanning
             Link(addr, next);
         }
 
-        private void Call(int uAddr, int len, int next)
+        private void Call(int uAddr, int len, int next, int uAddrDst)
         {
             var addr = Address.Ptr32((uint)uAddr);
             sr.FlatInstructions.Add(addr.ToLinear(), new ScanResults.instr
@@ -376,7 +416,7 @@ namespace Reko.UnitTests.Scanning
         {
             Lin(0x1000, 3, 0x1003);
             Lin(0x1003, 2, 0x1005);
-            Call(0x1005, 5, 0x100A);
+            Call(0x1005, 5, 0x100A, 0x1010);
             End(0x100A, 1);
 
             CreateScanner();
@@ -397,7 +437,7 @@ namespace Reko.UnitTests.Scanning
         {
             Lin(0x1000, 3, 0x1003);
             Lin(0x1003, 2, 0x1005);
-            Call(0x1005, 5, 0x100A);
+            Call(0x1005, 5, 0x100A, 0x1010);
             Bad(0x100A, 1);
 
             CreateScanner();
@@ -450,6 +490,102 @@ namespace Reko.UnitTests.Scanning
 ";
             #endregion
 
+            AssertBlocks(sExp, blocks);
+        }
+
+        [Test]
+        public void Shsc_FindUnscannedRanges_AUA()
+        {
+            var A = new Mock<IProcessorArchitecture>();
+            A.Setup(a => a.Name).Returns("A");
+            Given_Image(A.Object, new byte[100]);
+            Given_CodeBlock(A.Object, 0x1000, 20);
+            Given_UnknownBlock(0x1020, 20);
+            Given_CodeBlock(A.Object, 0x1040, 60);
+            CreateScanner();
+
+            var ranges = siq.FindUnscannedRanges().ToArray();
+
+            Assert.AreEqual(1, ranges.Length);
+            Assert.AreSame(A.Object, ranges[0].Item1);
+        }
+
+        [Test]
+        public void Shsc_FindUnscannedRanges_UA()
+        {
+            var A = new Mock<IProcessorArchitecture>();
+            A.Setup(a => a.Name).Returns("A");
+            Given_Image(A.Object, new byte[100]);
+            Given_UnknownBlock(0x1020, 20);
+            Given_CodeBlock(A.Object, 0x1040, 80);
+            CreateScanner();
+
+            var ranges = siq.FindUnscannedRanges().ToArray();
+
+            Assert.AreEqual(1, ranges.Length);
+            Assert.AreSame(A.Object, ranges[0].Item1);
+        }
+
+        [Test]
+        public void Shsc_FindUnscannedRanges_BUB()
+        {
+            var A = new Mock<IProcessorArchitecture>();
+            var B = new Mock<IProcessorArchitecture>();
+            A.Setup(a => a.Name).Returns("A");
+            B.Setup(a => a.Name).Returns("B");
+
+            Given_Image(A.Object, new byte[100]);
+            Given_CodeBlock(B.Object, 0x1000, 20);
+            Given_UnknownBlock(0x1020, 20);
+            Given_CodeBlock(B.Object, 0x1040, 60);
+            CreateScanner();
+
+            var ranges = siq.FindUnscannedRanges().ToArray();
+
+            Assert.AreEqual(1, ranges.Length);
+            Assert.AreSame(B.Object, ranges[0].Item1);
+        }
+
+        [Test]
+        public void Shsc_FindUnscannedRanges_AUBB()
+        {
+            var A = new Mock<IProcessorArchitecture>();
+            var B = new Mock<IProcessorArchitecture>();
+            A.Setup(a => a.Name).Returns("A");
+            B.Setup(a => a.Name).Returns("B");
+
+            Given_Image(A.Object, new byte[100]);
+            Given_CodeBlock(A.Object, 0x1000, 20);
+            Given_UnknownBlock(0x1020, 20);
+            Given_CodeBlock(B.Object, 0x1040, 60);
+            CreateScanner();
+
+            var ranges = siq.FindUnscannedRanges().ToArray();
+
+            Assert.AreEqual(1, ranges.Length);
+            Assert.AreSame(B.Object, ranges[0].Item1);
+        }
+
+        [Test(Description = "Stop tracing invalid blocks at call boundaries")]
+        public void Siq_CallThen_()
+        {
+            Call(0x1000, 4, 0x1004, 0x1010);
+            Bra(0x1004, 4, 0x1008, 0x100C);
+            Bad(0x1008, 4);
+            Bad(0x100C, 4);
+
+            Lin(0x1010, 4, 0x1014);
+            Bad(0x1014, 4);
+
+            CreateScanner();
+            var blocks = ScannerInLinq.BuildBasicBlocks(sr);
+            blocks = ScannerInLinq.RemoveInvalidBlocks(sr, blocks);
+
+            var sExp =
+            #region Expected
+@"00001000-00001004 (4): Cal 
+";
+            #endregion
             AssertBlocks(sExp, blocks);
         }
     }

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,16 +33,16 @@ namespace Reko.Core.Output
     /// </summary>
     public class GlobalDataWriter : IDataTypeVisitor<CodeFormatter>
     {
-        private Program program;
+        private readonly Program program;
+        private readonly IServiceProvider services;
+        private readonly DataTypeComparer cmp;
         private EndianImageReader rdr;
         private CodeFormatter codeFormatter;
         private StructureType globals;
-        private IServiceProvider services;
         private int recursionGuard;     //$REVIEW: remove this once deep recursion bugs have been flushed out.
         private Formatter formatter;
         private TypeReferenceFormatter tw;
         private Queue<StructureField> queue;
-        private DataTypeComparer cmp;
 
         public GlobalDataWriter(Program program, IServiceProvider services)
         {
@@ -54,7 +54,7 @@ namespace Reko.Core.Output
         public void WriteGlobals(Formatter formatter)
         {
             this.formatter = formatter;
-            this.codeFormatter = new CodeFormatter(formatter);
+            this.codeFormatter = new AbsynCodeFormatter(formatter);
             this.tw = new TypeReferenceFormatter(formatter);
             var eqGlobalStruct = program.Globals.TypeVariable.Class;
             this.globals = eqGlobalStruct.ResolveAs<StructureType>();
@@ -99,7 +99,7 @@ namespace Reko.Core.Output
         public void WriteGlobalVariable(Address address, DataType dataType, string name, Formatter formatter)
         {
             this.formatter = formatter;
-            this.codeFormatter = new CodeFormatter(formatter);
+            this.codeFormatter = new AbsynCodeFormatter(formatter);
             this.tw = new TypeReferenceFormatter(formatter);
             this.globals = new StructureType();
             this.queue = new Queue<StructureField>(globals.Fields);

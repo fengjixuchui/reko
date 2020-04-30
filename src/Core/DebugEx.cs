@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,46 +23,45 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace Reko.Core
 {
     public static class DebugEx
     {
         [Conditional("DEBUG")]
-        public static void PrintIf(bool doPrint, string fmt, params object[] args)
+        public static void Error(this TraceSwitch trace, string message, params object[] args)
         {
-            if (!doPrint)
-                return;
-            Debug.Print(fmt, args);
+            if (trace != null && trace.TraceError)
+            {
+                Debug.Print(message, args);
+            }
         }
 
         [Conditional("DEBUG")]
-        public static void Error(TraceSwitch trace, string fmt, params object[] args)
+        public static void Warn(this TraceSwitch trace, string message, params object[] args)
         {
-            if (trace.TraceError)
-                Debug.Print(fmt, args);
+            if (trace != null && trace.TraceWarning)
+            {
+                Debug.Print(message, args);
+            }
         }
 
         [Conditional("DEBUG")]
-        public static void Warn(TraceSwitch trace, string fmt, params object[] args)
+        public static void Inform(this TraceSwitch trace, string message, params object[] args)
         {
-            if (trace.TraceWarning)
-                Debug.Print(fmt, args);
+            if (trace != null && trace.TraceInfo)
+            {
+                Debug.Print(message, args);
+            }
         }
 
         [Conditional("DEBUG")]
-        public static void Inform(TraceSwitch trace, string fmt, params object[] args)
+        public static void Verbose(this TraceSwitch trace, string message, params object[]args)
         {
-            if (trace.TraceInfo)
-                Debug.Print(fmt, args);
-        }
-
-        [Conditional("DEBUG")]
-        public static void Verbose(TraceSwitch trace, string fmt, params object[] args)
-        {
-            if (trace.TraceVerbose)
-                Debug.Print(fmt, args);
+            if (trace != null && trace.TraceVerbose)
+            {
+                Debug.Print(message, args);
+            }
         }
     }
 }

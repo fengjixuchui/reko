@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@ using System;
 namespace Reko.Core.Operators
 {
     /// <summary>
-    /// Summary description for ConditionalOperator.
+    /// Models a binary conditional operator.
     /// </summary>
     public abstract class ConditionalOperator : BinaryOperator
     {
@@ -72,16 +72,10 @@ namespace Reko.Core.Operators
             return c1.ToInt32() == c2.ToInt32() ? Constant.True() : Constant.False();
 		}
 
-        public override Operator Negate()
-        {
-            return Eq;
-        }
+        public override Operator Negate() => Eq;
 
-        public override string ToString()
-		{
-			return " == ";
-		}
-	}
+        public override string ToString() => " == ";
+    }
 
 	public class NeOperator : ConditionalOperator
 	{
@@ -95,14 +89,8 @@ namespace Reko.Core.Operators
 		}
 
 
-        public override Operator Negate()
-        {
-            return Ne;
-        }
+        public override Operator Negate() => Ne;
 
-        public override string ToString()
-		{
-			return " != ";
-		}
-	}
+        public override string ToString() => " != ";
+    }
 }

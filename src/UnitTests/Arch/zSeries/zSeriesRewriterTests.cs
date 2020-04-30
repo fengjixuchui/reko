@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /*
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,8 +34,6 @@ namespace Reko.UnitTests.Arch.zSeries
     [TestFixture]
     public class zSeriesRewriterTests : RewriterTestBase
     {
-        private MemoryArea image;
-
         public zSeriesRewriterTests()
         {
             this.Architecture = new zSeriesArchitecture("zSeries");
@@ -46,54 +44,42 @@ namespace Reko.UnitTests.Arch.zSeries
 
         public override Address LoadAddress { get; }
 
-        protected override MemoryArea RewriteCode(string hexBytes)
-        {
-            return image;
-        }
-
-        protected override IEnumerable<RtlInstructionCluster> GetInstructionStream(IStorageBinder binder, IRewriterHost host)
+        protected override IEnumerable<RtlInstructionCluster> GetRtlStream(MemoryArea mem, IStorageBinder binder, IRewriterHost host)
         {
             return Architecture.CreateRewriter(
-                new BeImageReader(image, image.BaseAddress),
+                new BeImageReader(mem, mem.BaseAddress),
                 Architecture.CreateProcessorState(),
                 binder,
                 host);
         }
 
-        private void Given_MachineCode(string hex)
-        {
-            var bytes = PlatformDefinition.LoadHexBytes(hex)
-                .ToArray();
-            this.image = new MemoryArea(LoadAddress, bytes);
-        }
-
         [Test]
         public void zSeriesRw_stmg()
         {
-            Given_MachineCode("EB68F0300024");
+            Given_HexString("EB68F0300024");
             AssertCode(     // stmg	r6,r8,48(r15)
                 "0|L--|00100000(6): 6 instructions",
-                "1|L--|v3 = r15 + 48",
+                "1|L--|v3 = r15 + 48<i64>",
                 "2|L--|Mem0[v3:word64] = r6",
-                "3|L--|v3 = v3 + 8",
+                "3|L--|v3 = v3 + 8<i64>",
                 "4|L--|Mem0[v3:word64] = r7",
-                "5|L--|v3 = v3 + 8",
+                "5|L--|v3 = v3 + 8<i64>",
                 "6|L--|Mem0[v3:word64] = r8");
         }
 
         [Test]
         public void zSeriesRw_larl()
         {
-            Given_MachineCode("C05000000140");
+            Given_HexString("C05000000140");
             AssertCode(     // larl	r5,00100280
                 "0|L--|00100000(6): 1 instructions",
-                "1|L--|r5 = 00100280");
+                "1|L--|r5 = DPB(r5, 0x00100280<p32>, 0)");
         }
 
         [Test]
         public void zSeriesRw_br()
         {
-            Given_MachineCode("07FE");
+            Given_HexString("07FE");
             AssertCode(     // br	r14
                 "0|T--|00100000(2): 1 instructions",
                 "1|T--|goto r14");
@@ -102,16 +88,16 @@ namespace Reko.UnitTests.Arch.zSeries
         [Test]
         public void zSeriesRw_la()
         {
-            Given_MachineCode("4140F008");
+            Given_HexString("4140F008");
             AssertCode(     // la	r4,8(r15)
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r4 = r15 + 8");
+                "1|L--|r4 = r15 + 8<i64>");
         }
 
         [Test]
         public void zSeriesRw_lgr()
         {
-            Given_MachineCode("B904001F");
+            Given_HexString("B904001F");
             AssertCode(     // lgr	r1,r15
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r1 = r15");
@@ -120,17 +106,17 @@ namespace Reko.UnitTests.Arch.zSeries
         [Test]
         public void zSeriesRw_aghi()
         {
-            Given_MachineCode("A7FBFF58");
+            Given_HexString("A7FBFF58");
             AssertCode(     // aghi	r15,-000000A8
                 "0|L--|00100000(4): 2 instructions",
-                "1|L--|r15 = r15 - 168",
+                "1|L--|r15 = r15 - 168<i64>",
                 "2|L--|CC = cond(r15)");
         }
 
         [Test]
         public void zSeriesRw_sgr()
         {
-            Given_MachineCode("B9090031");
+            Given_HexString("B9090031");
             AssertCode(     // sgr	r3,r1
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|r3 = r3 - r1");
@@ -139,7 +125,7 @@ namespace Reko.UnitTests.Arch.zSeries
         [Test]
         public void zSeriesRw_lg()
         {
-            Given_MachineCode("E330F0000004");
+            Given_HexString("E330F0000004");
             AssertCode(     // lg	r3,(r15)
                 "0|L--|00100000(6): 1 instructions",
                 "1|L--|r3 = Mem0[r15:word64]");
@@ -148,7 +134,7 @@ namespace Reko.UnitTests.Arch.zSeries
         [Test]
         public void zSeriesRw_stg()
         {
-            Given_MachineCode("E310F0000024");
+            Given_HexString("E310F0000024");
             AssertCode(     // stg	r1,(r15)
                 "0|L--|00100000(6): 1 instructions",
                 "1|L--|Mem0[r15:word64] = r1");
@@ -157,7 +143,7 @@ namespace Reko.UnitTests.Arch.zSeries
         [Test]
         public void zSeriesRw_clg()
         {
-            Given_MachineCode("E31050000021");
+            Given_HexString("E31050000021");
             AssertCode(     // clg	r1,(r5)
                 "0|L--|00100000(6): 1 instructions",
                 "1|L--|CC = cond(r1 - Mem0[r5:byte])");
@@ -166,16 +152,16 @@ namespace Reko.UnitTests.Arch.zSeries
         [Test]
         public void zSeriesRw_st()
         {
-            Given_MachineCode("5010B0A4");
+            Given_HexString("5010B0A4");
             AssertCode(     // st	r1,164(r11)
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|Mem0[r11 + 164:word32] = (word32) r1");
+                "1|L--|Mem0[r11 + 164<i64>:word32] = (word32) r1");
         }
 
         [Test]
         public void zSeriesRw_brasl()
         {
-            Given_MachineCode("C0E5FFFFFE95");
+            Given_HexString("C0E5FFFFFE95");
             AssertCode(     // brasl	r14,00000560
                 "0|T--|00100000(6): 2 instructions",
                 "1|L--|r14 = 00100006",
@@ -185,7 +171,7 @@ namespace Reko.UnitTests.Arch.zSeries
         [Test]
         public void zSeriesRw_clc()
         {
-            Given_MachineCode("D507D0002000");
+            Given_HexString("D507D0002000");
             AssertCode(     // clc	(8,r13),(r2)
                 "0|L--|00100000(6): 1 instructions",
                 "1|L--|CC = cond(Mem0[r13:byte] - Mem0[r2:byte])");
@@ -194,34 +180,34 @@ namespace Reko.UnitTests.Arch.zSeries
         [Test]
         public void zSeriesRw_cli()
         {
-            Given_MachineCode("9500B000");
+            Given_HexString("9500B000");
             AssertCode(     // cli	(r11),00
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|CC = cond(Mem0[r11:byte] - 0x00)");
+                "1|L--|CC = cond(Mem0[r11:byte] - 0<8>)");
         }
 
         [Test]
         public void zSeriesRw_srag()
         {
-            Given_MachineCode("EB330003000A");
+            Given_HexString("EB330003000A");
             AssertCode(     // srag	r3,r3,00000003
                 "0|L--|00100000(6): 1 instructions",
-                "1|L--|r3 = r3 >> 3");
+                "1|L--|r3 = r3 >> 3<i32>");
         }
 
         [Test]
         public void zSeriesRw_lghi()
         {
-            Given_MachineCode("A709FFF0");
+            Given_HexString("A709FFF0");
             AssertCode(     // lghi	r0,-00000010
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r0 = 0xFFFFFFFFFFFFFFF0");
+                "1|L--|r0 = 0xFFFFFFFFFFFFFFF0<64>");
         }
 
         [Test]
         public void zSeriesRw_ltgr()
         {
-            Given_MachineCode("B9020011");
+            Given_HexString("B9020011");
             AssertCode(     // ltgr	r1,r1
                 "0|L--|00100000(4): 2 instructions",
                 "1|L--|r1 = r1",
@@ -231,7 +217,7 @@ namespace Reko.UnitTests.Arch.zSeries
         [Test]
         public void zSeriesRw_bler()
         {
-            Given_MachineCode("07CE");
+            Given_HexString("07CE");
             AssertCode(     // bler	r14
                 "0|T--|00100000(2): 2 instructions",
                 "1|T--|if (Test(GT,CC)) branch 00100002",
@@ -241,16 +227,16 @@ namespace Reko.UnitTests.Arch.zSeries
         [Test]
         public void zSeriesRw_chi()
         {
-            Given_MachineCode("A71E0001");
+            Given_HexString("A71E0001");
             AssertCode(     // chi	r1,+00000001
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|CC = cond(r1 - 0x0000000000000001)");
+                "1|L--|CC = cond(r1 - 1<64>)");
         }
 
         [Test]
         public void zSeriesRw_nopr()
         {
-            Given_MachineCode("0707");
+            Given_HexString("0707");
             AssertCode(     // nopr	r7
                 "0|L--|00100000(2): 1 instructions",
                 "1|L--|nop");
@@ -259,7 +245,7 @@ namespace Reko.UnitTests.Arch.zSeries
         [Test]
         public void zSeriesRw_je()
         {
-            Given_MachineCode("A7840012");
+            Given_HexString("A7840012");
             AssertCode(     // je	00000876
                 "0|T--|00100000(4): 1 instructions",
                 "1|T--|if (Test(EQ,CC)) branch 00100024");
@@ -268,7 +254,7 @@ namespace Reko.UnitTests.Arch.zSeries
         [Test]
         public void zSeriesRw_jne()
         {
-            Given_MachineCode("A7740008");
+            Given_HexString("A7740008");
             AssertCode(     // jne	0000074C
                 "0|T--|00100000(4): 1 instructions",
                 "1|T--|if (Test(NE,CC)) branch 00100010");
@@ -277,16 +263,16 @@ namespace Reko.UnitTests.Arch.zSeries
         [Test]
         public void zSeriesRw_srlg()
         {
-            Given_MachineCode("EB13003F000C");
+            Given_HexString("EB13003F000C");
             AssertCode(     // srlg	r1,r3,0000003F
                 "0|L--|00100000(6): 1 instructions",
-                "1|L--|r1 = r3 >>u 63");
+                "1|L--|r1 = r3 >>u 63<i32>");
         }
 
         [Test]
         public void zSeriesRw_ngr()
         {
-            Given_MachineCode("B98000F0");
+            Given_HexString("B98000F0");
             AssertCode(     // ngr	r15,r0
                 "0|L--|00100000(4): 2 instructions",
                 "1|L--|r15 = r15 & r0",
@@ -296,7 +282,7 @@ namespace Reko.UnitTests.Arch.zSeries
         [Test]
         public void zSeriesRw_jh()
         {
-            Given_MachineCode("A7240006");
+            Given_HexString("A7240006");
             AssertCode(     // jh	00000792
                 "0|T--|00100000(4): 1 instructions",
                 "1|T--|if (Test(UGT,CC)) branch 0010000C");
@@ -305,21 +291,21 @@ namespace Reko.UnitTests.Arch.zSeries
         [Test]
         public void zSeriesRw_lmg()
         {
-            Given_MachineCode("EB68F0D00004");
+            Given_HexString("EB68F0D00004");
             AssertCode(     // lmg	r6,r8,208(r15)
                 "0|L--|00100000(6): 6 instructions",
-                "1|L--|v3 = r15 + 208",
+                "1|L--|v3 = r15 + 208<i64>",
                 "2|L--|r6 = Mem0[v3:word64]",
-                "3|L--|v3 = v3 + 8",
+                "3|L--|v3 = v3 + 8<i64>",
                 "4|L--|r7 = Mem0[v3:word64]",
-                "5|L--|v3 = v3 + 8",
+                "5|L--|v3 = v3 + 8<i64>",
                 "6|L--|r8 = Mem0[v3:word64]");
         }
 
         [Test]
         public void zSeriesRw_basr()
         {
-            Given_MachineCode("0DE1");
+            Given_HexString("0DE1");
             AssertCode(     // basr	r14,r1
                 "0|T--|00100000(2): 2 instructions",
                 "1|L--|r14 = 00100002",
@@ -329,7 +315,7 @@ namespace Reko.UnitTests.Arch.zSeries
         [Test]
         public void zSeriesRw_lgfr()
         {
-            Given_MachineCode("B9140011");
+            Given_HexString("B9140011");
             AssertCode(     // lgfr	r1,r1
                 "0|L--|00100000(4): 2 instructions",
                 "1|L--|v3 = (word32) r1",
@@ -339,16 +325,16 @@ namespace Reko.UnitTests.Arch.zSeries
         [Test]
         public void zSeriesRw_mvi()
         {
-            Given_MachineCode("9201B000");
+            Given_HexString("9201B000");
             AssertCode(     // mvi	(r11),01
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|Mem0[r11:byte] = 0x01");
+                "1|L--|Mem0[r11:byte] = 1<8>");
         }
 
         [Test]
         public void zSeriesRw_agr()
         {
-            Given_MachineCode("B9080031");
+            Given_HexString("B9080031");
             AssertCode(     // agr	r3,r1
                 "0|L--|00100000(4): 2 instructions",
                 "1|L--|r3 = r3 + r1",
@@ -358,18 +344,18 @@ namespace Reko.UnitTests.Arch.zSeries
         [Test]
         public void zSeriesRw_xc()
         {
-            Given_MachineCode("D707F000F000");
+            Given_HexString("D707F000F000");
             AssertCode(     // xc	(8,r15),(r15)
                 "0|L--|00100000(6): 3 instructions",
-                "1|L--|v3 = 0x00",
-                "2|L--|Mem0[r15:byte] = 0x00",
+                "1|L--|v3 = 0<8>",
+                "2|L--|Mem0[r15:byte] = 0<8>",
                 "3|L--|CC = cond(v3)");
         }
 
         [Test]
         public void zSeriesRw_ber()
         {
-            Given_MachineCode("078E");
+            Given_HexString("078E");
             AssertCode(     // ber	r14
                 "0|T--|00100000(2): 2 instructions",
                 "1|T--|if (Test(NE,CC)) branch 00100002",
@@ -379,7 +365,7 @@ namespace Reko.UnitTests.Arch.zSeries
         [Test]
         public void zSeriesRw_j()
         {
-            Given_MachineCode("A7F4001E");
+            Given_HexString("A7F4001E");
             AssertCode(     // j	000007CA
                 "0|T--|00100000(4): 1 instructions",
                 "1|T--|goto 0010003C");
@@ -388,28 +374,29 @@ namespace Reko.UnitTests.Arch.zSeries
         [Test]
         public void zSeriesRw_ahi()
         {
-            Given_MachineCode("A71AFFFF");
+            Given_HexString("A71AFFFF");
             AssertCode(     // ahi	r1,-00000001
-                "0|L--|00100000(4): 3 instructions",
-                "1|L--|v3 = (word32) r1 - 1",
-                "2|L--|r1 = DPB(r1, v3, 0)",
-                "3|L--|CC = cond(v3)");
+                "0|L--|00100000(4): 4 instructions",
+                "1|L--|v3 = (word32) r1 - 1<i32>",
+                "2|L--|v4 = SLICE(r1, word32, 32)",
+                "3|L--|r1 = SEQ(v4, v3)",
+                "4|L--|CC = cond(v3)");
         }
 
         [Test]
         public void zSeriesRw_brctg()
         {
-            Given_MachineCode("A7B7FFF4");
+            Given_HexString("A7B7FFF4");
             AssertCode(     // brctg	r11,0000085A
                 "0|T--|00100000(4): 2 instructions",
-                "1|L--|r11 = r11 - 1",
-                "2|T--|if (r11 != 0x0000000000000000) branch 000FFFE8");
+                "1|L--|r11 = r11 - 1<i64>",
+                "2|T--|if (r11 != 0<64>) branch 000FFFE8");
         }
 
         [Test]
         public void zSeriesRw_jg()
         {
-            Given_MachineCode("C0F4FFFFFF9D");
+            Given_HexString("C0F4FFFFFF9D");
             AssertCode(     // jg	00000680
                 "0|T--|00100000(6): 1 instructions",
                 "1|T--|if (Test(GT,CC)) branch 000FFF3A");
@@ -418,62 +405,63 @@ namespace Reko.UnitTests.Arch.zSeries
         [Test]
         public void zSeriesRw_ar()
         {
-            Given_MachineCode("1A12");
+            Given_HexString("1A12");
             AssertCode( // ar\tr1,r2
-                "0|L--|00100000(2): 3 instructions",
+                "0|L--|00100000(2): 4 instructions",
                 "1|L--|v4 = (word32) r1 + (word32) r2",
-                "2|L--|r1 = DPB(r1, v4, 0)",
-                "3|L--|CC = cond(v4)");
+                "2|L--|v5 = SLICE(r1, word32, 32)",
+                "3|L--|r1 = SEQ(v5, v4)",
+                "4|L--|CC = cond(v4)");
         }
 
         [Test]
         public void zSeriesRw_lr()
         {
-            Given_MachineCode("18A1");
+            Given_HexString("18A1");
             AssertCode(     // lr	r10,r1
                 "0|L--|00100000(2): 1 instructions",
-                "1|L--|r10 = DPB(r10, (word32) r1, 0)");
+                "1|L--|r10 = r1");
         }
 
 
         [Test]
         public void zSeriesRw_nc()
         {
-            Given_MachineCode("D407C038D000");
+            Given_HexString("D407C038D000");
             AssertCode(     // nc	56(8,r12),(r13)
                 "0|L--|00100000(6): 3 instructions",
-                "1|L--|v3 = Mem0[r12 + 56:byte] & Mem0[r13:byte]",
-                "2|L--|Mem0[r12 + 56:byte] = v3",
+                "1|L--|v3 = Mem0[r12 + 56<i64>:byte] & Mem0[r13:byte]",
+                "2|L--|Mem0[r12 + 56<i64>:byte] = v3",
                 "3|L--|CC = cond(v3)");
         }
 
         [Test]
         public void zSeriesRw_lhi()
         {
-            Given_MachineCode("A728FFF0");
+            Given_HexString("A728FFF0");
             AssertCode(     // lhi	r2,+00000010
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r2 = 0xFFFFFFF0");
+                "1|L--|r2 = 0xFFFFFFF0<32>");
         }
 
 
         [Test]
         public void zSeriesRw_lgf()
         {
-            Given_MachineCode("E314F15C0014");
+            Given_HexString("E314F15C0014");
             AssertCode(     // lgf	r1,348(r15)
                 "0|L--|00100000(6): 1 instructions",
-                "1|L--|r1 = (int64) Mem0[r15 + r4 + 348:int32]");
+                "1|L--|r1 = (int64) Mem0[r15 + r4 + 348<i64>:int32]");
         }
 
         [Test]
         public void zSeriesRw_mvz()
         {
-            Given_MachineCode("D207F0B0F160");
+            Given_HexString("D207F0B0F160");
             AssertCode(     // mvz	176(8,r15),352(r15)
                 "0|L--|00100000(6): 2 instructions",
-                "1|L--|v3 = __move_zones(Mem0[r15 + 176:byte], Mem0[r15 + 352:byte])",
-                "2|L--|Mem0[r15 + 176:byte] = v3");
+                "1|L--|v3 = __move_zones(Mem0[r15 + 176<i64>:byte], Mem0[r15 + 352<i64>:byte])",
+                "2|L--|Mem0[r15 + 176<i64>:byte] = v3");
         }
     }
 }

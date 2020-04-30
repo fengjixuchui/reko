@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -109,6 +109,8 @@ namespace Reko.Core.Expressions
                 default: return new ConstantUInt32(p, (uint) value);
                 }
             case 36:        // PDP-10 <3
+            case 48:
+            case 56:
                 value &= (long)Bits.Mask(0, bitSize);
                 goto case 64;
             case 64:
@@ -118,6 +120,7 @@ namespace Reko.Core.Expressions
                 case Domain.Real: return new ConstantUInt64(p, (ulong) value);
                 default: return new ConstantUInt64(p, (ulong) value);
                 }
+            case 96:
             case 128:
                 switch (p.Domain)
                 {
@@ -134,7 +137,7 @@ namespace Reko.Core.Expressions
                 //$TODO: if we encounter less common bit sizes, do them in a cascading if statement.
                 break;
             }
-            throw new NotSupportedException(string.Format("Constants of type {0} are not supported.", dt));
+            throw new NotSupportedException($"Constants of type {dt} are not supported.");
         }
 
         public override T Accept<T, C>(ExpressionVisitor<T, C> v, C context)
@@ -182,7 +185,7 @@ namespace Reko.Core.Expressions
             return Constant.Real64(BitConverter.Int64BitsToDouble(bits));
 		}
 
-		private static double MakeReal(int exponent, int expBias, long mantissa, int mantissaSize)
+		public static double MakeReal(int exponent, int expBias, long mantissa, int mantissaSize)
 		{
 			if (exponent == 0)
 			{

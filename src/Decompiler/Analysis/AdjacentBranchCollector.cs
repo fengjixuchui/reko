@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -154,6 +154,8 @@ namespace Reko.Analysis
                 pred = block.Pred[1];
                 predCond = block.Pred[0];
             }
+            if (pred == block)
+                return null;
             if (pred.Succ.Count != 2)
                 return null;
             if (predCond.Pred.Count != 1)
@@ -171,7 +173,7 @@ namespace Reko.Analysis
             if (BlockTrashesIdentifier(predCond, v))
                 return null;
 
-            DebugEx.PrintIf(trace.TraceVerbose, "ABC: Candidate pred: {0}, block {1}", pred.Name, block.Name);
+            DebugEx.Verbose(trace, "ABC: Candidate pred: {0}, block {1}", pred.Name, block.Name);
             return new Candidate
             {
                 Predecessor = pred,
@@ -186,26 +188,13 @@ namespace Reko.Analysis
 
         private bool BlockTrashesIdentifier(Block block, Identifier id)
         {
-            bool IsTrashed(Identifier dst, Identifier src)
-            {
-                var dstStg = dst.Storage as FlagGroupStorage;
-                var srcStg = src.Storage as FlagGroupStorage;
-                if (dstStg != null && srcStg != null)
-                {
-                    //$TODO: when moved to analysis-development,
-                    // simply use Overlap.
-                    return (dstStg.FlagGroupBits & srcStg.FlagGroupBits) != 0;
-                }
-                return false;
-            }
-
             bool ApplOutArgumentTrashesIdentifier(Expression e)
             {
                 if (e is Application appl)
                 {
                     if (appl.Arguments.OfType<OutArgument>()
                         .Any(a => a.Expression is Identifier i && 
-                                    IsTrashed(i, id)))
+                                    i.Storage.OverlapsWith(id.Storage)))
                         return true;
                 }
                 return false;
@@ -216,7 +205,7 @@ namespace Reko.Analysis
                 switch (stm.Instruction)
                 {
                 case Assignment ass:
-                    if (IsTrashed(ass.Dst, id))
+                    if (ass.Dst.Storage.OverlapsWith(id.Storage))
                         return true;
                     if (ApplOutArgumentTrashesIdentifier(ass.Src))
                         return true;

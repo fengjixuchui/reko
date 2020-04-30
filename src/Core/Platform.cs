@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -64,6 +64,15 @@ namespace Reko.Core
         TypeLibrary CreateMetadata();
 
         /// <summary>
+        /// Creates a platform emulator for this platform.
+        /// </summary>
+        /// <param name="segmentMap">Loaded program image.</param>
+        /// <param name="importReferences">Imported procedures.</param>
+        /// <returns>The created platform emulators.
+        /// </returns>
+        IPlatformEmulator CreateEmulator(SegmentMap segmentMap, Dictionary<Address, ImportReference> importReferences);
+
+        /// <summary>
         /// Creates an empty SegmentMap based on the absolute memory map. It is 
         /// the caller's responsibility to fill in the MemoryArea properties
         /// of each resulting ImageSegment.
@@ -107,7 +116,7 @@ namespace Reko.Core
         /// <returns></returns>
         string GetPrimitiveTypeName(PrimitiveType t, string language);
 
-        ProcedureBase GetTrampolineDestination(IEnumerable<RtlInstructionCluster> instrs, IRewriterHost host);
+        ProcedureBase GetTrampolineDestination(Address addrInstr, IEnumerable<RtlInstruction> instrs, IRewriterHost host);
 
         /// <summary>
         /// Given an executable entry point, find the location of the "main" program,
@@ -130,8 +139,8 @@ namespace Reko.Core
         /// <param name="vector"></param>
         /// <param name="state"></param>
         /// <returns></returns>
-        SystemService FindService(int vector, ProcessorState state);
-        SystemService FindService(RtlInstruction call, ProcessorState state);
+        SystemService FindService(int vector, ProcessorState state, SegmentMap segmentMap);
+        SystemService FindService(RtlInstruction call, ProcessorState state, SegmentMap segmentMap);
         DispatchProcedure_v1 FindDispatcherProcedureByAddress(Address addr);
 
         string FormatProcedureName(Program program, Procedure proc);
@@ -149,8 +158,8 @@ namespace Reko.Core
         Expression ResolveImportByName(string moduleName, string globalName);
         Expression ResolveImportByOrdinal(string moduleName, int ordinal);
         ProcedureCharacteristics LookupCharacteristicsByName(string procName);
-        Address MakeAddressFromConstant(Constant c);
-        Address MakeAddressFromLinear(ulong uAddr);
+        Address MakeAddressFromConstant(Constant c, bool codeAlign);
+        Address MakeAddressFromLinear(ulong uAddr, bool codeAlign);
 
         /// <summary>
         /// Given an indirect call, attempt to resolve it into an address.
@@ -165,6 +174,13 @@ namespace Reko.Core
         Dictionary<string, object> SaveUserOptions();
         ProcedureBase_v1 SignatureFromName(string importName);
         Tuple<string, SerializedType, SerializedType> DataTypeFromImportName(string importName);
+
+        /// <summary>
+        /// Write one or more metadata files for the loaded program.
+        /// </summary>
+        /// <param name="program">A <see cref="Program"/> whose file metadata is to be written.</param>
+        /// <param name="path">Full path to use (without file extension).</param>
+        void WriteMetadata(Program program, string path);
     }
 
     /// <summary>
@@ -225,6 +241,8 @@ namespace Reko.Core
             return addr;
         }
 
+        public abstract IPlatformEmulator CreateEmulator(SegmentMap segmentMap, Dictionary<Address, ImportReference> importReferences);
+
         /// <summary>
         /// Creates a set that represents those registers that are never used
         /// as arguments to a procedure. 
@@ -234,7 +252,13 @@ namespace Reko.Core
         /// Some architectures define global registers that are preserved 
         /// across calls; these should also be present in this set.
         /// </remarks>
-        public abstract HashSet<RegisterStorage> CreateImplicitArgumentRegisters();
+        public virtual HashSet<RegisterStorage> CreateImplicitArgumentRegisters()
+        {
+            return new HashSet<RegisterStorage>()
+            {
+                Architecture.StackRegister,
+            };
+        }
 
         /// <summary>
         /// Creates a set of registers that the "standard" ABI cannot 
@@ -279,8 +303,7 @@ namespace Reko.Core
         /// <returns></returns>
         public virtual SegmentMap CreateAbsoluteMemoryMap()
         {
-            if (this.MemoryMap == null ||
-                  this.MemoryMap.Segments == null)
+            if (this.MemoryMap == null || this.MemoryMap.Segments == null)
                 return null;
             var diagSvc = Services.RequireService<IDiagnosticsService>();
             var segs = MemoryMap.Segments.Select(s => MemoryMap_v1.LoadSegment(s, this, diagSvc))
@@ -311,7 +334,7 @@ namespace Reko.Core
                     throw new ApplicationException(string.Format(
                         "Environment '{0}' doesn't appear in the configuration file. Your installation may be out-of-date.",
                         envName));
-                this.Metadata = new TypeLibrary();
+                this.Metadata = new TypeLibrary(envCfg.CaseInsensitive);
 
                 var tlSvc = Services.RequireService<ITypeLibraryLoaderService>();
 
@@ -373,14 +396,14 @@ namespace Reko.Core
             throw new NotSupportedException();
         }
 
-        public abstract SystemService FindService(int vector, ProcessorState state);
+        public abstract SystemService FindService(int vector, ProcessorState state, SegmentMap segmentMap);
 
         public virtual DispatchProcedure_v1 FindDispatcherProcedureByAddress(Address addr)
         {
             return null;
         }
 
-        public virtual SystemService FindService(RtlInstruction rtl, ProcessorState state)
+        public virtual SystemService FindService(RtlInstruction rtl, ProcessorState state, SegmentMap segmentMap)
         {
             return null;
         }
@@ -397,14 +420,14 @@ namespace Reko.Core
         /// </summary>
         /// <param name="imageReader"></param>
         /// <returns></returns>
-        public virtual ProcedureBase GetTrampolineDestination(IEnumerable<RtlInstructionCluster> instrs, IRewriterHost host)
+        public virtual ProcedureBase GetTrampolineDestination(Address addrInstr, IEnumerable<RtlInstruction> instrs, IRewriterHost host)
         {
             return null;
         }
 
-        public virtual Address MakeAddressFromConstant(Constant c)
+        public virtual Address MakeAddressFromConstant(Constant c, bool codeAlign)
         {
-            return Architecture.MakeAddressFromConstant(c);
+            return Architecture.MakeAddressFromConstant(c, codeAlign);
         }
 
         public virtual void InjectProcedureEntryStatements(Procedure proc, Address addr, CodeEmitter emitter)
@@ -422,7 +445,7 @@ namespace Reko.Core
         /// </remarks>
         /// <param name="uAddr"></param>
         /// <returns></returns>
-        public virtual Address MakeAddressFromLinear(ulong uAddr)
+        public virtual Address MakeAddressFromLinear(ulong uAddr, bool codeAlign)
         {
             return Address.Create(Architecture.PointerType, uAddr);
         }
@@ -504,6 +527,10 @@ namespace Reko.Core
                 .Where(c => c != null)
                 .FirstOrDefault();
         }
+
+        public virtual void WriteMetadata(Program program, string path)
+        {
+        }
     }
 
     /// <summary>
@@ -539,9 +566,9 @@ namespace Reko.Core
             get { return ""; }
         }
 
-        public override HashSet<RegisterStorage> CreateImplicitArgumentRegisters()
+        public override IPlatformEmulator CreateEmulator(SegmentMap segmentMap, Dictionary<Address, ImportReference> importReferences)
         {
-            return new HashSet<RegisterStorage>();
+            throw new NotSupportedException();
         }
 
         public override HashSet<RegisterStorage> CreateTrashedRegisters()
@@ -556,7 +583,7 @@ namespace Reko.Core
             return this.Architecture.GetCallingConvention(ccName);
         }
 
-        public override SystemService FindService(int vector, ProcessorState state)
+        public override SystemService FindService(int vector, ProcessorState state, SegmentMap segmentMap)
         {
             return null;
         }

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -72,7 +72,7 @@ namespace Reko.UnitTests.Gui.Windows
             var dlg = new Mock<IAddressPromptDialog>();
             dlg.Setup(x => x.Address).Returns(Address.Ptr32(0x41104110));
             dlgFactory.Setup(x => x.CreateAddressPromptDialog()).Returns(dlg.Object);
-            uiSvc.Expect(x => x.ShowModalDialog(dlg.Object))
+            uiSvc.Setup(x => x.ShowModalDialog(dlg.Object))
                 .Returns(DialogResult.OK)
                 .Verifiable();
             dlg.Setup(x => x.Dispose());

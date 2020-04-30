@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John KÃ¤llÃ©n.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,7 +38,7 @@ namespace Reko.UnitTests.Core
 			var add = emitter.IAdd(id, 3);
 			Assert.AreEqual(PrimitiveType.Word16, add.DataType);
 			Assert.AreEqual(PrimitiveType.Word16, add.Right.DataType);
-			Assert.AreEqual("id + 0x0003", add.ToString());
+			Assert.AreEqual("id + 3<16>", add.ToString());
 		}
 
 		[Test]
@@ -49,7 +49,7 @@ namespace Reko.UnitTests.Core
 			var add = emitter.ISub(id, 3);
 			Assert.AreEqual(PrimitiveType.Word16, add.DataType);
 			Assert.AreEqual(PrimitiveType.Word16, add.Right.DataType);
-			Assert.AreEqual("id - 0x0003", add.ToString());
+			Assert.AreEqual("id - 3<16>", add.ToString());
 		}
 
         [Test]
@@ -61,7 +61,7 @@ namespace Reko.UnitTests.Core
             var sub = emitter.ISub(id, 3);
             Assert.AreEqual("(ptr32 (struct \"tmp\" 0010))", sub.DataType.ToString());
             Assert.AreEqual(PrimitiveType.Word32, sub.Right.DataType);
-            Assert.AreEqual("id - 0x00000003", sub.ToString());
+            Assert.AreEqual("id - 3<32>", sub.ToString());
         }
 
         [Test]
@@ -73,7 +73,7 @@ namespace Reko.UnitTests.Core
             var add = emitter.IAdd(id, 3);
             Assert.AreEqual(PrimitiveType.Word32, add.DataType);
             Assert.AreEqual(PrimitiveType.Word32, add.Right.DataType);
-            Assert.AreEqual("id + 0x00000003", add.ToString());
+            Assert.AreEqual("id + 3<32>", add.ToString());
         }
 
 
@@ -84,7 +84,6 @@ namespace Reko.UnitTests.Core
             var cond = emitter.Cond(new Identifier("id", PrimitiveType.Word32, null));
             Assert.AreEqual("cond(id)", cond.ToString());
         }
-
 
         private class CodeEmitterImpl : CodeEmitter
         {
@@ -99,11 +98,6 @@ namespace Reko.UnitTests.Core
             public override Frame Frame
             {
                 get { return frame;  }
-            }
-
-            public override Identifier Register(int i)
-            {
-                throw new NotImplementedException();
             }
         }
 	}

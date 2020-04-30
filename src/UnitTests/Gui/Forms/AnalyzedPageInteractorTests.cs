@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -67,7 +67,7 @@ namespace Reko.UnitTests.Gui.Forms
             var bytes = new byte[4711];
             var arch = new X86ArchitectureFlat32("x86-protected-32");
             var mem = new MemoryArea(loadAddress, bytes);
-            Program program = new Program
+            this.program = new Program
             {
                 SegmentMap = new SegmentMap(
                     mem.BaseAddress,
@@ -85,9 +85,9 @@ namespace Reko.UnitTests.Gui.Forms
                 It.IsAny<string>(),
                 It.IsAny<int>())).Returns(bytes);
             sc.AddService<DecompilerEventListener>(new FakeDecompilerEventListener());
-            sc.AddService<DecompilerHost>(new FakeDecompilerHost());
+            sc.AddService<IDecompiledFileService>(new FakeDecompiledFileService());
             this.decSvc = new DecompilerService();
-            decSvc.Decompiler = new DecompilerDriver(ldr.Object, sc);
+            decSvc.Decompiler = new Decompiler(ldr.Object, sc);
             decSvc.Decompiler.Load("test.exe");
             this.program = this.decSvc.Decompiler.Project.Programs.First();
             sc.AddService<IDecompilerService>(decSvc);
@@ -138,12 +138,9 @@ namespace Reko.UnitTests.Gui.Forms
             Given_Interactor();
             form.Object.Show();
             Procedure p = new Procedure(program.Architecture, "foo_proc", Address.Ptr32(0x12346), program.Architecture.CreateFrame());
-            p.Signature = new FunctionType(
-                new Identifier("eax", PrimitiveType.Word32, Registers.eax),
-                new Identifier[] {
-                    new Identifier("arg04", PrimitiveType.Word32, new StackArgumentStorage(4, PrimitiveType.Word32))
-                });
-
+            p.Signature = FunctionType.Func(
+                Identifier.Create(Registers.eax),
+                new Identifier("arg04", PrimitiveType.Word32, new StackArgumentStorage(4, PrimitiveType.Word32)));
             var p2 = new Procedure(program.Architecture, "bar", Address.Ptr32(0x12345), program.Architecture.CreateFrame());
             program.Procedures.Add(p.EntryAddress, p);
             program.Procedures.Add(p2.EntryAddress, p2);

@@ -1,8 +1,9 @@
 // fn0C00_0000
 // Return size: 2
-void fn0C00_0000()
+define fn0C00_0000
 fn0C00_0000_entry:
 	sp = fp
+	Top = 0
 	// succ:  l0C00_0000
 l0C00_0000:
 	call fn0C00_000F (retsize: 2; depth: 2)
@@ -15,16 +16,17 @@ l0C00_0000:
 	sp = fp
 	// succ:  l0C00_000E_thunk_fn0C00_000F
 l0C00_000E_thunk_fn0C00_000F:
-	call fn0C00_000F (retsize: 2; depth: 2)
+	call fn0C00_000F (retsize: 0;)
 	return
 	// succ:  fn0C00_0000_exit
 fn0C00_0000_exit:
 
 // fn0C00_000F
 // Return size: 2
-void fn0C00_000F()
+define fn0C00_000F
 fn0C00_000F_entry:
 	sp = fp
+	Top = 0
 	// succ:  l0C00_000F
 l0C00_000F:
 	Mem0[ds:di:word16] = 0x0000
@@ -34,9 +36,10 @@ fn0C00_000F_exit:
 
 // fn0C00_0014
 // Return size: 2
-void fn0C00_0014()
+define fn0C00_0014
 fn0C00_0014_entry:
 	sp = fp
+	Top = 0
 	// succ:  l0C00_0014
 l0C00_0014:
 	di = 0x0000

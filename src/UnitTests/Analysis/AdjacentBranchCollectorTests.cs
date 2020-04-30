@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -67,7 +67,7 @@ namespace Reko.UnitTests.Analysis
             #region Expected
 @"// ProcedureBuilder
 // Return size: 0
-void ProcedureBuilder()
+define ProcedureBuilder
 ProcedureBuilder_entry:
 	// succ:  l1
 l1:
@@ -90,7 +90,7 @@ ProcedureBuilder_exit:
             #region Expected
 @"// ProcedureBuilder
 // Return size: 0
-void ProcedureBuilder()
+define ProcedureBuilder
 ProcedureBuilder_entry:
 	// succ:  l1
 l1:
@@ -100,7 +100,7 @@ m1do:
 	r1 = r2
 	// succ:  m3do
 m3do:
-	r2 = 0x00000000
+	r2 = 0<32>
 	// succ:  m4skip
 m4skip:
 	return
@@ -136,7 +136,7 @@ ProcedureBuilder_exit:
             #region Expected
 @"// ProcedureBuilder
 // Return size: 0
-void ProcedureBuilder()
+define ProcedureBuilder
 ProcedureBuilder_entry:
 	// succ:  m0
 m0:
@@ -151,7 +151,7 @@ m2skip:
 	branch Test(ULT,C) m4skip
 	// succ:  m3do m4skip
 m3do:
-	r2 = 0x00000000
+	r2 = 0<32>
 	// succ:  m4skip
 m4skip:
 	return
@@ -182,6 +182,53 @@ ProcedureBuilder_exit:
                 m.Assign(r2, 0);
 
                 m.Label("m4skip");
+                m.Return();
+            });
+        }
+
+        [Test]
+        public void Abc_Selfloop()
+        {
+            // The top "triangle" is a self loop. Avoid collecting it.
+            var sExp =
+            #region Expected
+@"// ProcedureBuilder
+// Return size: 0
+define ProcedureBuilder
+ProcedureBuilder_entry:
+	// succ:  m1Header
+m1Header:
+	Mem0[0x00123400<p32>:byte] = 0x2A<8>
+	// succ:  m1Prev
+m1Prev:
+	branch Test(UGE,CZ) m1Prev
+	// succ:  m2Block m1Prev
+m2Block:
+	branch Test(EQ,Z) m4Done
+	// succ:  m3Leg m4Done
+m3Leg:
+	CZ = 0<8>
+	// succ:  m4Done
+m4Done:
+	return
+	// succ:  ProcedureBuilder_exit
+ProcedureBuilder_exit:
+";
+            #endregion
+
+            RunTest(sExp, m =>
+            {
+                var Z = m.Frame.EnsureFlagGroup(arch.GetFlagGroup("Z"));
+                var CZ = m.Frame.EnsureFlagGroup(arch.GetFlagGroup("CZ"));
+                m.Label("m1Header");
+                m.MStore(m.Ptr32(0x00123400), m.Byte(42));
+                m.Label("m1Prev");
+                m.BranchIf(m.Test(ConditionCode.UGE, CZ), "m1Prev");
+                m.Label("m2Block");
+                m.BranchIf(m.Test(ConditionCode.EQ, Z), "m4Done");
+                m.Label("m3Leg");
+                m.Assign(CZ, 0);
+                m.Label("m4Done");
                 m.Return();
             });
         }

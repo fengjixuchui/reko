@@ -112,6 +112,9 @@ def strip_id_nums_for_file(file_name):
 
 def collect_jobs(dir_name, files, pool_state):
     needClear = True
+    if dir_name.endswith(".reko"):
+        clear_dir(dir_name, files)
+        needClear = False
     for pname in files:
         if pname.endswith(".dcproject"):
             if needClear:
@@ -250,11 +253,13 @@ if __name__ == '__main__':
     queue = start_jobs(jobs, pool)
     new_weights = {}
     outputs = []
-    for result in queue:
-        x = result.get(timeout=TIMEOUT)
-        new_weights[x[0]] = x[1]
-        outputs.append(x[2])
-
+    for (i, result) in enumerate(queue):
+        try:
+            x = result.get(timeout=TIMEOUT)
+            new_weights[x[0]] = x[1]
+            outputs.append(x[2])
+        except:
+            outputs.append("!!! " + jobs[i].rel_pname + " timed out\n");
     for output in sorted(outputs):
         sys.stdout.write(output)
 

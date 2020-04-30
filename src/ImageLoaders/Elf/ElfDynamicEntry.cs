@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -133,6 +133,8 @@ namespace Reko.ImageLoaders.Elf
             { DT_FINI_ARRAY,  new TagInfo { Name = "DT_FINI_ARRAY", Format = DtFormat.Address} },
             { DT_INIT_ARRAYSZ,  new TagInfo { Name = "DT_INIT_ARRAYSZ", Format = DtFormat.Hexadecimal} },
             { DT_FINI_ARRAYSZ,  new TagInfo { Name = "DT_FINI_ARRAYSZ", Format = DtFormat.Hexadecimal} },
+            { DT_SONAME, new TagInfo { Name  = "DT_SONAME", Format =DtFormat.String } },
+            { DT_FLAGS, new TagInfo { Name  = "DT_FLAGS", Format = DtFormat.Hexadecimal } },
 
             { DT_GNU_HASH,   new TagInfo { Name = "DT_GNU_HASH", Format = DtFormat.Hexadecimal} },
             { DT_RELACOUNT,   new TagInfo { Name = "DT_RELACOUNT", Format = DtFormat.Decimal} },

@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2019 John Källén.
+ * Copyright (C) 1999-2020 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -210,7 +210,8 @@ namespace Reko.UnitTests
 
         public StringBuilder VisitStructure(StructType_v1 structure)
         {
-            throw new NotImplementedException();
+            sb.Append(structure.Name);
+            return sb;
         }
 
         public StringBuilder VisitTypedef(SerializedTypedef typedef)
