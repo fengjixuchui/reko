@@ -410,6 +410,7 @@ namespace Reko.Arch.PowerPC
                 case Mnemonic.vrefp:
                 case Mnemonic.vrefp128: RewriteVrefp(); break;
                 case Mnemonic.vrfin128: RewriteVectorUnary("__vrfin"); break;
+                case Mnemonic.vrfip128: RewriteVectorUnary("__vrfip"); break;
                 case Mnemonic.vrfiz128: RewriteVectorUnary("__vrfiz"); break;
                 case Mnemonic.vrlimi128: RewriteVrlimi(); break;
                 case Mnemonic.vrsqrtefp: 
@@ -534,7 +535,7 @@ namespace Reko.Arch.PowerPC
             var mop = (MemoryOperand) operand;
             var reg = binder.EnsureRegister(mop.BaseRegister);
             var offset = mop.Offset;
-            return emitter.IAdd(reg, offset);
+            return emitter.IAddS(reg, offset);
         }
 
         private Expression EffectiveAddress_r0(MachineOperand operand, RtlEmitter emitter)
@@ -542,13 +543,16 @@ namespace Reko.Arch.PowerPC
             var mop = (MemoryOperand) operand;
             if (mop.BaseRegister.Number == 0)
             {
-                return Constant.Word32((int) mop.Offset.ToInt16());
+                return Constant.Word32(mop.Offset);
             }
             else
             {
                 var reg = binder.EnsureRegister(mop.BaseRegister);
                 var offset = mop.Offset;
-                return emitter.IAdd(reg, offset);
+                if (offset != 0)
+                    return emitter.IAddS(reg, offset);
+                else
+                    return reg;
             }
         }
 

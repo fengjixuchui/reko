@@ -125,7 +125,6 @@ namespace Reko.Analysis
             ssts = RewriteProceduresToSsa();
             if (eventListener.IsCanceled())
                 return ssts;
-            if (eventListener.IsCanceled()) return ssts;
 
             // Recreate user-defined signatures. It should prevent type
             // inference between user-defined parameters and other expressions
@@ -513,10 +512,10 @@ namespace Reko.Analysis
         [Conditional("DEBUG")]
         public static void DumpWatchedProcedure(string caption, Procedure proc)
         {
-            if (proc.Name == "fn0D7A")
+            if (proc.Name == "fn00404134")
             {
                 Debug.Print("// {0}: {1} ==================", proc.Name, caption);
-                MockGenerator.DumpMethod(proc);
+                //MockGenerator.DumpMethod(proc);
                 proc.Dump(true);
             }
         }

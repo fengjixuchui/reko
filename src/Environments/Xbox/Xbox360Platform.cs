@@ -17,6 +17,7 @@
  * the Free Software Foundation, 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 #endregion
+
 using Reko.Arch.PowerPC;
 using Reko.Core;
 using Reko.Core.CLanguage;
@@ -29,7 +30,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Reko.Environments.Xbox360
+namespace Reko.Environments.Xbox
 {
     /// <remarks>
     /// A particularity of this platform is that even though the PowerPC 
