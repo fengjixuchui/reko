@@ -10852,7 +10852,7 @@ T_2053: (in 0<16> : word16)
   Class: Eq_2046
   DataType: word16
   OrigDataType: word16
-T_2054: (in __btst((&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&globals->t2BED)[(int32) (int16) (d0_2124 & 0xFF<32>)].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>], 0<16>) : bool)
+T_2054: (in __btst((&globals->t2BED)[(int32) (int16) (d0_2124 & 0xFF<32>)], 0<16>) : bool)
   Class: Eq_2054
   DataType: bool
   OrigDataType: bool
@@ -13204,7 +13204,7 @@ T_2641: (in 0<16> : word16)
   Class: Eq_2046
   DataType: word16
   OrigDataType: word16
-T_2642: (in __btst((&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&globals->t2BED)[(int32) (int16) (d0_2416 & 0xFF<32>)].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>], 0<16>) : bool)
+T_2642: (in __btst((&globals->t2BED)[(int32) (int16) (d0_2416 & 0xFF<32>)], 0<16>) : bool)
   Class: Eq_2054
   DataType: bool
   OrigDataType: bool
@@ -14612,7 +14612,7 @@ T_2993: (in 1<32> : word32)
   Class: Eq_2993
   DataType: ui32
   OrigDataType: ui32
-T_2994: (in (uint32) (uint8) (&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&globals->t2BED)[SEQ(SLICE(d0_2837, word24, 8), (byte) d5_1007) & 0xFF<32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>] & 1<32> : word32)
+T_2994: (in (uint32) (uint8) (&globals->t2BED)[SEQ(SLICE(d0_2837, word24, 8), (byte) d5_1007) & 0xFF<32>] & 1<32> : word32)
   Class: Eq_2994
   DataType: ui32
   OrigDataType: ui32
@@ -14620,7 +14620,7 @@ T_2995: (in 0<32> : word32)
   Class: Eq_2994
   DataType: ui32
   OrigDataType: word32
-T_2996: (in ((uint32) (uint8) (&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&globals->t2BED)[SEQ(SLICE(d0_2837, word24, 8), (byte) d5_1007) & 0xFF<32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>] & 1<32>) == 0<32> : bool)
+T_2996: (in ((uint32) (uint8) (&globals->t2BED)[SEQ(SLICE(d0_2837, word24, 8), (byte) d5_1007) & 0xFF<32>] & 1<32>) == 0<32> : bool)
   Class: Eq_2996
   DataType: bool
   OrigDataType: bool
@@ -14832,7 +14832,7 @@ T_3048: (in 2<32> : word32)
   Class: Eq_3048
   DataType: ui32
   OrigDataType: ui32
-T_3049: (in (uint32) (uint8) (&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&globals->t2BED)[SEQ(SLICE(d0_2892, word24, 8), (byte) d5_1007) & 0xFF<32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>] & 2<32> : word32)
+T_3049: (in (uint32) (uint8) (&globals->t2BED)[SEQ(SLICE(d0_2892, word24, 8), (byte) d5_1007) & 0xFF<32>] & 2<32> : word32)
   Class: Eq_3049
   DataType: ui32
   OrigDataType: ui32
@@ -14840,7 +14840,7 @@ T_3050: (in 0<32> : word32)
   Class: Eq_3049
   DataType: ui32
   OrigDataType: word32
-T_3051: (in ((uint32) (uint8) (&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&globals->t2BED)[SEQ(SLICE(d0_2892, word24, 8), (byte) d5_1007) & 0xFF<32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>] & 2<32>) == 0<32> : bool)
+T_3051: (in ((uint32) (uint8) (&globals->t2BED)[SEQ(SLICE(d0_2892, word24, 8), (byte) d5_1007) & 0xFF<32>] & 2<32>) == 0<32> : bool)
   Class: Eq_3051
   DataType: bool
   OrigDataType: bool
@@ -16004,7 +16004,7 @@ T_3341: (in 4<32> : word32)
   Class: Eq_3341
   DataType: ui32
   OrigDataType: ui32
-T_3342: (in (uint32) (uint8) (&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&globals->t2BED)[SEQ(a7_2763->n0001, (byte) d5_1007) & 0xFF<32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>] & 4<32> : word32)
+T_3342: (in (uint32) (uint8) (&globals->t2BED)[SEQ(a7_2763->n0001, (byte) d5_1007) & 0xFF<32>] & 4<32> : word32)
   Class: Eq_3342
   DataType: ui32
   OrigDataType: ui32
@@ -16012,7 +16012,7 @@ T_3343: (in 0<32> : word32)
   Class: Eq_3342
   DataType: ui32
   OrigDataType: word32
-T_3344: (in ((uint32) (uint8) (&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&(&globals->t2BED)[SEQ(a7_2763->n0001, (byte) d5_1007) & 0xFF<32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>].a0000)[0<i32>] & 4<32>) == 0<32> : bool)
+T_3344: (in ((uint32) (uint8) (&globals->t2BED)[SEQ(a7_2763->n0001, (byte) d5_1007) & 0xFF<32>] & 4<32>) == 0<32> : bool)
   Class: Eq_3344
   DataType: bool
   OrigDataType: bool
@@ -24195,7 +24195,7 @@ T_5388: (in 105<i32> : int32)
 T_5389: (in a3_1222 : Eq_613)
   Class: Eq_613
   DataType: Eq_613
-  OrigDataType: (ptr32 Eq_5312)
+  OrigDataType: (ptr32 word32)
 T_5390: (in 76<i32> : int32)
   Class: Eq_5390
   DataType: int32
@@ -31023,7 +31023,7 @@ T_7095: (in d0 : Eq_5352)
 T_7096: (in a1_102 : Eq_5354)
   Class: Eq_5354
   DataType: Eq_5354
-  OrigDataType: (ptr32 Eq_5103)
+  OrigDataType: (ptr32 (ptr32 ui32))
 T_7097: (in a0_101 : (ptr32 ui32))
   Class: Eq_5159
   DataType: (ptr32 ui32)

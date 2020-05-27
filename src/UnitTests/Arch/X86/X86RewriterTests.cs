@@ -47,9 +47,10 @@ namespace Reko.UnitTests.Arch.X86
 
         public X86RewriterTests()
         {
-            arch16 = new X86ArchitectureReal("x86-real-16");
-            arch32 = new X86ArchitectureFlat32("x86-protected-32");
-            arch64 = new X86ArchitectureFlat64("x86-protected-64");
+            var sc = CreateServiceContainer();
+            arch16 = new X86ArchitectureReal(sc, "x86-real-16");
+            arch32 = new X86ArchitectureFlat32(sc, "x86-protected-32");
+            arch64 = new X86ArchitectureFlat64(sc, "x86-protected-64");
             baseAddr16 = Address.SegPtr(0x0C00, 0x0000);
             baseAddr32 = Address.Ptr32(0x10000000);
             baseAddr64 = Address.Ptr64(0x140000000ul);
@@ -3699,6 +3700,17 @@ namespace Reko.UnitTests.Arch.X86
             AssertCode(
                 "0|---|10000000(1): 1 instructions",
                 "1|---|<invalid>");
+        }
+
+        [Test]
+        public void X86Rw_adc_imm8()
+        {
+            Run32bitTest("83 56 FE FF");
+            AssertCode(
+                "0|L--|10000000(4): 3 instructions",
+                "1|L--|v4 = Mem0[esi - 2<32>:word32] + 0xFFFFFFFF<32> + C",
+                "2|L--|Mem0[esi - 2<32>:word32] = v4",
+                "3|L--|SCZO = cond(v4)");
         }
     }
 }

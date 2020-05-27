@@ -26,18 +26,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.ComponentModel.Design;
 
 namespace Reko.UnitTests.Arch.Sparc
 {
     [TestFixture]
     public class SparcDisassemblerTests
     {
-        private static SparcInstruction DisassembleWord(byte[] a)
-        {
-            MemoryArea img = new MemoryArea(Address.Ptr32(0x00100000), a);
-            return Disassemble(img);
-        }
-
         private static SparcInstruction DisassembleWord(uint instr)
         {
             var bytes = new byte[4];
@@ -48,7 +43,8 @@ namespace Reko.UnitTests.Arch.Sparc
 
         private static SparcInstruction Disassemble(MemoryArea img)
         {
-            var arch = new SparcArchitecture("sparc", PrimitiveType.Word32);
+            var sc = new ServiceContainer();
+            var arch = new SparcArchitecture(sc, "sparc", PrimitiveType.Word32);
             var dasm = new SparcDisassembler(arch, img.CreateBeReader(0U));
             return dasm.First();
         }

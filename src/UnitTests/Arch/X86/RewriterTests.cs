@@ -55,10 +55,11 @@ namespace Reko.UnitTests.Arch.X86
 		[SetUp]
 		public void SetUp()
 		{
-            var arch = new X86ArchitectureReal("x86-real-16");
-            program = new Program() { Architecture = arch };
             sc = new ServiceContainer();
+            sc.AddService<ITestGenerationService>(new UnitTestGenerationService(sc));
             sc.AddService<IFileSystemService>(new FileSystemServiceImpl());
+            var arch = new X86ArchitectureReal(sc, "x86-real-16");
+            program = new Program() { Architecture = arch };
             asm = new X86TextAssembler(arch);
 			configFile = null;
 		}

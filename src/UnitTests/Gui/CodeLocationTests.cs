@@ -21,6 +21,7 @@
 using Moq;
 using NUnit.Framework;
 using Reko.Core;
+using Reko.Core.Services;
 using Reko.Gui;
 using Reko.UnitTests.Mocks;
 using System.ComponentModel.Design;
@@ -37,7 +38,7 @@ namespace Reko.UnitTests.Gui
         {
             this.program = new Program
             {
-                Architecture = new FakeArchitecture()
+                Architecture = new FakeArchitecture(new ServiceContainer())
             };
         }
 

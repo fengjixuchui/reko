@@ -23,11 +23,10 @@ using Reko.Core.Expressions;
 using Reko.Core.Machine;
 using Reko.Core.Types;
 using System;
-using System.Text;
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
+using Reko.Core.Services;
 
 namespace Reko.Arch.X86
 {
@@ -36,6 +35,7 @@ namespace Reko.Arch.X86
 	/// </summary>
 	public partial class X86Disassembler : DisassemblerBase<X86Instruction, Mnemonic>
 	{
+#pragma warning disable IDE1006
         private class X86LegacyCodeRegisterExtension
         {
             internal X86LegacyCodeRegisterExtension(byte value)
@@ -265,15 +265,16 @@ namespace Reko.Arch.X86
             public bool VexLong { get; set; } // If true, use YMM or 256-bit memory access.
         }
 
+        private readonly IServiceProvider services;
         private readonly ProcessorMode mode;
 		private readonly PrimitiveType defaultDataWidth;
 		private readonly PrimitiveType defaultAddressWidth;
 		private readonly EndianImageReader rdr;
 
         private readonly bool isRegisterExtensionEnabled;
+        private readonly X86InstructionDecodeInfo decodingContext;
 
         private Address addr;
-        private X86InstructionDecodeInfo decodingContext;
 
 		/// <summary>
 		/// Creates a disassembler that uses the specified reader to fetch bytes
@@ -282,12 +283,14 @@ namespace Reko.Arch.X86
 		/// <param name="width">Default address and data widths. PrimitiveType.Word16 for 
         /// 16-bit operation, PrimitiveType.Word32 for 32-bit operation.</param>
 		public X86Disassembler(
+            IServiceProvider services,
             ProcessorMode mode,
             EndianImageReader rdr,
             PrimitiveType defaultWordSize,
             PrimitiveType defaultAddressSize,
             bool useRexPrefix)
 		{
+            this.services = services;
             this.mode = mode;
 			this.rdr = rdr;
 			this.defaultDataWidth = defaultWordSize;
@@ -337,33 +340,17 @@ namespace Reko.Arch.X86
             return new X86Instruction(Mnemonic.illegal, InstrClass.Invalid, decodingContext.dataWidth, decodingContext.addressWidth);
         }
 
-        private void NotYetImplemented(string message)
+        public override X86Instruction NotYetImplemented(uint wInstr, string message)
         {
-            // collect bytes from rdr.addr to this.addr 
-            var r2 = rdr.Clone();
-            int len = (int) (r2.Address - this.addr);
-            r2.Offset -= len;
-            var bytes = r2.ReadBytes(len);
-            var strBytes = string.Join("", bytes.Select(b => b.ToString("X2")));
-
-            base.EmitUnitTest("x86", strBytes, message, "X86Dis", this.addr, w =>
-            {
-                w.WriteLine("    AssertCode32(\"@@@\", {0});",
-                    string.Join(", ", bytes.Select(b => $"0x{b:X2}")));
-            });
+            var testGenSvc = services.GetService<ITestGenerationService>();
+            testGenSvc?.ReportMissingDecoder("X86Dis", this.addr, this.rdr, message);
+            return CreateInvalidInstruction();
         }
 
         private RegisterStorage RegFromBitsRexB(int bits, PrimitiveType dataWidth)
         {
             int reg_bits = bits & 7;
             reg_bits |= this.decodingContext.RegisterExtension.FlagTargetModrmRegOrMem ? 8 : 0;
-            return GpRegFromBits(reg_bits, dataWidth);
-        }
-
-        private RegisterStorage RegFromBitsRexW(int bits, PrimitiveType dataWidth)
-        {
-            int reg_bits = bits & 7;
-            reg_bits |= this.decodingContext.RegisterExtension.FlagWideValue ? 8 : 0;
             return GpRegFromBits(reg_bits, dataWidth);
         }
 
@@ -723,7 +710,7 @@ namespace Reko.Arch.X86
                 { 
                     width = d.OperandWidth(opType); //  Don't use the width of the previous operand.
                 }
-                var op = d.CreateImmediateOperand(width, d.decodingContext.dataWidth);
+                var op = d.CreateImmediateOperand(width);
                 if (op == null)
                     return false;
                 d.decodingContext.ops.Add(op);
@@ -833,8 +820,10 @@ namespace Reko.Arch.X86
                 var width = d.OperandWidth(opType);
                 if (!d.rdr.TryReadLe(d.decodingContext.addressWidth, out var offset))
                     return false;
-                var memOp = new MemoryOperand(width, offset);
-                memOp.SegOverride = d.decodingContext.SegmentOverride;
+                var memOp = new MemoryOperand(width, offset)
+                {
+                    SegOverride = d.decodingContext.SegmentOverride
+                };
                 d.decodingContext.ops.Add(memOp);
                 return true;
             };
@@ -1029,7 +1018,6 @@ namespace Reko.Arch.X86
         internal static bool rV(uint uInstr, X86Disassembler dasm)
         {
             RegisterStorage reg;
-            var bitsize = dasm.decodingContext.dataWidth.BitSize;
             if (dasm.decodingContext.SizeOverridePrefix)
                 reg = dasm.RegFromBitsRexB((int)uInstr & 7, dasm.decodingContext.dataWidth);
             else
@@ -1093,7 +1081,6 @@ namespace Reko.Arch.X86
         }
 
         private static readonly Mutator<X86Disassembler> rb = r(OperandType.b);
-        private static readonly Mutator<X86Disassembler> rq = r(OperandType.q);
         private static readonly Mutator<X86Disassembler> rv = r(OperandType.v);
         private static readonly Mutator<X86Disassembler> rw = r(OperandType.w);
 
@@ -1144,11 +1131,6 @@ namespace Reko.Arch.X86
         public static VexInstructionDecoder VexInstr(Decoder legacy, Decoder vex)
         {
             return new VexInstructionDecoder(legacy, vex);
-        }
-
-        public static PrefixedDecoder Prefixed(Mnemonic op, string format)
-        {
-            return new PrefixedDecoder();
         }
 
         public static AddrWidthDecoder AddrWidthDependent(
@@ -1336,7 +1318,7 @@ namespace Reko.Arch.X86
 			RegisterStorage.None,
 		};
 
-		public ImmediateOperand CreateImmediateOperand(PrimitiveType immWidth, PrimitiveType instrWidth)
+		public ImmediateOperand CreateImmediateOperand(PrimitiveType immWidth)
 		{
             if (!rdr.TryReadLe(immWidth, out Constant c))
                 return null;

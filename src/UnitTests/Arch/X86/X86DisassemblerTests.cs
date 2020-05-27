@@ -52,7 +52,7 @@ namespace Reko.UnitTests.Arch.X86
         {
             MemoryArea img = new MemoryArea(Address.SegPtr(0xC00, 0), bytes);
             EndianImageReader rdr = img.CreateLeReader(img.BaseAddress);
-            var dasm =  ProcessorMode.Real.CreateDisassembler(rdr, options);
+            var dasm =  ProcessorMode.Real.CreateDisassembler(sc, rdr, options);
             if (options != null)
             {
                 dasm.Emulate8087 = options.Emulate8087;
@@ -64,7 +64,7 @@ namespace Reko.UnitTests.Arch.X86
         {
             var img = new MemoryArea(Address.Ptr32(0x10000), bytes);
             var rdr = img.CreateLeReader(img.BaseAddress);
-            var dasm = new X86Disassembler(ProcessorMode.Protected32, rdr, PrimitiveType.Word32, PrimitiveType.Word32, false);
+            var dasm = new X86Disassembler(sc, ProcessorMode.Protected32, rdr, PrimitiveType.Word32, PrimitiveType.Word32, false);
             return dasm.First();
         }
 
@@ -73,6 +73,7 @@ namespace Reko.UnitTests.Arch.X86
             var img = new MemoryArea(Address.Ptr64(0x10000), bytes);
             var rdr = img.CreateLeReader(img.BaseAddress);
             var dasm = new X86Disassembler(
+                sc,
                 ProcessorMode.Protected64,
                 rdr,
                 PrimitiveType.Word32,
@@ -90,6 +91,7 @@ namespace Reko.UnitTests.Arch.X86
         private void CreateDisassembler16(MemoryArea mem)
         {
             dasm = new X86Disassembler(
+                sc,
                 ProcessorMode.Real,
                 mem.CreateLeReader(mem.BaseAddress),
                 PrimitiveType.Word16,
@@ -104,6 +106,7 @@ namespace Reko.UnitTests.Arch.X86
         private void CreateDisassembler32(MemoryArea image)
         {
             dasm = new X86Disassembler(
+                sc,
                 ProcessorMode.Protected32,
                 image.CreateLeReader(image.BaseAddress),
                 PrimitiveType.Word32,
@@ -114,6 +117,7 @@ namespace Reko.UnitTests.Arch.X86
         private void CreateDisassembler16(EndianImageReader rdr)
         {
             dasm = new X86Disassembler(
+                sc,
                 ProcessorMode.Real,
                 rdr,
                 PrimitiveType.Word16,
@@ -167,7 +171,7 @@ namespace Reko.UnitTests.Arch.X86
         [Test]
         public void X86dis_Sequence()
         {
-            var arch = new X86ArchitectureReal("x86-real-16");
+            var arch = new X86ArchitectureReal(sc, "x86-real-16");
             X86TextAssembler asm = new X86TextAssembler(arch);
             var program = asm.AssembleFragment(
                 Address.SegPtr(0xB96, 0),
@@ -200,7 +204,7 @@ foo:
         [Test]
         public void SegmentOverrides()
         {
-            var arch = new X86ArchitectureReal("x86-real-16");
+            var arch = new X86ArchitectureReal(sc, "x86-real-16");
             X86TextAssembler asm = new X86TextAssembler(arch);
             var program = asm.AssembleFragment(
                 Address.SegPtr(0xB96, 0),
@@ -219,7 +223,7 @@ foo:
         [Test]
         public void Rotations()
         {
-            var arch = new X86ArchitectureReal("x86-real-16");
+            var arch = new X86ArchitectureReal(sc, "x86-real-16");
             X86TextAssembler asm = new X86TextAssembler(arch);
             var lr = asm.AssembleFragment(
                 Address.SegPtr(0xB96, 0),
@@ -247,7 +251,7 @@ foo:
         [Test]
         public void Extensions()
         {
-            var arch = new X86ArchitectureReal("x86-real-16");
+            var arch = new X86ArchitectureReal(sc, "x86-real-16");
             IAssembler asm = arch.CreateAssembler(null);
             var program = asm.AssembleFragment(
                 Address.SegPtr(0xA14, 0),
@@ -283,7 +287,7 @@ movzx	ax,byte ptr [bp+04]
         [Test]
         public void X86Dis_InvalidKeptStateRegression()
         {
-            var arch = new X86ArchitectureFlat32("x86-protected-32");
+            var arch = new X86ArchitectureFlat32(sc, "x86-protected-32");
             X86TextAssembler asm = new X86TextAssembler(arch);
             var lr = asm.AssembleFragment(
                 Address.Ptr32(0x01001000),
@@ -320,7 +324,7 @@ movzx	ax,byte ptr [bp+04]
         [Test]
         public void DisEdiTimes2()
         {
-            var arch = new X86ArchitectureFlat32("x86-protected-32");
+            var arch = new X86ArchitectureFlat32(sc, "x86-protected-32");
             X86TextAssembler asm = new X86TextAssembler(arch);
             var program = asm.AssembleFragment(Address.SegPtr(0x0B00, 0),
                 @"	.i386
@@ -339,7 +343,7 @@ movzx	ax,byte ptr [bp+04]
         {
             using (FileUnitTester fut = new FileUnitTester("Intel/DisFpuInstructions.txt"))
             {
-                var arch = new X86ArchitectureReal("x86-real-16");
+                var arch = new X86ArchitectureReal(sc, "x86-real-16");
                 X86TextAssembler asm = new X86TextAssembler(arch);
                 Program lr;
                 using (var rdr = new StreamReader(FileUnitTester.MapTestPath("Fragments/fpuops.asm")))
@@ -401,6 +405,7 @@ movzx	ax,byte ptr [bp+04]
             img.Relocations.AddPointerReference(0x00100001ul, 0x12345678);
             EndianImageReader rdr = img.CreateLeReader(img.BaseAddress);
             X86Disassembler dasm = new X86Disassembler(
+                sc,
                 ProcessorMode.Protected32,
                 rdr,
                 PrimitiveType.Word32,
@@ -798,7 +803,7 @@ movzx	ax,byte ptr [bp+04]
         [Test]
         public void X86Dis_StringOps()
         {
-            X86TextAssembler asm = new X86TextAssembler(new X86ArchitectureFlat32("x86-protected-32"));
+            X86TextAssembler asm = new X86TextAssembler(new X86ArchitectureFlat32(sc, "x86-protected-32"));
             var lr = asm.AssembleFragment(
                 Address.Ptr32(0x01001000),
 
@@ -3123,6 +3128,13 @@ movzx	ax,byte ptr [bp+04]
         public void X86Dis_push_64_size_override()
         {
             AssertCode64("push\tcx", "66 51");
+        }
+
+        [Test]
+        public void X86Dis_endbr()
+        {
+            AssertCode32("endbr32", "F3 0F 1E FB");
+            AssertCode32("endbr64", "F3 0F 1E FA");
         }
     }
 }

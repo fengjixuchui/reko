@@ -32,6 +32,7 @@ using IEnumerable = System.Collections.IEnumerable;
 using IEnumerator = System.Collections.IEnumerator;
 using System.Diagnostics;
 using System.Linq;
+using Reko.Core.Services;
 
 namespace Reko.Arch.X86
 {
@@ -60,10 +61,8 @@ namespace Reko.Arch.X86
             EndianImageReader rdr,
             IStorageBinder binder)
         {
-            if (host == null)
-                throw new ArgumentNullException("host");
             this.arch = arch;
-            this.host = host;
+            this.host = host ?? throw new ArgumentNullException("host");
             this.state = state;
             this.rdr = rdr;
             this.binder = binder;
@@ -183,9 +182,11 @@ namespace Reko.Arch.X86
                 case Mnemonic.vdivsd: RewriteScalarBinop(m.FDiv, PrimitiveType.Real64, true); break;
                 case Mnemonic.divss: RewriteScalarBinop(m.FDiv, PrimitiveType.Real32, false); break;
                 case Mnemonic.vdivss: RewriteScalarBinop(m.FDiv, PrimitiveType.Real32, true); break;
-                case Mnemonic.f2xm1: RewriteF2xm1(); break;
                 case Mnemonic.emms: RewriteEmms(); break;
                 case Mnemonic.enter: RewriteEnter(); break;
+                case Mnemonic.endbr32:
+                case Mnemonic.endbr64: RewriteEndbr(); break;
+                case Mnemonic.f2xm1: RewriteF2xm1(); break;
                 case Mnemonic.fabs: RewriteFabs(); break;
                 case Mnemonic.fadd: EmitCommonFpuInstruction(m.FAdd, false, false); break;
                 case Mnemonic.faddp: EmitCommonFpuInstruction(m.FAdd, false, true); break;
@@ -657,31 +658,10 @@ namespace Reko.Arch.X86
             return orw.Transform(instrCur, opSrc, dstWidth, state);
         }
 
-        private static HashSet<Mnemonic> seen = new HashSet<Mnemonic>();
-
-        [Conditional("DEBUG")]
         private void EmitUnitTest()
         {
-            if (seen.Contains(dasm.Current.Mnemonic))
-                return;
-            seen.Add(dasm.Current.Mnemonic);
-
-            var r2 = rdr.Clone();
-            r2.Offset -= dasm.Current.Length;
-            var bytes = r2.ReadBytes(dasm.Current.Length);
-            Debug.WriteLine("        [Test]");
-            Debug.WriteLine("        public void X86Rw_" + dasm.Current.Mnemonic + "()");
-            Debug.WriteLine("        {");
-            Debug.Write("            BuildTest(");
-            Debug.Write(string.Join(
-                ", ",
-                bytes.Select(b => string.Format("0x{0:X2}", (int)b))));
-            Debug.WriteLine(");\t// " + dasm.Current.ToString());
-            Debug.WriteLine("            AssertCode(");
-            Debug.WriteLine("                \"0|L--|{0}({1}): 1 instructions\",", dasm.Current.Address, dasm.Current.Length);
-            Debug.WriteLine("                \"1|L--|@@@\");");
-            Debug.WriteLine("        }");
-            Debug.WriteLine("");
+            var testGenSvc = arch.Services.GetService<ITestGenerationService>();
+            testGenSvc?.ReportMissingRewriter("X86Rw", instrCur, rdr, "");
         }
     }
 }
