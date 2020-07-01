@@ -102,6 +102,7 @@
         <File Source="$(var.OdbgScript.TargetPath)" />
         <File Source="$(var.Srec.TargetPath)" />
         <File Source="$(var.VmsExe.TargetPath)" />
+        <File Source="$(var.WebAssembly.TargetPath)" />
         <File Source="$(var.Xbe.TargetPath)" />
         <File Source="$(var.Xex.TargetPath)" />
 
@@ -111,6 +112,7 @@
         <File Source="$(var.AmigaOS_Design.TargetPath)" />
         <File Source="$(var.AtariTOS.TargetPath)" />
         <File Source="$(var.AtariTOS.ProjectDir)atariTOS.xml" />
+        <File Source="$(var.BbcMicro.TargetPath)" />
         <File Source="$(var.C64.TargetPath)" />
         <File Source="$(var.C64.ProjectDir)C64.xml" />
         <File Source="$(var.Cpm.TargetPath)" />
@@ -130,6 +132,7 @@
         <File Source="$(var.RT11.ProjectDir)rt11_services.xml" />
         <File Source="$(var.SegaGenesis.TargetPath)" />
         <File Source="$(var.SegaGenesis.ProjectDir)SegaGenesis.xml" />
+        <File Source="$(var.Snes.TargetPath)" />
         <File Source="$(var.Switch.TargetPath)" />
         <File Source="$(var.SysV.TargetPath)" />
         <File Source="$(var.SysV.ProjectDir)lp32.xml" />

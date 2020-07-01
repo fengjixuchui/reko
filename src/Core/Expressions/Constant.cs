@@ -105,7 +105,7 @@ namespace Reko.Core.Expressions
                 switch (p.Domain)
                 {
                 case Domain.SignedInt: return new ConstantInt32(p, (int) value);
-                case Domain.Real: return new ConstantUInt32(p,  (uint) value);
+                case Domain.Real: return new ConstantReal32(p,  (uint) value);
                 default: return new ConstantUInt32(p, (uint) value);
                 }
             case 36:        // PDP-10 <3
@@ -117,7 +117,7 @@ namespace Reko.Core.Expressions
                 switch (p.Domain)
                 {
                 case Domain.SignedInt: return new ConstantInt64(p, (long) value);
-                case Domain.Real: return new ConstantUInt64(p, (ulong) value);
+                case Domain.Real: return new ConstantReal64(p, (ulong) value);
                 default: return new ConstantUInt64(p, (ulong) value);
                 }
             case 96:
@@ -127,6 +127,8 @@ namespace Reko.Core.Expressions
                 case Domain.SignedInt: return new ConstantInt128(p, (long)value);
                 default: return new ConstantUInt128(p, (ulong)value);
                 }
+            case 192:
+            case 224:
             case 256:
                 switch (p.Domain)
                 {
@@ -172,15 +174,20 @@ namespace Reko.Core.Expressions
 
 		public static Constant FloatFromBitpattern(long bits)
 		{
-			long mant = bits & 0x007FFFFF;
-			int exp =  (int) (bits >> 23) & 0xFF;
-			float sign = (bits < 0) ? -1.0F : 1.0F;
-			if (mant == 0 && exp == 0)
-				return Constant.Real32(0.0F);
-			return Constant.Real32(sign * (float) MakeReal(exp, 0x7F, mant, 23));
+            return Constant.Real32(Int32BitsToFloat((int)bits));
 		}
 
-		public static Constant DoubleFromBitpattern(long bits)
+        public static float Int32BitsToFloat(int bits)
+        {
+            long mant = bits & 0x007FFFFF;
+            int exp = (int)(bits >> 23) & 0xFF;
+            float sign = (bits < 0) ? -1.0F : 1.0F;
+            if (mant == 0 && exp == 0)
+                return 0.0F;
+            return sign * (float)MakeReal(exp, 0x7F, mant, 23);
+        }
+
+        public static Constant DoubleFromBitpattern(long bits)
 		{
             return Constant.Real64(BitConverter.Int64BitsToDouble(bits));
 		}

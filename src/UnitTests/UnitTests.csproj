@@ -302,8 +302,10 @@
     <Compile Include="Core\Analysis\ScanfFormatParserTests.cs" />
     <Compile Include="Core\BitRangeTests.cs" />
     <Compile Include="Core\DumperTests.cs" />
+    <Compile Include="Core\Expressions\ExpressionTreeTests.cs" />
     <Compile Include="Core\IRFormat\IRParserTests.cs" />
     <Compile Include="Core\Lib\Float80Tests.cs" />
+    <Compile Include="Core\Lib\IntervalTreeTests.cs" />
     <Compile Include="Core\NativeInterface\NativeTypeFactoryTests.cs" />
     <Compile Include="Core\NativeInterface\RtlNativeEmitterTests.cs" />
     <Compile Include="Core\Output\IRFormatterTests.cs" />
@@ -318,13 +320,12 @@
     <Compile Include="DecompiledFileServiceTests.cs" />
     <Compile Include="Drivers\CmdLine\CmdLineDriverTests.cs" />
     <Compile Include="Environments\MacOS\Classic\A5RelocatorTests.cs" />
+    <Compile Include="Environments\BbcMicro\DiscFilingSystemTests.cs" />
     <Compile Include="Environments\MacOS\Classic\MacOSClassicTests.cs" />
     <Compile Include="Environments\MacOS\Classic\MacsBugSymbolScannerTests.cs" />
     <Compile Include="Environments\MacOS\Classic\MpwPascalInterfaceLoaderTests.cs" />
     <Compile Include="Environments\MacOS\Classic\PascalCallingConventionTests.cs" />
     <Compile Include="Environments\MacOS\Classic\InlineCodeInterpreterTests.cs" />
-    <Compile Include="Core\Expressions\ExpressionTreeTests.cs" />
-    <Compile Include="Core\Lib\IntervalTreeTests.cs" />
     <Compile Include="Environments\MacOS\Classic\TypeImporterTests.cs" />
     <Compile Include="Environments\RT11\LdaFileLoaderTests.cs" />
     <Compile Include="Environments\SysV\ArchSpecific\Arm32CallingConventionTests.cs" />
@@ -365,6 +366,9 @@
     <Compile Include="ImageLoaders\Llvm\LlvmParserTests.cs" />
     <Compile Include="ImageLoaders\Llvm\ProgramBuilderTests.cs" />
     <Compile Include="ImageLoaders\MzExe\Borland\SymbolLoaderTests.cs" />
+    <Compile Include="ImageLoaders\WebAssembly\WasmEvaluatorTests.cs" />
+    <Compile Include="ImageLoaders\WebAssembly\WasmLoaderTests.cs" />
+    <Compile Include="ImageLoaders\WebAssembly\WasmRewriterTests.cs" />
     <Compile Include="Mocks\FakeCallingConvention.cs" />
     <Compile Include="Mocks\FakeFrameApplicationBuilder.cs" />
     <Compile Include="Mocks\FakeTextBox.cs" />
@@ -602,7 +606,7 @@
     <Compile Include="Core\PrimitiveTypeTests.cs" />
     <Compile Include="Core\ProcedureSignatureTests.cs" />
     <Compile Include="Core\ProcedureTests.cs" />
-    <Compile Include="Core\ProgramImageTests.cs" />
+    <Compile Include="Core\MemoryAreaTests.cs" />
     <Compile Include="Core\ProgramTests.cs" />
     <Compile Include="Core\StorageTests.cs" />
     <Compile Include="Core\RelocationDictionaryTests.cs" />
@@ -886,6 +890,10 @@
       <Project>{9E952B82-A52F-4221-BC4A-DD9D8B9F7854}</Project>
       <Name>MicroBlaze</Name>
     </ProjectReference>
+    <ProjectReference Include="..\Arch\MicrochipPIC.Design\MicrochipPIC.Design.csproj">
+      <Project>{e75c3be2-0f98-48cd-943d-198159b57dc7}</Project>
+      <Name>MicrochipPIC.Design</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Arch\Microchip\MicrochipPIC.csproj">
       <Project>{a959c1a2-a622-4600-81ad-29e08545b2f7}</Project>
       <Name>MicrochipPIC</Name>
@@ -913,6 +921,10 @@
     <ProjectReference Include="..\Arch\Pdp11\Pdp11.csproj">
       <Project>{CD10A2C6-246C-4CBB-8E92-86579714795A}</Project>
       <Name>Pdp11</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Arch\PowerPC.Design\PowerPC.Design.csproj">
+      <Project>{16550df3-0916-4bdd-aa7a-7e1bad7aba3b}</Project>
+      <Name>PowerPC.Design</Name>
     </ProjectReference>
     <ProjectReference Include="..\Arch\PowerPC\PowerPC.csproj">
       <Project>{B7DC39DD-6693-4F71-AE7F-007C5C62CBAA}</Project>
@@ -990,6 +1002,10 @@
       <Project>{73e8b629-f836-4ca6-b003-dae0809b8a7a}</Project>
       <Name>AtariTOS</Name>
     </ProjectReference>
+    <ProjectReference Include="..\Environments\BbcMicro\BbcMicro.csproj">
+      <Project>{1A75D9C8-F708-4B8E-8F2D-F909ED1C0AD8}</Project>
+      <Name>BbcMicro</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Environments\C64\C64.csproj">
       <Project>{FDFE3507-E8CE-4930-B9B5-8FB647CFC6DC}</Project>
       <Name>C64</Name>
@@ -1010,6 +1026,10 @@
       <Project>{D0D1798C-08F7-4DE6-94E9-CC382E1FBEC8}</Project>
       <Name>MacOS</Name>
     </ProjectReference>
+    <ProjectReference Include="..\Environments\MorphOS\MorphOS.csproj">
+      <Project>{22b34ddf-36cf-48f1-8e62-dc7f18e42594}</Project>
+      <Name>MorphOS</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Environments\Msdos.Design\Msdos.Design.csproj">
       <Project>{6b0ded4f-5035-49ce-ae54-be92b3354e44}</Project>
       <Name>Msdos.Design</Name>
@@ -1021,6 +1041,10 @@
     <ProjectReference Include="..\Environments\NeoGeo\NeoGeo.csproj">
       <Project>{1e57924e-b623-4894-8e3a-87e3e99e2303}</Project>
       <Name>NeoGeo</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Environments\OS2\OS2.csproj">
+      <Project>{6369aaec-5946-412b-929b-024c4fb1cfd6}</Project>
+      <Name>OS2</Name>
     </ProjectReference>
     <ProjectReference Include="..\Environments\Ps3\Ps3.csproj">
       <Project>{1a60f017-4e4c-48f8-bb97-47d52186c7fd}</Project>
@@ -1037,6 +1061,10 @@
     <ProjectReference Include="..\Environments\SegaGenesis\SegaGenesis.csproj">
       <Project>{46D47AC5-DEC2-44E6-942A-F1D9B77BB514}</Project>
       <Name>SegaGenesis</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Environments\Snes\Snes.csproj">
+      <Project>{b4704089-c5bd-42ed-b509-8f2c0a528ba1}</Project>
+      <Name>Snes</Name>
     </ProjectReference>
     <ProjectReference Include="..\Environments\Switch\Switch.csproj">
       <Project>{c1bae231-5a72-40d2-8b75-328849d58c0f}</Project>
@@ -1133,6 +1161,10 @@
     <ProjectReference Include="..\ImageLoaders\VmsExe\VmsExe.csproj">
       <Project>{4059bebf-7b5c-4701-ac98-ade2515d8823}</Project>
       <Name>VmsExe</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\ImageLoaders\WebAssembly\WebAssembly.csproj">
+      <Project>{5b8c1889-5de4-43c0-9bd6-34ddcf0e2136}</Project>
+      <Name>WebAssembly</Name>
     </ProjectReference>
     <ProjectReference Include="..\ImageLoaders\XexLoader\Xex.csproj">
       <Project>{e6d43750-9abc-407d-b247-c91593c77062}</Project>

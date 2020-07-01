@@ -5,6 +5,7 @@
 # * having a dcproject file associated with them or
 # * a subject.cmd file containing reko command lines to execute.
 
+from __future__ import print_function
 from optparse import OptionParser
 from threading import Thread
 from datetime import datetime
@@ -81,17 +82,24 @@ def cmdline_split(s):
         a.append(sub)
     return a
 
-# On Windows file removal is asynchronous but renames are atomic
-def remove_file(file):
-    os.rename(file, '%s.rmtmp' % file)
-    os.remove('%s.rmtmp' % file)
-
 # Remove output files
 def clear_dir(dir_name, files):
+    failedFiles = []
     for pname in files:
         for ext in output_extensions:
             if pname.endswith(ext):
-                remove_file(os.path.join(dir_name, pname))
+                filename = os.path.join(dir_name, pname)
+                try:
+                    os.remove(filename)
+                except:
+                    # File may be held open by another program, try again later.
+                    failedFiles.append(filename)
+    # Retry all failed files with a delay. Let the error propagate if persists.
+    if failedFiles:
+        time.sleep(1000)
+        for filename in failedFiles:
+            if os.exists(filename):
+                os.remove(filename)
 
 def strip_id_nums(dirs):
     for dir in dirs:
@@ -108,12 +116,15 @@ numbered_id_regexp = re.compile('(?P<id_name>\w+)_\d+')
 fn_seg_name_regexp = re.compile('(?P<seg_name>fn\w+)_(?P<offset_name>\d+)')
 
 def strip_id_nums_for_file(file_name):
-    file = fileinput.FileInput(file_name, inplace=True)
-    for line in file:
-        #remove EOLN
-        line = line[:-1]
-        line = fn_seg_name_regexp.sub('\g<seg_name>-\g<offset_name>', line)
-        print(numbered_id_regexp.sub('\g<id_name>_n', line))
+    try:
+        file = fileinput.FileInput(file_name, inplace=True)
+        for line in file:
+            #remove EOLN
+            line = line[:-1]
+            line = fn_seg_name_regexp.sub('\g<seg_name>-\g<offset_name>', line)
+            print(numbered_id_regexp.sub('\g<id_name>_n', line))
+    except UnicodeDecodeError:
+        print("Unicode decoding error in "+ file_name, file=sys.stderr)
 
 def collect_jobs(dir_name, files, pool_state):
     needClear = True
