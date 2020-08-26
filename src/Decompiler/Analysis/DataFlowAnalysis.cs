@@ -362,8 +362,17 @@ namespace Reko.Analysis
                 var ssa = sst.SsaState;
                 try
                 {
-                    DumpWatchedProcedure("Before expression coalescing", ssa.Procedure);
+                    if (program.User.AggressiveBranchRemoval)
+                    {
+                        // This ends up being very aggressive and doesn't replicate the original
+                        // binary code. See discussion on https://github.com/uxmal/reko/issues/932
+                        DumpWatchedProcedure("Before unreachable block removal", ssa.Procedure);
+                        var urb = new UnreachableBlockRemover(ssa, eventListener);
+                        urb.Transform();
+                    }
 
+                    DumpWatchedProcedure("Before expression coalescing", ssa.Procedure);
+                    
                     // Procedures should be untangled from each other. Now process
                     // each one separately.
                     DeadCode.Eliminate(ssa);
@@ -512,7 +521,7 @@ namespace Reko.Analysis
         [Conditional("DEBUG")]
         public static void DumpWatchedProcedure(string caption, Procedure proc)
         {
-            if (proc.Name == "fn000000000040ADB0")
+            if (proc.Name == "prvSetAndCheckRegisters")
             {
                 Debug.Print("// {0}: {1} ==================", proc.Name, caption);
                 //MockGenerator.DumpMethod(proc);

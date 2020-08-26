@@ -1712,11 +1712,21 @@ namespace Reko.UnitTests.Arch.X86
         }
 
         [Test]
-        public void X86rw_x64_push_immediate()
+        public void X86rw_x64_push_immediate_32bit()
         {
             Run64bitTest(0x6A, 0xC2);
             AssertCode(     // "push 0xC2", 
                 "0|L--|0000000140000000(2): 2 instructions",
+                "1|L--|rsp = rsp - 4<i64>",
+                "2|L--|Mem0[rsp:word32] = 0xFFFFFFC2<32>");
+        }
+
+        [Test]
+        public void X86rw_x64_push_immediate_64bit()
+        {
+            Run64bitTest(0x48, 0x6A, 0xC2);
+            AssertCode(     // "push 0xC2", 
+                "0|L--|0000000140000000(3): 2 instructions",
                 "1|L--|rsp = rsp - 8<i64>",
                 "2|L--|Mem0[rsp:word64] = 0xFFFFFFFFFFFFFFC2<64>");
         }
@@ -3763,6 +3773,30 @@ namespace Reko.UnitTests.Arch.X86
                 "0|T--|10000000(7): 2 instructions",
                 "1|L--|SCZO = FPUF",
                 "2|T--|if (Test(GE,FPUF)) branch 10000009");
+        }
+
+        [Test]
+        public void X86rw_short_push()
+        {
+            Run32bitTest(
+                "66 68 34 12"   // push word 1234h
+                );
+            AssertCode(
+                "0|L--|10000000(4): 2 instructions",
+                "1|L--|esp = esp - 2<i32>",
+                "2|L--|Mem0[esp:word16] = 0x1234<16>");
+        }
+
+        [Test]
+        public void X86Rw_fld_st0()
+        {
+            // This is a 'duplicate top of stack' instruction.
+            Run32bitTest("D9 C0"); // fld st(0)");
+            AssertCode(
+              "0|L--|10000000(2): 3 instructions",
+              "1|L--|v3 = ST[Top:real64]",
+              "2|L--|Top = Top - 1<i8>",
+              "3|L--|ST[Top:real64] = v3");
         }
 
         /*
