@@ -43,13 +43,13 @@ namespace Reko.Typing
     public class ExpressionTypeDescender : ExpressionVisitor<bool, TypeVariable>
     {
         // Matches the effective address of Mem[p + c] where c is a constant.
-        private ExpressionMatcher fieldAccessPattern = new ExpressionMatcher(
+        private static readonly ExpressionMatcher fieldAccessPattern = new ExpressionMatcher(
             new BinaryExpression(
                 Operator.IAdd,
                 ExpressionMatcher.AnyDataType(null),
                 ExpressionMatcher.AnyExpression("p"),
                 ExpressionMatcher.AnyConstant("c")));
-        private ExpressionMatcher segFieldAccessPattern = new ExpressionMatcher(
+        private static readonly ExpressionMatcher segFieldAccessPattern = new ExpressionMatcher(
             new MkSequence(
                 ExpressionMatcher.AnyDataType(null),
                 ExpressionMatcher.AnyExpression("p"),
@@ -432,6 +432,8 @@ namespace Reko.Typing
 
         public DataType MeetDataType(Expression exp, DataType dt)
         {
+            if (exp is Conversion || exp is Cast)
+                return exp.TypeVariable!.DataType;
             return MeetDataType(exp.TypeVariable!, dt);
         }
 
@@ -490,6 +492,14 @@ namespace Reko.Typing
             return false;
         }
 
+        public bool VisitConversion(Conversion conversion, TypeVariable tv)
+        {
+     //       MeetDataType(conversion, conversion.DataType);
+            MeetDataType(conversion.Expression, conversion.SourceDataType);
+            conversion.Expression.Accept(this, conversion.Expression.TypeVariable!);
+            return false;
+        }
+
         public bool VisitDereference(Dereference deref, TypeVariable tv)
         {
             //$BUG: push (ptr (typeof(deref)
@@ -529,16 +539,27 @@ namespace Reko.Typing
                 p = fieldAccessPattern.CapturedExpression("p")!;
                 var c = (Constant) fieldAccessPattern.CapturedExpression("c")!;
                 offset = OffsetOf(c);
-                if (p is Cast cast && cast.Expression.DataType.BitSize < cast.DataType.BitSize)
+                if (p is Conversion cvt && cvt.SourceDataType.BitSize < cvt.DataType.BitSize)
                 {
-                    // p some cast-extended thing and cannot be a pointer; c therefore must be treated as a
+                    // p some convert-extended thing and cannot be a pointer; c therefore must be treated as a
                     // pointer and p is the index.
                     // First do the array index.
+                    p.Accept(this, p.TypeVariable!);
+
+                    // Now treat c as an array pointer.
+                    var cbElement = tvAccess.DataType.Size;
+                    var tvElement = ArrayField(basePointer, c, c.DataType.BitSize, 0, cbElement, 0, tvAccess);
+                    StructField(basePointer, c, 0, tvElement, eaBitSize);
+                    return false;
+                }
+                else if (p is Cast cast && cast.Expression.DataType.BitSize < cast.DataType.BitSize)
+                {
                     p.Accept(this, p.TypeVariable!);
 
                     var cbElement = tvAccess.DataType.Size;
                     var tvElement = ArrayField(basePointer, c, c.DataType.BitSize, 0, cbElement, 0, tvAccess);
                     StructField(basePointer, c, 0, tvElement, eaBitSize);
+                    return false;
                 }
                 else
                 {

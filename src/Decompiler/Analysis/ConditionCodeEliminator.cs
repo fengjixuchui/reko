@@ -111,10 +111,17 @@ namespace Reko.Analysis
         {
             var defs = new HashSet<SsaIdentifier>();
             var wl = new WorkList<SsaIdentifier>();
+            var visited = new HashSet<Statement>();
             wl.Add(sidUse);
             while (wl.GetWorkItem(out var sid))
             {
                 var def = sid.DefStatement;
+                if (def != null)
+                {
+                    if (visited.Contains(def))
+                        continue;
+                    visited.Add(def);
+                }
                 switch (def?.Instruction)
                 {
                 case Assignment ass:
@@ -159,7 +166,7 @@ namespace Reko.Analysis
                 uses.Add(use);
                 if (IsCopyWithOptionalCast(sid.Identifier, use))
                 {
-                    // Bypass copies (C_4 = C_3) and casts
+                    // Bypass copies (C_4 = C_3) and slices
                     // (C_4 = SLICE(SZC_3, bool, 0)
                     var ass = (Assignment)use.Instruction;
                     var sidAlias = ssaIds[ass.Dst];
@@ -202,16 +209,14 @@ namespace Reko.Analysis
         {
             if (!(stm.Instruction is Assignment ass))
                 return false;
-            Expression e = ass.Src;
-            if (e is Cast cast)
-                return grf == cast.Expression;
-            else if (e is Slice s)
-                return grf == s.Expression;
-            else if (e is BinaryExpression bin && bin.Operator == Operator.Or)
+            return ass.Src switch
             {
-                return bin.Left == grf || bin.Right == grf;
-            }
-            return false;
+                Conversion conv => grf == conv.Expression,
+                Cast cast => grf == cast.Expression,
+                Slice s => grf == s.Expression,
+                BinaryExpression bin when bin.Operator == Operator.Or => bin.Left == grf || bin.Right == grf,
+                _ => false,
+            };
         }
 
 		private BinaryExpression CmpExpressionToZero(Expression e)
@@ -270,9 +275,10 @@ namespace Reko.Analysis
                 var id = (Identifier) UseGrfConditionally(sidArg, cc, true);
                 newArgs.Add(new PhiArgument(arg.Block, id));
             }
-            var newPhi = new PhiAssignment(sidDef.OriginalIdentifier, newArgs.ToArray());
+            var idNew = ssa.Procedure.Frame.CreateTemporary(newArgs[0].Value.DataType);
+            var newPhi = new PhiAssignment(idNew, newArgs.ToArray());
             var stmPhi = mutator.InsertStatementAfter(newPhi, sidDef.DefStatement!);
-            var sidPhi = ssaIds.Add(sidDef.OriginalIdentifier, stmPhi, newPhi.Src, false);
+            var sidPhi = ssaIds.Add(idNew, stmPhi, newPhi.Src, false);
             newPhi.Dst = sidPhi.Identifier;
             Use(newPhi.Src, stmPhi);
             generatedIds.Add((sidDef.Identifier, cc), sidPhi);
@@ -331,7 +337,7 @@ namespace Reko.Analysis
             var oldSid = ssaIds[(Identifier)u];
             u = UseGrfConditionally(sidGrf, ConditionCode.ULT, false);
             if (c != null)
-                binUse.Right = new Cast(c.DataType, u);
+                binUse.Right = new Conversion(u, u.DataType, c.DataType);
             else
                 binUse.Right = u;
             oldSid.Uses.Remove(useStm!);
@@ -382,9 +388,10 @@ namespace Reko.Analysis
             block.Statements.Remove(sidCarry.DefStatement!);
             ssaIds.Remove(sidCarry);
 
-            var expNewLo = m.Cast(
+            var expNewLo = m.Slice(
                 PrimitiveType.CreateWord(tmpHi.DataType.BitSize),
-                sidTmp.Identifier);
+                sidTmp.Identifier,
+                0);
             var stmNewLo = block.Statements.Insert(
                 iRolc + 2,
                 sidOrigLo.DefStatement.LinearAddress,
@@ -420,7 +427,7 @@ namespace Reko.Analysis
         // 3.  tmp_2 = b_2
         // *.  tmp_3 = (tmp1:tmp2) >> 1
         // 1'. a_2 = slice(tmp3,16)
-        // 2'. b_2 = (cast) tmp3
+        // 2'. b_2 = slice(tmp3,0)
         // 4.  flags_3 = cond(b_2)
 
         private Instruction TransformRorC(Application rorc, Assignment a)
@@ -485,9 +492,10 @@ namespace Reko.Analysis
             sidOrigHi.DefStatement = stmNewHi;
             sidOrigHi.DefExpression = expNewHi;
 
-            var expNewLo = m.Cast(
+            var expNewLo = m.Slice(
                 PrimitiveType.CreateWord(tmpLo.DataType.BitSize),
-                sidTmp.Identifier);
+                sidTmp.Identifier,
+                0);
             var stmNewLo = block.Statements.Insert(
                 iRorc + 3,
                 sidOrigLo.DefStatement.LinearAddress,

@@ -345,9 +345,9 @@ bool xQueueCRSend(Eq_n r0, Eq_n r1, Eq_n r2, Eq_n r7, Eq_n lr, ptr32 cpsr, union
 	bool Z_n = SLICE(cond(r2_n - r3_n), bool, 2);
 	if (r2_n < r3_n)
 	{
-		word32 lr_n;
-		word32 r7_n;
 		word32 r0_n;
+		word32 r7_n;
+		word32 lr_n;
 		Z_n = prvCopyDataToQueue(r0, r1, 0x00, r7, lr, out r0_n, out r7_n, out lr_n);
 		if (*((word32) r0 + 36) != 0x00)
 		{
@@ -751,7 +751,7 @@ l00008690:
 // 000086E8: void prvFixedDelayCoRoutine(Register (ptr32 Eq_n) r0, Register ui32 r1, Register Eq_n r7, Register Eq_n lr, Register ptr32 cpsr)
 void prvFixedDelayCoRoutine(struct Eq_n * r0, ui32 r1, Eq_n r7, Eq_n lr, ptr32 cpsr)
 {
-	bool Z_n;
+	bool v18_n;
 	Eq_n r0_n;
 	word32 r0_n;
 	up32 r3_n = (word32) r0->w0034;
@@ -766,16 +766,16 @@ void prvFixedDelayCoRoutine(struct Eq_n * r0, ui32 r1, Eq_n r7, Eq_n lr, ptr32 c
 		}
 		else if (r3_n != 0x00)
 			return;
-		Z_n = xQueueCRSend(*g_ptr877C, fp - 0x0C, 0x00, r7, lr, cpsr, out r0_n);
-		if (Z_n)
+		v18_n = xQueueCRSend(*g_ptr877C, fp - 0x0C, 0x00, r7, lr, cpsr, out r0_n);
+		if (v18_n)
 		{
 			r0->w0034 = 0x0182;
 			return;
 		}
 	}
 	else
-		Z_n = xQueueCRSend(*g_ptr877C, fp - 0x0C, 0x00, r7, lr, cpsr, out r0_n);
-	if (Z_n)
+		v18_n = xQueueCRSend(*g_ptr877C, fp - 0x0C, 0x00, r7, lr, cpsr, out r0_n);
+	if (v18_n)
 	{
 		r0->w0034 = 0x0183;
 		return;

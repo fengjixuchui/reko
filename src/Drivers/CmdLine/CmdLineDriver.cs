@@ -194,7 +194,15 @@ namespace Reko.CmdLine
                     decompiler.Project.Programs[0].User.AggressiveBranchRemoval =
                         oAggressiveBranchRemoval is bool flag && flag;
                 }
-
+                if (pArgs.TryGetValue("debug-types", out var oProcRange))
+                {
+                    decompiler.Project.Programs[0].DebugProcedureRange = ((int, int)) oProcRange;
+                }
+                if (pArgs.TryGetValue("debug-trace-proc", out object oTraceProcs))
+                {
+                    decompiler.Project.Programs[0].User.DebugTraceProcedures =
+                        (HashSet<string>) oTraceProcs;
+                }
                 decompiler.ExtractResources();
                 decompiler.ScanPrograms();
                 if (!pArgs.ContainsKey("scan-only"))
@@ -441,6 +449,21 @@ namespace Reko.CmdLine
                 {
                     parsedArgs["aggressive-branch-removal"] = true;
                 }
+                else if (args[i] == "--debug-types")
+                {
+                    if (i < args.Length - 1)
+                    {
+                        parsedArgs["debug-types"] = ParseIntRange(args[++i]);
+                    }
+                }
+                else if (args[i] == "--debug-trace-proc")
+                {
+                    if (i < args.Length - 1)
+                    {
+                        ++i;
+                        parsedArgs["debug-trace-proc"] = new HashSet<string>(args[i].Split(','));
+                    }
+                }
                 else if (arg.StartsWith("-"))
                 {
                     w.WriteLine("error: unrecognized option {0}", arg);
@@ -452,6 +475,24 @@ namespace Reko.CmdLine
                 }
             }
             return parsedArgs;
+        }
+
+        private (int, int) ParseIntRange(string sRange)
+        {
+            int iColon = sRange.IndexOf(':');
+            if (iColon <= 0)
+            {
+                return (0, Convert.ToInt32(sRange));
+            }
+            else
+            {
+                var nStart = Convert.ToInt32(sRange.Remove(iColon));
+                ++iColon;
+                var nEnd = (iColon < sRange.Length)
+                    ? Convert.ToInt32(sRange.Substring(iColon))
+                    : 0;
+                return (nStart, nEnd);
+            }
         }
 
         /// <summary>
@@ -530,6 +571,8 @@ namespace Reko.CmdLine
             w.WriteLine(" --scan-only              Only scans the binary to find instructions, forgoing");
             w.WriteLine("                          full decompilation.");
             w.WriteLine(" --time-limit <s>         Limit execution time to s seconds");
+            w.WriteLine(" --debug-trace-proc <p1>[,<p2>...]  Debug: trace Reko analysis phases of the");
+            w.WriteLine("                          given procedure names p1, p2 etc.");
             //           01234567890123456789012345678901234567890123456789012345678901234567890123456789
         }
 

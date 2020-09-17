@@ -76,6 +76,35 @@ namespace Reko.Arch.X86
                             orw.AddrOf(orw.AluRegister(Registers.ah))));
         }
 
+        public void RewriteAdcSbb(Func<Expression, Expression, Expression> opr)
+        {
+            // We do not take the trouble of widening the CF to the word size
+            // to simplify code analysis in later stages. 
+            var c = orw.FlagGroup(FlagM.CF);
+            EmitCopy(
+                instrCur.Operands[0],
+                opr(
+                    opr(
+                        SrcOp(instrCur.Operands[0]),
+                        SrcOp(instrCur.Operands[1], instrCur.Operands[0].Width)),
+                    c),
+                CopyFlags.EmitCc);
+        }
+
+        private void RewriteAdcx(FlagGroupStorage carry)
+        {
+            var cy = binder.EnsureFlagGroup(carry);
+            var dst = SrcOp(0);
+            m.Assign(
+                dst,
+                m.IAdd(
+                    m.IAdd(
+                        dst,
+                        SrcOp(instrCur.Operands[1], dst.DataType)),
+                    cy));
+            m.Assign(cy, m.Cond(dst));
+        }
+
         private void RewriteCli()
         {
             m.SideEffect(host.PseudoProcedure("__cli", VoidType.Instance));
@@ -106,21 +135,6 @@ namespace Reko.Arch.X86
                 instrCur.Operands[0].Width,
                 SrcOp(instrCur.Operands[0]),
                 SrcOp(instrCur.Operands[1]),
-                CopyFlags.EmitCc);
-        }
-
-        public void RewriteAdcSbb(Func<Expression,Expression,Expression> opr)
-        {
-            // We do not take the trouble of widening the CF to the word size
-            // to simplify code analysis in later stages. 
-            var c = orw.FlagGroup(FlagM.CF);
-            EmitCopy(
-                instrCur.Operands[0], 
-                opr(
-                    opr(
-                        SrcOp(instrCur.Operands[0]),
-                        SrcOp(instrCur.Operands[1], instrCur.Operands[0].Width)),
-                    c),
                 CopyFlags.EmitCc);
         }
 
@@ -289,7 +303,7 @@ namespace Reko.Arch.X86
         {
             m.Assign(
                 orw.AluRegister(Registers.ax),
-                m.Cast(PrimitiveType.Int16, orw.AluRegister(Registers.al)));
+                m.Convert(orw.AluRegister(Registers.al), PrimitiveType.SByte, PrimitiveType.Int16));
         }
 
         private void RewriteCdq()
@@ -299,14 +313,15 @@ namespace Reko.Arch.X86
                 Registers.edx,
                 Registers.eax);
             m.Assign(
-                edx_eax, m.Cast(edx_eax.DataType, orw.AluRegister(Registers.eax)));
+                edx_eax, 
+                m.Convert(orw.AluRegister(Registers.eax), PrimitiveType.Int32, PrimitiveType.Int64));
         }
 
         public void RewriteCdqe()
         {
             m.Assign(
                 orw.AluRegister(Registers.rax),
-                m.Cast(PrimitiveType.Int64, orw.AluRegister(Registers.eax)));
+                m.Convert(orw.AluRegister(Registers.eax), PrimitiveType.Int32, PrimitiveType.Int64));
         }
 
         public void RewriteCqo()
@@ -316,7 +331,8 @@ namespace Reko.Arch.X86
                 Registers.rdx,
                 Registers.rax);
             m.Assign(
-                rdx_rax, m.Cast(rdx_rax.DataType, orw.AluRegister(Registers.rax)));
+                rdx_rax,
+                m.Convert(orw.AluRegister(Registers.rax), PrimitiveType.Int64, PrimitiveType.Int128));
 
         }
 
@@ -327,14 +343,14 @@ namespace Reko.Arch.X86
                 Registers.dx,
                 Registers.ax);
             m.Assign(
-                dx_ax, m.Cast(dx_ax.DataType, orw.AluRegister(Registers.ax)));
+                dx_ax, m.Convert(orw.AluRegister(Registers.ax), PrimitiveType.Int16, dx_ax.DataType));
         }
 
         public void RewriteCwde()
         {
             m.Assign(
                 orw.AluRegister(Registers.eax),
-                m.Cast(PrimitiveType.Int32, orw.AluRegister(Registers.ax)));
+                m.Convert(orw.AluRegister(Registers.ax), PrimitiveType.Int16, PrimitiveType.Int32));
         }
 
 
@@ -461,12 +477,15 @@ namespace Reko.Arch.X86
             PrimitiveType p = ((PrimitiveType)regRemainder.DataType).MaskDomain(domain);
             var tmp = binder.CreateTemporary(regDividend.DataType);
             m.Assign(tmp, regDividend);
+            var r = m.Mod(tmp, SrcOp(instrCur.Operands[0]));
+            var divisor = SrcOp(instrCur.Operands[0]);
+            var q = op(tmp, divisor);
             m.Assign(
-                regRemainder, 
-                m.Cast(p, m.Mod(tmp, SrcOp(instrCur.Operands[0]))));
+                regRemainder,
+                m.Convert(r, r.DataType, p));
             m.Assign(
-                regQuotient, 
-                m.Cast(p, op(tmp, SrcOp(instrCur.Operands[0]))));
+                regQuotient,
+                m.Convert(q, q.DataType, p));
             EmitCcInstr(regQuotient, X86Instruction.DefCc(instrCur.Mnemonic));
         }
 
@@ -639,7 +658,8 @@ namespace Reko.Arch.X86
                     src = orw.AddrOf(src);
                 }
             }
-            m.Assign(SrcOp(instrCur.Operands[0]), src);
+            var dst = SrcOp(instrCur.Operands[0]);
+            m.Assign(dst, MaybeSlice(dst.DataType, src));
         }
 
         private void RewriteLeave()
@@ -665,6 +685,13 @@ namespace Reko.Arch.X86
             m.Assign(
                 binder.EnsureSequence(ptr, seg, reg.Register),
                 SrcOp(mem, segptr));
+        }
+
+        private void RewriteLeadingTrailingZeros(string fnName)
+        {
+            var src = SrcOp(1);
+            var dst = SrcOp(0);
+            m.Assign(dst, host.PseudoProcedure(fnName, PrimitiveType.Create(Domain.SignedInt, dst.DataType.BitSize), src));
         }
 
         private void RewriteMov()
@@ -695,7 +722,7 @@ namespace Reko.Arch.X86
             var src = SrcOp(instrCur.Operands[1]);
             if (src is Identifier)
             {
-                src = m.Cast(dt, src);
+                src = m.Slice(dt, src, 0);
             }
             if (dst is Identifier idDst)
             {
@@ -722,16 +749,17 @@ namespace Reko.Arch.X86
             var dstBitSize = dst.DataType.BitSize;
             if (dstBitSize != src.DataType.BitSize)
             {
-                src = m.Cast(PrimitiveType.Create(Domain.SignedInt, dstBitSize), src);
+                src = m.Convert(src, src.DataType, PrimitiveType.Create(Domain.SignedInt, dstBitSize));
             }
             m.Assign(dst, src);
         }
 
         private void RewriteMovzx()
         {
+            var src = SrcOp(instrCur.Operands[1]);
             EmitCopy(
                 instrCur.Operands[0],
-                m.Cast(instrCur.Operands[0].Width, SrcOp(instrCur.Operands[1])),
+                m.Convert(src, src.DataType, instrCur.Operands[0].Width),
                 0
             );
         }
@@ -972,7 +1000,11 @@ namespace Reko.Arch.X86
 
         private void RewriteSet(ConditionCode cc)
         {
-            m.Assign(SrcOp(instrCur.Operands[0]), CreateTestCondition(cc, instrCur.Mnemonic));
+            var dst = SrcOp(instrCur.Operands[0]);
+            m.Assign(dst, m.Convert(
+                CreateTestCondition(cc, instrCur.Mnemonic),
+                PrimitiveType.Bool,
+                PrimitiveType.Create(Domain.SignedInt, dst.DataType.BitSize)));
         }
 
         private void RewriteSetFlag(FlagM flagM, Constant value)
@@ -1201,7 +1233,7 @@ namespace Reko.Arch.X86
                     orw.AluRegister(Registers.ds),
                     m.IAdd(
                         bx,
-                        m.Cast(offsetType, al))));
+                        m.Convert(al, PrimitiveType.UInt8, offsetType))));
         }
 
         private Identifier StackPointer()

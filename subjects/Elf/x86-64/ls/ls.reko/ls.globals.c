@@ -404,10 +404,7 @@ byte g_b61B147 = 0x00;
 word32 g_dw61B148 = 0x00;
 word32 g_dw61B14C = 0x00;
 up32 g_dw61B150 = 0x00;
-Eq_n g_t61B154 = 
-	{
-		0
-	};
+int32 g_dw61B154 = 0;
 Eq_n g_t61B158 = 
 	{
 		0x00
@@ -434,7 +431,10 @@ Eq_n g_t61B178 =
 	};
 byte g_b61B17C = 0x00;
 byte g_b61B17D = 0x00;
-int64 g_qw61B180 = 0;
+Eq_n g_t61B180 = 
+	{
+		0
+	};
 Eq_n g_t61B188 = 
 	{
 		0

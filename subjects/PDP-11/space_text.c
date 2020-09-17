@@ -492,7 +492,7 @@ void fn0AE6(word16 r3, <anonymous> ** r4, word16 wArg00, struct Eq_n * wArg02, s
 {
 	byte bArg00 = (byte) wArg00;
 	struct Eq_n * r3_n = g_ptr5424;
-	uint16 wLoc04_n = (uint16) (uint8) bArg00;
+	uint16 wLoc04_n = (uint16) bArg00;
 	if (bArg00 == 0x01)
 		fn0B02(r3_n, r4, wLoc04_n, r3, wArg00, wArg02, wArg04, wArg06);
 	else
@@ -561,7 +561,7 @@ void fn0B60(struct Eq_n * r0, word16 * r3, word16 wArg00, struct Eq_n * wArg02, 
 	struct Eq_n * r3_n = g_ptr5424;
 	if (bArg00 != 0x01)
 	{
-		wLoc04_n = (uint16) (uint8) bArg00;
+		wLoc04_n = (uint16) bArg00;
 		if (bArg00 != 0x08)
 			wLoc04_n += 0x03;
 	}
@@ -682,11 +682,11 @@ void fn0E0E(<anonymous> * wArg00, word16 wArg02, word16 wArg04, word16 wArg06, w
 	struct Eq_n * r4_n = g_ptr5424;
 	r4_n->ptr002A = wArg00;
 	cup16 v18_n = wArg02 - wArg06;
-	bool C_n = v18_n >= 0x00;
+	bool v24_n = v18_n >= 0x00;
 	if (v18_n == 0x00)
 	{
 		cup16 v20_n = wArg04 - wArg08;
-		C_n = v20_n >= 0x00;
+		v24_n = v20_n >= 0x00;
 		if (v20_n == 0x00)
 		{
 l0E7C:
@@ -1660,7 +1660,7 @@ void fn1DAE()
 			{
 				r2_n -= 0x02;
 				r2_n->w0000 = 0x00;
-			} while (r4_n - 0x38 - r2_n >u 0x00);
+			} while (r4_n - 0x38 - r2_n > 0x00);
 			r4_n->tFFFFFFC2.u1 = 0x00;
 			r4_n->tFFFFFFC3.u1 = 0x00;
 			r4_n->wFFFFFF56 = sp_n->wFFFFFFE0;

@@ -409,10 +409,10 @@ word32 fn8032(word16 er1_16_n, word16 er2_16_n, word16 er3_16_n, ui16 r4, ui16 r
 			}
 			int16 r4_n = sp_n->w000E;
 			sp_n->w0000 = r4_n;
+			Eq_n er1_n = SEQ(er1_16_16_n, r1_n);
 		} while (r4_n <= 0x02);
 		int16 r5_n = sp_n->w000C;
 		word32 er0_n = SEQ(er0_16_n, r0_n);
-		Eq_n er1_n = SEQ(er1_16_16_n, r1_n);
 		Eq_n er2_n = SEQ(er2_16_n, 0x03);
 		if (r5_n > 0x03)
 			break;
@@ -882,9 +882,9 @@ word32 fn8AEA(word16 er0_16_n, word16 er4_16_n, Eq_n r6, union Eq_n & er2Out, pt
 	word16 er0_16_16_n = SLICE(fn9C18(SEQ(SLICE(fn9BB6(SEQ(er0_16_16_n, 0x1A4E), 0x2002, 0x01, r6_n, *((word32) sp_n - 4), *((word32) sp_n - 2), out r6_n), word16, 16), 0x1E), er4_n, r6_n, out er2_n, out er4_n, out r6_n), word16, 16);
 	*((word32) sp_n - 2) = (word16) er4_n;
 	Eq_n r6_n;
-	word32 er4_n;
 	Eq_n er2_n;
 	ptr16 r6_n;
+	word32 er4_n;
 	word32 er0_n = fn9C18(SEQ(SLICE(fn9BB6(SEQ(er0_16_16_n, 0x1A4E), 0x2002, 0x03, r6_n, *((word32) sp_n - 4), *((word32) sp_n - 2), out r6_n), word16, 16), 0x55), er4_n, r6_n, out er2_n, out er4_n, out r6_n);
 	er2Out = er2_n;
 	r6Out = r6_n;
@@ -1017,7 +1017,6 @@ word32 fn8BB0(word16 er0_16_n, Eq_n r1, Eq_n er4, Eq_n r5, Eq_n r6, union Eq_n &
 	}
 l8DA2:
 	word16 er4_16_16_n = SLICE(er4_n, word16, 16);
-	er4_16_16_n = SLICE(er4_n, word16, 16);
 	int16 r2_n = g_wFFFF9E34;
 	int16 r5_n = *((word32) sp_n + 8);
 	if (r2_n >= r5_n)
@@ -1181,7 +1180,8 @@ word32 fn8F4E(word16 er0_16_n, Eq_n er4, Eq_n r5, Eq_n r6, union Eq_n & er4Out, 
 	word16 r3_n = (word16) r6_n + sp_n->w0008;
 	byte r2l_n = (byte) r3_n;
 	bool C_n = (bool) cond(r2l_n << 1);
-	word16 r2_n = SEQ(__rcl(SLICE(r3_n, byte, 8), 1, C_n) & 0x00, __bst(r2l_n << 1, C_n, 0x00) & 0x01) + r3_n;
+	__rcl(SLICE(r3_n, byte, 8), 1, C_n);
+	uint16 r2_n = (uint16) (__bst(r2l_n << 1, C_n, 0x00) & 0x01) + r3_n;
 	bci8 r2h_n = SLICE(r2_n, byte, 8);
 	int16 r2_n = SEQ(r2h_n >> 1, __rcr((byte) r2_n, 1, (bool) cond(r2h_n >> 1)));
 	g_wFFFF9E3A = r2_n;
@@ -1230,7 +1230,8 @@ word32 fn8F4E(word16 er0_16_n, Eq_n er4, Eq_n r5, Eq_n r6, union Eq_n & er4Out, 
 	word16 r3_n = Mem397[sp_n + 6:word16] + r6_n;
 	byte r2l_n = (byte) r3_n;
 	bool C_n = (bool) cond(r2l_n << 1);
-	word16 r2_n = SEQ(__rcl(SLICE(r3_n, byte, 8), 1, C_n) & 0x00, __bst(r2l_n << 1, C_n, 0x00) & 0x01) + r3_n;
+	__rcl(SLICE(r3_n, byte, 8), 1, C_n);
+	uint16 r2_n = (uint16) (__bst(r2l_n << 1, C_n, 0x00) & 0x01) + r3_n;
 	bci8 r2h_n = SLICE(r2_n, byte, 8);
 	int16 r2_n = SEQ(r2h_n >> 1, __rcr((byte) r2_n, 1, (bool) cond(r2h_n >> 1)));
 	g_wFFFF9E38 = r2_n;
@@ -1367,9 +1368,9 @@ word32 fn8F4E(word16 er0_16_n, Eq_n er4, Eq_n r5, Eq_n r6, union Eq_n & er4Out, 
 	word16 er0_16_16_n = SLICE(fn8BB0(SLICE(fn9B90(SEQ(SLICE(fn9BB6(SEQ(er0_16_16_n, 0x1FF2), 0x3001, r2_n, r6_n, *((word32) sp_n - 4), *((word32) sp_n - 2), out r6_n), word16, 16), 10184), r6_n, *((word32) sp_n - 4), out r6_n), word16, 16), 0x00, er4_n, r5_n, r6_n, out er4_n, out r5_n, out r6_n), word16, 16);
 	*((word32) sp_n - 2) = (word16) er4_n;
 	Eq_n r4_n = (word16) er4_n;
+	word32 er2_n;
 	Eq_n r6_n;
 	word32 er4_n;
-	word32 er2_n;
 	Eq_n r6_n;
 	Eq_n r6_n;
 	word16 er0_16_16_n = SLICE(fn9BB6(SEQ(SLICE(fn9C18(SEQ(SLICE(fn9BB6(SEQ(er0_16_16_n, 0x1A4E), 0x2002, 0x02, r6_n, *((word32) sp_n - 4), *((word32) sp_n - 2), out r6_n), word16, 16), 300), er4_n, r6_n, out er2_n, out er4_n, out r6_n), word16, 16), 0x1A4E), 0x2002, 0x03, r6_n, r5, r4_n, out r6_n), word16, 16);
@@ -1405,9 +1406,7 @@ word32 fn9370(word16 er0_16_n, word16 er2_16_n, word16 er3_16_n, uint16 r4, word
 		word32 er1_n = SEQ(er1_16_n, r1_n);
 		Eq_n r1_n = (word16) (er1_n - 0x01);
 		byte r6l_n = (byte) r6_n;
-		r6l_n = (byte) r6_n;
 		byte r6h_n = SLICE(r6_n, byte, 8);
-		r6h_n = SLICE(r6_n, byte, 8);
 		er1_16_n = SLICE(er1_n - 0x01, word16, 16);
 		Eq_n r1_n = r1_n;
 		Eq_n er4_n = er4_n;
@@ -1471,7 +1470,6 @@ word32 fn9370(word16 er0_16_n, word16 er2_16_n, word16 er3_16_n, uint16 r4, word
 		Eq_n er2_n = SEQ(er2_16_n, 0x04);
 		if ((word16) er4_n > 0x04)
 			break;
-		er1_n = SEQ(er1_16_n, r1_n);
 		er2_n = SEQ(er2_16_n, 0x04);
 	} while (*((word32) sp_n + 8) == 0x00);
 	Eq_n r6_n = *sp_n;
@@ -1566,7 +1564,7 @@ word32 fn9478(word16 er0_16_n, word16 er1_16_n, word16 er2_16_n, word16 er3_16_n
 			er4_16_n = SLICE(er4_n, word16, 16);
 			er5_16_n = SLICE(er5_n, word16, 16);
 			r5_n = 0x04;
-			uint16 r0_n = (uint16) (uint8) (byte) er0_n;
+			uint16 r0_n = (uint16) (byte) er0_n;
 			if (r0_n == 0x04)
 				break;
 			if (r0_n != 0x02)
@@ -1960,8 +1958,8 @@ ui16 fn9B66(int16 r4, word16 r5, word16 r6, ptr16 & r6Out)
 {
 	cu8 r1l_n = (byte) r1_n;
 	word16 r1_n;
-	byte r2l_n;
 	ptr16 r6_n;
+	byte r2l_n;
 	word16 r0_n = fn9E18(*(ui16 *) 0x9E90, *(ui16 *) 0x9E92, 0x01, 3533, r4, r5, r6, wLoc02, out r1_n, out r2l_n, out r6_n);
 	cu8 r1h_n = (bool) (r1l_n < 0x01) + SLICE(r1_n, byte, 8);
 	cu8 r0l_n = (bool) (r1h_n < 0x00) + (byte) r0_n;
@@ -2094,7 +2092,6 @@ word32 fn9C18(word32 er0, Eq_n er4, Eq_n r6, union Eq_n & er2Out, union Eq_n & e
 			if ((word16) er0_n != 0x00)
 				break;
 			ci16 r2_n = *er4_n;
-			er0_n = er0_n;
 			er2 = SEQ(er2_16_16_n, r2_n);
 		} while (r2_n > 0x00);
 	}
@@ -2163,7 +2160,6 @@ word32 fn9CBC(word16 er0_16_n, word16 er4_16_n, word16 r5, word16 er5_16_n, Eq_n
 		er0_16_n = SLICE(fn9BA6(SEQ(SLICE(fn9BA6(SEQ(er0_16_n, 0x29F2), 0x4000, r7_n + 0x06, r6, wLoc0A, out r6_n), word16, 16), 8118), 0x3000, r5_n, r6_n, wLoc0A, out r6), word16, 16);
 	} while (wLoc02 == 0x02 && wLoc04 == 0x00);
 	word16 er5_16_16_n = SLICE((char *) er5_n + 4, word16, 16);
-	er5_16_16_n = SLICE((char *) er5_n + 4, word16, 16);
 	word32 er4_n = SEQ(er4_16_n, 0x00);
 	do
 	{
@@ -2252,7 +2248,7 @@ word16 * fn9DC0(word16 er0_16_n, Eq_n r6, union Eq_n & er2Out, union Eq_n & r6Ou
 		word16 * er0_n = fn9BA6(SEQ(er0_16_n, 0x3CCC), 0x700C, (word16) (er2_n + 0x01), r6, wLoc04, out r6);
 		er2_16_n = SLICE(er2_n + 0x01, word16, 16);
 		er0_16_n = SLICE(er0_n, word16, 16);
-		Eq_n er2_n = SEQ(SLICE(er2_n + 0x01, word16, 16), SLICE(r2_n, byte, 8), bLoc01);
+		Eq_n er2_n = SEQ(er2_16_n, SLICE(r2_n, byte, 8), bLoc01);
 	} while (bLoc01 != 0x00);
 	er2Out = er2_n;
 	r6Out = r6;
