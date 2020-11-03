@@ -47,10 +47,10 @@ namespace Reko.Analysis
         private readonly IServiceProvider services;
 		private readonly DecompilerEventListener eventListener;
         private readonly IDynamicLinker dynamicLinker;
-		private readonly ProgramDataFlow flow;
+        private readonly Dictionary<string, int> phaseNumbering;
+        private readonly ProgramDataFlow flow;
         private List<SsaTransform>? ssts;
         private HashSet<Procedure>? sccProcs;
-        private Dictionary<string, int> phaseNumbering;
 
         public DataFlowAnalysis(
             Program program,
@@ -185,6 +185,7 @@ namespace Reko.Analysis
 
             // Convert all procedures in the SCC to SSA form and perform
             // value propagation.
+            DumpWatchedProcedure("scc", "Before SSA", procs);
             var ssts = procs.Select(ConvertToSsa).ToArray();
             this.ssts!.AddRange(ssts);
             DumpWatchedProcedure("esv", "After extra stack vars", ssts);
@@ -218,6 +219,8 @@ namespace Reko.Analysis
                 var prj = new ProjectionPropagator(ssa, sac);
                 prj.Transform();
                 DumpWatchedProcedure("prpr", "After projection propagation", ssa.Procedure);
+                //var stfu = new StoreFuser(ssa);
+                //DumpWatchedProcedure("stfu", "After store fusion", ssa.Procedure);
             }
 
             var uid = new UsedRegisterFinder(flow, procs, this.eventListener);
@@ -522,6 +525,15 @@ namespace Reko.Analysis
             if (testSvc != null)
             {
                 testSvc.RemoveFiles("analysis_");
+            }
+        }
+
+        [Conditional("DEBUG")]
+        public void DumpWatchedProcedure(string phase, string caption, IEnumerable<Procedure> procs)
+        {
+            foreach(var proc in procs)
+            {
+                DumpWatchedProcedure(phase, caption, proc);
             }
         }
 

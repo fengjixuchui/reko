@@ -21,6 +21,7 @@
 using Reko.Core;
 using Reko.Core.Expressions;
 using Reko.Core.Machine;
+using Reko.Core.Memory;
 using Reko.Core.Operators;
 using Reko.Core.Rtl;
 using Reko.Core.Serialization;
@@ -521,8 +522,8 @@ namespace Reko.Arch.Z80
                     {
                         int s = memOp.Offset.ToInt32();
                         return m.Mem(memOp.Width, m.AddSubSignedInt(bReg, s));
-                    }
-                }
+                        }
+                        }
             default:
                 throw new NotImplementedException(string.Format("Rewriting of Z80 operand type {0} is not implemented yet.", op.GetType().FullName));
             }

@@ -45,6 +45,9 @@ namespace Reko.Analysis
             this.dynamicLinker = dynamicLinker;
         }
 
+        public EndianServices Endianness => arch.Endianness;
+
+
         public Statement? Statement { get; set; }
 
         public Expression? GetValue(Identifier id)
@@ -144,6 +147,12 @@ namespace Reko.Analysis
         public Expression MakeSegmentedAddress(Constant seg, Constant off)
         {
             return arch.MakeSegmentedAddress(seg, off);
+        }
+
+
+        public Constant ReinterpretAsFloat(Constant rawBits)
+        {
+            return arch.ReinterpretAsFloat(rawBits);
         }
 
         public void RemoveIdentifierUse(Identifier id)

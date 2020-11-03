@@ -18,6 +18,8 @@
  */
 #endregion
 
+#pragma warning disable IDE1006
+
 using Reko.Core.Machine;
 using System;
 using System.Collections.Generic;
@@ -29,6 +31,7 @@ using Reko.Core.Expressions;
 using Reko.Core.Lib;
 using Reko.Core.Types;
 using Reko.Core.Services;
+using Reko.Core.Memory;
 
 namespace Reko.Arch.RiscV
 {
@@ -40,6 +43,9 @@ namespace Reko.Arch.RiscV
         private static readonly Decoder[] decoders;
         private static readonly int[] compressedRegs;
         private static readonly Decoder invalid;
+        private static readonly Bitfield bf_r1 = new Bitfield(15, 5);
+        private static readonly Bitfield bf_r2 = new Bitfield(20, 5);
+        private static readonly Bitfield bf20_12 = new Bitfield(20, 12);
 
         private readonly RiscVArchitecture arch;
         private readonly EndianImageReader rdr;
@@ -141,9 +147,25 @@ namespace Reko.Arch.RiscV
         private static readonly Mutator<RiscVDisassembler> F3 = Ff(27);
         private static readonly Mutator<RiscVDisassembler> Fd = Ff(7);
 
-        private static bool J (uint u, RiscVDisassembler d)
+        private static bool Csr20(uint uInstr, RiscVDisassembler dasm)
+        {
+            var iCsr = bf20_12.Read(uInstr);
+            if (!dasm.arch.Csrs.TryGetValue(iCsr, out var csr))
+                return false;       //$REVIEW: should raise a warning? This could be model-specific.
+            dasm.state.ops.Add(new RegisterOperand(csr));
+            return true;
+        }
+
+        private static bool J(uint u, RiscVDisassembler d)
         {
             var offset = Bitfield.ReadSignedFields(j_bitfields, u) << 1;
+            d.state.ops.Add(AddressOperand.Create(d.addrInstr + offset));
+            return true;
+        }
+
+        private static bool Jc(uint u, RiscVDisassembler d)
+        {
+            var offset = Bitfield.ReadSignedFields(c_j_bitfields, u) << 1;
             d.state.ops.Add(AddressOperand.Create(d.addrInstr + offset));
             return true;
         }
@@ -261,7 +283,7 @@ namespace Reko.Arch.RiscV
             return ImmediateOperand.Int32(offset);
         }
 
-        public override RiscVInstruction NotYetImplemented(uint wInstr, string message)
+        public override RiscVInstruction NotYetImplemented(string message)
         {
             var testGenSvc = arch.Services.GetService<ITestGenerationService>();
             testGenSvc?.ReportMissingDecoder("RiscV_dasm", this.addrInstr, this.rdr, message);
@@ -287,7 +309,7 @@ namespace Reko.Arch.RiscV
 
             public override RiscVInstruction Decode(uint hInstr, RiscVDisassembler dasm)
             {
-                return dasm.NotYetImplemented(hInstr, message);
+                return dasm.NotYetImplemented(message);
             }
         }
 
@@ -409,6 +431,23 @@ namespace Reko.Arch.RiscV
             return (u, d) =>
             {
                 var iReg = (int) regMask.Read(u);
+                var reg = new RegisterOperand(d.arch.GetRegister(iReg));
+                d.state.ops.Add(reg);
+                return true;
+            };
+        }
+
+        /// <summary>
+        /// Integer register encoded at <paramref name="bitPos"/>, but 0 is invalid.
+        /// </summary>
+        private static Mutator<RiscVDisassembler> R_nz(int bitPos)
+        {
+            var regMask = new Bitfield(bitPos, 5);
+            return (u, d) =>
+            {
+                var iReg = (int) regMask.Read(u);
+                if (iReg == 0)
+                    return false;
                 var reg = new RegisterOperand(d.arch.GetRegister(iReg));
                 d.state.ops.Add(reg);
                 return true;
@@ -556,6 +595,17 @@ namespace Reko.Arch.RiscV
             };
         }
 
+        private static Mutator<RiscVDisassembler> ImmS(Bitfield[] masks)
+        {
+            return (u, d) =>
+            {
+                var sImm = Bitfield.ReadSignedFields(masks, u);
+                d.state.ops.Add(new ImmediateOperand(
+                    Constant.Create(d.arch.WordWidth, sImm)));
+                return true;
+            };
+        }
+
         // Signed immediate with a shift
         private static Mutator<RiscVDisassembler> ImmShS(int sh, params (int pos, int len)[] fields)
         {
@@ -631,7 +681,7 @@ namespace Reko.Arch.RiscV
             };
         }
 
-        // Memory operand format used for compressed instructions
+        // Memory operand format used for compressed instructions. Offset is unsigned.
         private static Mutator<RiscVDisassembler> Memc(PrimitiveType dt, int regOffset, params (int pos, int len)[] fields)
         {
             var baseRegMask = new Bitfield(regOffset, 3);
@@ -659,7 +709,20 @@ namespace Reko.Arch.RiscV
             new Bitfield(21, 10)
         };
 
+        private static readonly Bitfield[] c_j_bitfields =
+            Bf((12, 1), (8, 1), (9, 2), (6, 1), (7, 1), (2,1), (11,1), (3,3));
+            //Bf((11, 1), (4, 1), (8, 2), (10, 1), (6, 1), (7, 1), (1, 3), (5, 1));
+
+        private static bool Eq0(uint u) => u == 0;
+
         private static bool Ne0(uint u) => u != 0;
+
+        private static bool R1EqR2(uint u)
+        {
+            var ireg1 = bf_r1.Read(u);
+            var ireg2 = bf_r2.Read(u);
+            return ireg1 == ireg2;
+        }
 
         #endregion
 
@@ -815,17 +878,35 @@ namespace Reko.Arch.RiscV
                 ( 0x0F, Instr(Mnemonic.fdiv_q, Fd,F1,F2) ),
 
                 ( 0x10, Sparse(12, 3, "fsgn.s", invalid,
-                    (0x0, Instr(Mnemonic.fsgnj_s, Fd,F1, F2)),
-                    (0x1, Instr(Mnemonic.fsgnjn_s, Fd,F1, F2)),
-                    (0x2, Instr(Mnemonic.fsgnjx_s, Fd,F1, F2)))),
+                    (0x0, Select(R1EqR2,
+                        Instr(Mnemonic.fmv_s, Fd,F1, F2),
+                        Instr(Mnemonic.fsgnj_s, Fd,F1, F2))),
+                    (0x1, Select(R1EqR2,
+                        Instr(Mnemonic.fneg_s, Fd,F1, F2),
+                        Instr(Mnemonic.fsgnjn_s, Fd,F1, F2))),
+                    (0x2, Select(R1EqR2,
+                        Instr(Mnemonic.fabs_s, Fd,F1, F2),
+                        Instr(Mnemonic.fsgnjx_s, Fd,F1, F2))))),
                 ( 0x11, Sparse(12, 3, "fsgn.d", invalid,
-                    (0x0, Instr(Mnemonic.fsgnj_d, Fd,F1, F2)),
-                    (0x1, Instr(Mnemonic.fsgnjn_d, Fd,F1, F2)),
-                    (0x2, Instr(Mnemonic.fsgnjx_d, Fd,F1, F2)))),
+                    (0x0, Select(R1EqR2,
+                        Instr(Mnemonic.fmv_d, Fd,F1, F2),
+                        Instr(Mnemonic.fsgnj_d, Fd,F1, F2))),
+                    (0x1, Select(R1EqR2,
+                        Instr(Mnemonic.fneg_d, Fd,F1, F2),
+                        Instr(Mnemonic.fsgnjn_d, Fd,F1, F2))),
+                    (0x2, Select(R1EqR2,
+                        Instr(Mnemonic.fabs_d, Fd,F1, F2),
+                        Instr(Mnemonic.fsgnjx_d, Fd,F1, F2))))),
                 ( 0x13, Sparse(12, 3, "fsgn.q", invalid,
-                    (0x0, Instr(Mnemonic.fsgnj_q, Fd,F1, F2)),
-                    (0x1, Instr(Mnemonic.fsgnjn_q, Fd,F1, F2)),
-                    (0x2, Instr(Mnemonic.fsgnjx_q, Fd,F1, F2)))),
+                    (0x0, Select(R1EqR2,
+                        Instr(Mnemonic.fmv_q, Fd,F1, F2),
+                        Instr(Mnemonic.fsgnj_q, Fd,F1, F2))),
+                    (0x1, Select(R1EqR2,
+                        Instr(Mnemonic.fneg_q, Fd,F1, F2),
+                        Instr(Mnemonic.fsgnjn_q, Fd,F1, F2))),
+                    (0x2, Select(R1EqR2,
+                        Instr(Mnemonic.fabs_q, Fd,F1, F2),
+                        Instr(Mnemonic.fsgnjx_q, Fd,F1, F2))))),
 
                 ( 0x14, Sparse(12, 3, "fmin/fmax.s", invalid,
                     (0x0, Instr(Mnemonic.fmin_s, Fd,F1, F2)),
@@ -881,20 +962,20 @@ namespace Reko.Arch.RiscV
                     ( 3, Instr(Mnemonic.fcvt_lu_q, Rd,F1)))),
 
                 ( 0x68, Sparse(20, 5, "fcvt.to.s", invalid,
-                    ( 0, Instr(Mnemonic.fcvt_s_w, Rd,F1)),
-                    ( 1, Instr(Mnemonic.fcvt_s_wu, Rd,F1)),
-                    ( 2, Instr(Mnemonic.fcvt_s_l, Rd,F1)),
-                    ( 3, Instr(Mnemonic.fcvt_s_lu, Rd, F1)))),
+                    ( 0, Instr(Mnemonic.fcvt_s_w, Fd,R1)),
+                    ( 1, Instr(Mnemonic.fcvt_s_wu, Fd,R1)),
+                    ( 2, Instr(Mnemonic.fcvt_s_l, Fd,R1)),
+                    ( 3, Instr(Mnemonic.fcvt_s_lu, Fd,R1)))),
                 ( 0x69, Sparse(20, 5, "fcvt.to.d", invalid,
-                    ( 0, Instr(Mnemonic.fcvt_d_w, Rd,F1)),
-                    ( 1, Instr(Mnemonic.fcvt_d_wu, Rd,F1)),
-                    ( 2, Instr(Mnemonic.fcvt_d_l, Rd,F1)),
-                    ( 3, Instr(Mnemonic.fcvt_d_lu, Rd,F1)))),
+                    ( 0, Instr(Mnemonic.fcvt_d_w, Fd,R1)),
+                    ( 1, Instr(Mnemonic.fcvt_d_wu, Fd,R1)),
+                    ( 2, Instr(Mnemonic.fcvt_d_l, Fd,R1)),
+                    ( 3, Instr(Mnemonic.fcvt_d_lu, Fd,R1)))),
                 ( 0x6B, Sparse(20, 5, "fcvt.to.q", invalid,
-                    ( 0, Instr(Mnemonic.fcvt_q_w, Rd,F1)),
-                    ( 1, Instr(Mnemonic.fcvt_q_wu, Rd,F1)),
-                    ( 2, Instr(Mnemonic.fcvt_q_l, Rd,F1)),
-                    ( 3, Instr(Mnemonic.fcvt_q_lu, Rd,F1)))),
+                    ( 0, Instr(Mnemonic.fcvt_q_w, Fd,R1)),
+                    ( 1, Instr(Mnemonic.fcvt_q_wu, Fd,R1)),
+                    ( 2, Instr(Mnemonic.fcvt_q_l, Fd,R1)),
+                    ( 3, Instr(Mnemonic.fcvt_q_lu, Fd,R1)))),
 
                 ( 0x70, Instr(Mnemonic.fmv_x_w, Rd,F1) ),
                 ( 0x71, Instr(Mnemonic.fmv_d_x, Fd,r1) ),
@@ -918,10 +999,23 @@ namespace Reko.Arch.RiscV
                 Instr(Mnemonic.bgeu, InstrClass.ConditionalTransfer, r1,r2,B),
             };
 
-            var system = Sparse(20, 12, "system",   // 0b11100
-                Nyi("system"),
-                (0, Instr(Mnemonic.ecall)),
-                (1, Instr(Mnemonic.ebreak)));
+            var system = Mask(12, 3, "  system",
+                Sparse(20, 12, "system",   // 0b11100
+                    Nyi("system 000"),
+                    (0, Instr(Mnemonic.ecall, InstrClass.Transfer | InstrClass.Call)),
+                    (1, Instr(Mnemonic.ebreak, InstrClass.Terminates)),
+                    (0b0000000_00010, Instr(Mnemonic.uret, InstrClass.Transfer)),
+                    (0b0001000_00010, Instr(Mnemonic.sret, InstrClass.Transfer)),
+                    (0b0011000_00010, Instr(Mnemonic.mret, InstrClass.Transfer)),
+                    (0b0001000_00101, Instr(Mnemonic.wfi, InstrClass.Linear))),
+
+                Instr(Mnemonic.csrrw, d, Csr20, r2),
+                Instr(Mnemonic.csrrs, d, Csr20, r2),
+                Instr(Mnemonic.csrrc, d, Csr20, r2),
+                invalid,
+                Instr(Mnemonic.csrrwi, d, Csr20, Imm(15, 5)),
+                Instr(Mnemonic.csrrsi, d, Csr20, Imm(15, 5)),
+                Instr(Mnemonic.csrrci, d, Csr20, Imm(15, 5))); ;
 
 
             var w32decoders = Mask(2, 5, "w32decoders", 
@@ -996,7 +1090,7 @@ namespace Reko.Arch.RiscV
 
             var compressed0 = new Decoder[8]
             {
-                Select((0, 16), u => u != 0, "zero",
+                Select((0, 16), Ne0, "zero",
                     Instr(Mnemonic.c_addi4spn, Rc(2), Imm((7,4), (11,2), (5, 1),(6, 1), (0,2))),
                     Instr(Mnemonic.invalid, InstrClass.Invalid|InstrClass.Zero)),
                 WordSize(
@@ -1009,24 +1103,30 @@ namespace Reko.Arch.RiscV
                     rv64: Instr(Mnemonic.c_ld, Rc(7), Memc(PrimitiveType.Word64, 2, (5,2), (10, 3))),
                     rv128: Instr(Mnemonic.c_ld, Rc(7), Memc(PrimitiveType.Word64, 2, (5,2), (10, 3)))),
 
-                Nyi("reserved"),
+                invalid, // Nyi("reserved"),
                 WordSize(
                     rv32: Instr(Mnemonic.c_fsd, Fc(7), Memc(PrimitiveType.Real64, 2, (5,2), (10, 3))),
                     rv64: Instr(Mnemonic.c_fsd, Fc(7), Memc(PrimitiveType.Real64, 2, (5,2), (10, 3))),
                     rv128: Nyi("sq")),
                 Instr(Mnemonic.c_sw, Rc(7), Memc(PrimitiveType.Word32, 2, (5,1), (10,3), (6,1))),
                 WordSize(
-                    rv32: Nyi("fsw"),
+                    rv32: Instr(Mnemonic.c_fsw, Rc(7), Memc(PrimitiveType.Word32, 2, (5,1), (10,3), (6,1))),
                     rv64: Instr(Mnemonic.c_sd, Rc(7), Memc(PrimitiveType.Real64, 2, (5,2), (10, 3))),
                     rv128: Instr(Mnemonic.c_sd, Rc(7), Memc(PrimitiveType.Real64, 2, (5,2), (10, 3)))),
             };
 
+            var bf_12_1_2_5 = Bf((12, 1), (2, 5));
+
             var compressed1 = new Decoder[8]
             {
-                Instr(Mnemonic.c_addi, R(7), ImmS((12, 1), (2, 5))),
+                Select((7,5), Eq0, "c.addi",
+                    Select(u => u == 0x0001, 
+                        Instr(Mnemonic.c_nop, InstrClass.Linear|InstrClass.Padding),
+                        invalid),
+                    Instr(Mnemonic.c_addi, R(7), ImmS(bf_12_1_2_5))),
                 WordSize(
-                    rv32: Nyi("c.jal"),
-                    rv64: Instr(Mnemonic.c_addiw, R(7), ImmS((12, 1), (2, 5))),
+                    rv32: Instr(Mnemonic.c_jal, InstrClass.Transfer|InstrClass.Call, Jc),
+                    rv64: Instr(Mnemonic.c_addiw, R_nz(7), ImmS((12, 1), (2, 5))),
                     rv128: Instr(Mnemonic.c_addiw, R(7), ImmS((12, 1), (2, 5)))),
                 Instr(Mnemonic.c_li, R(7), ImmS((12,1), (2, 5))),
                 Select((7, 5), u => u == 2,
@@ -1053,19 +1153,18 @@ namespace Reko.Arch.RiscV
                             invalid,
                             invalid))),
 
-// imm[11|4|9:8|10|6|7|3:1|5]
-     //11 10  9  8 7 6   3 2
-                Instr(Mnemonic.c_j, InstrClass.Transfer, PcRel(1, (11,1), (8,1), (9,2), (6,1), (7,1), (2,1), (10,1), (3,2))),
+                Instr(Mnemonic.c_j, InstrClass.Transfer, Jc),
                 Instr(Mnemonic.c_beqz, InstrClass.ConditionalTransfer, Rc(7), PcRel(1, (12,1), (5,2), (2,1), (10,2), (3, 2))),
                 Instr(Mnemonic.c_bnez, InstrClass.ConditionalTransfer, Rc(7), PcRel(1, (12,1), (5,2), (2,1), (10,2), (3, 2))),
             };
 
             var compressed2 = new Decoder[8]
             {
-                Instr(Mnemonic.c_slli, R(7), ImmB((12, 1), (2, 5))),
+                Instr(Mnemonic.c_slli, R_nz(7), ImmB((12, 1), (2, 5))),
                 WordSize(
                     rv32: Instr(Mnemonic.c_fldsp, F(2), ImmSh(3, (12,1),(7,3),(10,3))),
-                    rv64: Instr(Mnemonic.c_fldsp, F(2), ImmSh(3, (12,1),(7,3),(10,3)))),
+                    rv64: Instr(Mnemonic.c_fldsp, F(2), ImmSh(3, (12,1),(7,3),(10,3))),
+                    rv128: Instr(Mnemonic.c_lqsp, R_nz(7), ImmSh(4, (2, 4),(12, 1),(6,1)))),
                 Instr(Mnemonic.c_lwsp, R(2), ImmSh(2, (12,1),(7,3),(10,3))),
                 Instr(Mnemonic.c_ldsp, R(2), ImmSh(3, (12,1),(7,3),(10,3))),
 
@@ -1073,9 +1172,9 @@ namespace Reko.Arch.RiscV
                     Select((2, 5), u => u == 0, "",
                         Instr(Mnemonic.c_jr, InstrClass.Transfer, R(7)),
                         Instr(Mnemonic.c_mv, R(7), R(2))),
-                    Select((2, 5), u => u == 0,
-                        Select((7, 5), u => u == 0,
-                            Nyi("c.ebreak"),
+                    Select((2, 5), Eq0,
+                        Select((7, 5), Eq0,
+                            Instr(Mnemonic.c_ebreak, InstrClass.Terminates),
                             Instr(Mnemonic.c_jalr, InstrClass.Transfer, R(7))),
                         Instr(Mnemonic.c_add, R(7), R(2)))),
                 WordSize(

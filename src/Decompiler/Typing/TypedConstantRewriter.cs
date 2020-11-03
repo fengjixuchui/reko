@@ -75,7 +75,7 @@ namespace Reko.Typing
             DataType dtInferred = c.DataType;
             if (dtInferred == null)
             {
-                eventListener.Warn(new NullCodeLocation(""),
+                eventListener.Warn(
                     $"The equivalence class {c.TypeVariable!.Name} has a null data type");
                 dtInferred = c.TypeVariable.DataType;
             }
@@ -100,7 +100,6 @@ namespace Reko.Typing
                 if (!mpSelectorToSegId.TryGetValue(addr.Selector.Value, out Identifier segId))
                 {
                     eventListener.Warn(
-                        new NullCodeLocation(""),
                         "Selector {0:X4} has no known segment.",
                         addr.Selector.Value);
                     return addr;
@@ -125,7 +124,7 @@ namespace Reko.Typing
                     addr.Offset);
 
                 var f = EnsureFieldAtOffset(baseType, dt.Pointee, c.ToInt32());
-                Expression ex = new FieldAccess(dt, new Dereference(ptrSeg, segId), f);
+                Expression ex = new FieldAccess(f.DataType, new Dereference(ptrSeg, segId), f);
                 if (dereferenced || dt.Pointee is ArrayType)
                 {
                     return ex;

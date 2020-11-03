@@ -27,6 +27,7 @@ using Reko.Core.Expressions;
 using Reko.Core.Machine;
 using Reko.Core.Rtl;
 using Reko.Core.Types;
+using Reko.Core.Memory;
 
 namespace Reko.Arch.Xtensa
 {
@@ -86,7 +87,7 @@ namespace Reko.Arch.Xtensa
         };
 
         private static RegisterStorage[] fregs = new[]
-{
+        {
             Registers.f0 ,
             Registers.f1 ,
             Registers.f2 ,

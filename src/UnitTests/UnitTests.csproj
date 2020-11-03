@@ -17,6 +17,7 @@
     <UpgradeBackupLocation>
     </UpgradeBackupLocation>
     <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <LangVersion>8.0</LangVersion>
     <PublishUrl>publish\</PublishUrl>
     <Install>true</Install>
     <InstallFrom>Disk</InstallFrom>
@@ -160,6 +161,7 @@
     <Compile Include="Analysis\SparseValuePropagationTests.cs" />
     <Compile Include="Analysis\SsaMutatorTests.cs" />
     <Compile Include="Analysis\StackPointerBackpropagatorTests.cs" />
+    <Compile Include="Analysis\StoreFuserTests.cs" />
     <Compile Include="Analysis\UnreachableBlockRemoverTests.cs" />
     <Compile Include="Arch\Alpha\AlphaDisassemblerTests.cs" />
     <Compile Include="Arch\Alpha\AlphaRewriterTests.cs" />
@@ -171,6 +173,7 @@
     <Compile Include="Arch\Avr\Avr32RewriterTests.cs" />
     <Compile Include="Arch\Blackfin\BlackfinDisassemblerTests.cs" />
     <Compile Include="Arch\Blackfin\BlackfinRewriterTests.cs" />
+    <Compile Include="Arch\CompactRisc\Cr16DisassemblerTests.cs" />
     <Compile Include="Arch\Cray\Cray1\Cray1DisassemblerTests.cs" />
     <Compile Include="Arch\Cray\Ymp\YmpDisassemblerTests.cs" />
     <Compile Include="Arch\Cray\Ymp\YmpRewriterTests.cs" />
@@ -178,11 +181,20 @@
     <Compile Include="Arch\H8\H8RewriterTests.cs" />
     <Compile Include="Arch\i8051\i8051DisassemblerTests.cs" />
     <Compile Include="Arch\i8051\i8051RewriterTests.cs" />
+    <Compile Include="Arch\IA64\IA64DisassemblerTests.cs" />
     <Compile Include="Arch\M68k\Assembler\M68kAssemblerTests.cs" />
     <Compile Include="Arch\M68k\Assembler\M68kTextAssemblerTests.cs" />
+    <Compile Include="Arch\MCore\MCoreDisassemblerTests.cs" />
+    <Compile Include="Arch\MilStd1750\MilStd1750ArchitectureTests.cs" />
+    <Compile Include="Arch\MilStd1750\MilStd1750DisassemblerTests.cs" />
+    <Compile Include="Arch\MilStd1750\MilStd1750RewriterTests.cs" />
     <Compile Include="Arch\Pdp11\Assembler\Pdp11TextAssemblerTests.cs" />
     <Compile Include="Arch\PowerPC\PowerPcDisassemblerTests.Xenon.cs" />
     <Compile Include="Arch\PowerPC\PowerPcEmulatorTests.cs" />
+    <Compile Include="Arch\Qualcomm\HexagonDisassemblerTests.cs" />
+    <Compile Include="Arch\Qualcomm\HexagonRewriterTests.cs" />
+    <Compile Include="Arch\Sparc\Sparc64DisassemblerTests.cs" />
+    <Compile Include="Arch\Sparc\Sparc64RewriterTests.cs" />
     <Compile Include="Arch\SuperH\SuperHArchitectureTests.cs" />
     <Compile Include="Arch\UnitTestGenerationService.cs" />
     <Compile Include="Arch\X86\Assembler\AssembleFragmentTests.cs" />
@@ -218,7 +230,11 @@
     <Compile Include="Arch\Sparc\SparcDisassemblerTests.cs" />
     <Compile Include="Arch\Tms7000\Tms7000DisassemblerTests.cs" />
     <Compile Include="Arch\Tms7000\Tms7000RewriterTests.cs" />
+    <Compile Include="Arch\V850\V850DisassemblerTests.cs" />
     <Compile Include="Arch\WE32100\WE32100DisassemblerTests.cs" />
+    <Compile Include="Arch\X86\NasmSyntaxTests.cs" />
+    <Compile Include="Arch\XCore\XCoreDisassemblerTests.cs" />
+    <Compile Include="Arch\XCore\XCoreRewriterTests.cs" />
     <Compile Include="Arch\zSeries\zSeriesDisassemblerTests.cs" />
     <Compile Include="Arch\zSeries\zSeriesRewriterTests.cs" />
     <Compile Include="Core\CriticalInstructionTests.cs" />
@@ -271,6 +287,7 @@
     <Compile Include="Core\Lib\BTreeDictionaryTests.cs" />
     <Compile Include="Core\Lib\Float16Tests.cs" />
     <Compile Include="Core\Lib\MBFFloatTests.cs" />
+    <Compile Include="Core\Output\GlobalObjectTracerTests.cs" />
     <Compile Include="Core\Output\SegmentFilePolicyTests.cs" />
     <Compile Include="Core\Output\SingleFilePolicyTests.cs" />
     <Compile Include="Core\Pascal\PascalLexerTests.cs" />
@@ -608,7 +625,7 @@
     <Compile Include="Core\PrimitiveTypeTests.cs" />
     <Compile Include="Core\ProcedureSignatureTests.cs" />
     <Compile Include="Core\ProcedureTests.cs" />
-    <Compile Include="Core\MemoryAreaTests.cs" />
+    <Compile Include="Core\Memory\ByteMemoryAreaTests.cs" />
     <Compile Include="Core\ProgramTests.cs" />
     <Compile Include="Core\StorageTests.cs" />
     <Compile Include="Core\RelocationDictionaryTests.cs" />
@@ -860,6 +877,10 @@
       <Project>{F6F2225D-B778-4FD2-9BA9-A8E2B58ACCCC}</Project>
       <Name>Cil</Name>
     </ProjectReference>
+    <ProjectReference Include="..\Arch\CompactRisc\CompactRisc.csproj">
+      <Project>{60C6B7F9-30BF-47DE-AF91-F6E5CA371757}</Project>
+      <Name>CompactRisc</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Arch\Cray\Cray.csproj">
       <Project>{47B16677-2BFC-4A5C-A830-E1683C574AEC}</Project>
       <Name>Cray</Name>
@@ -871,6 +892,10 @@
     <ProjectReference Include="..\Arch\i8051\i8051.csproj">
       <Project>{AB5DDEB2-87C0-42C7-8CD3-72CB2B1282FB}</Project>
       <Name>i8051</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Arch\IA64\IA64.csproj">
+      <Project>{54a54f6f-841a-4934-bfd1-65e8ad3e1d45}</Project>
+      <Name>IA64</Name>
     </ProjectReference>
     <ProjectReference Include="..\Arch\LatticeMico\LatticeMico.csproj">
       <Project>{75d6bc51-64d8-4f1c-bffd-ee2debfd83ba}</Project>
@@ -888,6 +913,10 @@
       <Project>{38A94634-B2B2-4A89-AF02-2A2898B93343}</Project>
       <Name>M68k</Name>
     </ProjectReference>
+    <ProjectReference Include="..\Arch\MCore\MCore.csproj">
+      <Project>{6a06542b-7bc0-44de-b983-039c8a0948f6}</Project>
+      <Name>MCore</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Arch\MicroBlaze\MicroBlaze.csproj">
       <Project>{9E952B82-A52F-4221-BC4A-DD9D8B9F7854}</Project>
       <Name>MicroBlaze</Name>
@@ -899,6 +928,10 @@
     <ProjectReference Include="..\Arch\Microchip\MicrochipPIC.csproj">
       <Project>{a959c1a2-a622-4600-81ad-29e08545b2f7}</Project>
       <Name>MicrochipPIC</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Arch\MilStd1750\MilStd1750.csproj">
+      <Project>{A518EC80-144C-4761-9508-4C2140518CCB}</Project>
+      <Name>MilStd1750</Name>
     </ProjectReference>
     <ProjectReference Include="..\Arch\Mips\Mips.csproj">
       <Project>{4DEC7ADA-E512-43C5-8312-CA076818C2A9}</Project>
@@ -932,6 +965,10 @@
       <Project>{B7DC39DD-6693-4F71-AE7F-007C5C62CBAA}</Project>
       <Name>PowerPC</Name>
     </ProjectReference>
+    <ProjectReference Include="..\Arch\Qualcomm\Qualcomm.csproj">
+      <Project>{4F48595F-967A-438E-9B62-00DE972E2719}</Project>
+      <Name>Qualcomm</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Arch\RiscV\RiscV.csproj">
       <Project>{E0697F4C-5F5E-4037-9F0E-7A9064A55B4D}</Project>
       <Name>RiscV</Name>
@@ -952,6 +989,10 @@
       <Project>{B15C2937-0FB8-4F3B-8B84-BEE861DC841B}</Project>
       <Name>Tlcs</Name>
     </ProjectReference>
+    <ProjectReference Include="..\Arch\V850\V850.csproj">
+      <Project>{3C9E8F29-7D4C-4754-BE9C-28D572E834C1}</Project>
+      <Name>V850</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Arch\Vax\Vax.csproj">
       <Project>{82777964-B370-431A-AC97-733C594C02B5}</Project>
       <Name>Vax</Name>
@@ -967,6 +1008,10 @@
     <ProjectReference Include="..\Arch\X86\X86.csproj">
       <Project>{0942ACB2-EBA0-4E2B-B363-205DF72A77B2}</Project>
       <Name>X86</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Arch\XCore\XCore.csproj">
+      <Project>{EA6CA709-00CF-4BE2-A34F-11C43522C789}</Project>
+      <Name>XCore</Name>
     </ProjectReference>
     <ProjectReference Include="..\Arch\Xtensa\Xtensa.csproj">
       <Project>{BC7D4AD1-795F-4AEC-823C-813E65C5557A}</Project>

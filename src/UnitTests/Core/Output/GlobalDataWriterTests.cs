@@ -17,28 +17,26 @@
  * the Free Software Foundation, 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 #endregion
-using Moq;
+
 using NUnit.Framework;
 using Reko.Core;
-using Reko.Core.Types;
+using Reko.Core.Expressions;
 using Reko.Core.Output;
-using Reko.Core.Serialization;
-using System.IO;
-using System;
-using System.Collections.Generic;
+using Reko.Core.Services;
+using Reko.Core.Types;
+using Reko.UnitTests.Mocks;
 using System.ComponentModel.Design;
+using System.IO;
 using System.Linq;
 using System.Text;
-using Reko.Core.Services;
-using Reko.UnitTests.Mocks;
-using Reko.Core.Expressions;
+using Reko.Core.Memory;
 
 namespace Reko.UnitTests.Core.Output
 {
     [TestFixture]
     public class GlobalDataWriterTests
     {
-        private MemoryArea mem;
+        private ByteMemoryArea bmem;
         private Program program;
         private ServiceContainer sc;
 
@@ -51,8 +49,8 @@ namespace Reko.UnitTests.Core.Output
 
         private ImageWriter Given_Memory(uint address)
         {
-            this.mem = new MemoryArea(Address.Ptr32(address), new byte[1024]);
-            var mem = new LeImageWriter(this.mem.Bytes);
+            this.bmem = new ByteMemoryArea(Address.Ptr32(address), new byte[1024]);
+            var mem = new LeImageWriter(this.bmem.Bytes);
             return mem;
         }
 
@@ -71,8 +69,8 @@ namespace Reko.UnitTests.Core.Output
             var arch = new Mocks.FakeArchitecture(sc);
             this.program = new Program(
                 new SegmentMap(
-                    mem.BaseAddress,
-                    new ImageSegment("code", mem, AccessMode.ReadWriteExecute)),
+                    bmem.BaseAddress,
+                    new ImageSegment("code", bmem, AccessMode.ReadWriteExecute)),
                 arch,
                 new DefaultPlatform(sc, arch));
             var globalStruct = new StructureType();
@@ -94,7 +92,7 @@ namespace Reko.UnitTests.Core.Output
                 Indentation = 0,
                 UseTabs = false,
             };
-            var gdw = new GlobalDataWriter(program, formatter, sc);
+            var gdw = new GlobalDataWriter(program, formatter, true, sc);
             gdw.Write();
             Assert.AreEqual(sExp, sw.ToString());
         }
@@ -376,5 +374,17 @@ struct test g_t1004 =
 ");
         }
 
+
+        [Test]
+        public void GdwNonAsciiChar()
+        {
+            Given_Memory(0x1000)
+                .WriteByte(0x9D);
+            Given_Globals(
+                Given_Field(0x1000, PrimitiveType.Char));
+            RunTest(@"char g_b1000 = '\x9D';
+");
+
+        }
     }
 }

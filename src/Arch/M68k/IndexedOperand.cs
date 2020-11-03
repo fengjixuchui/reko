@@ -70,7 +70,7 @@ namespace Reko.Arch.M68k
             return visitor.Visit(this);
         }
 
-        public override void Write(MachineInstructionWriter writer, MachineInstructionWriterOptions options)
+        protected override void DoRender(MachineInstructionRenderer renderer, MachineInstructionRendererOptions options)
         {
             //@base = EXT_BASE_DISPLACEMENT_PRESENT(extension) ? (EXT_BASE_DISPLACEMENT_LONG(extension) ? read_imm_32() : read_imm_16()) : 0;
             //outer = EXT_OUTER_DISPLACEMENT_PRESENT(extension) ? (EXT_OUTER_DISPLACEMENT_LONG(extension) ? read_imm_32() : read_imm_16()) : 0;
@@ -89,47 +89,53 @@ namespace Reko.Arch.M68k
             //preindex = (extension & 7) > 0 && (extension & 7) < 4;
             //postindex = (extension & 7) > 4;
 
-            writer.WriteString("(");
-            if (preindex || postindex)
-                writer.WriteString("[");
-            var sep = "";
+            renderer.WriteString("(");
+            var sep = (preindex || postindex) ? "[" : "";
             if (BaseDisplacement != null)
             {
-                writer.WriteString(FormatValue(BaseDisplacement));
+                renderer.WriteString(sep);
+                renderer.WriteString(FormatValue(BaseDisplacement));
                 sep = ",";
             }
             if (Base != null)
             {
-                writer.WriteString(sep);
-                writer.WriteString(Base.ToString());
+                renderer.WriteString(sep);
+                renderer.WriteString(Base.ToString());
                 sep = ",";
             }
             if (postindex)
             {
-                writer.WriteString("]");
-                sep = ",";
+                if (BaseDisplacement != null || Base != null)
+                {
+                    renderer.WriteString("]");
+                    sep = ",";
+                }
+                else
+                {
+                    sep = "";
+                }
             }
             if (Index != null)
             {
-                writer.WriteString(sep);
-                writer.WriteString(Index.Name);
+                renderer.WriteString(sep);
+                renderer.WriteString(Index.Name);
                 if (index_reg_width!.BitSize == 16)
-                    writer.WriteString(".w");
+                    renderer.WriteString(".w");
                 if (IndexScale > 1)
-                    writer.WriteFormat("*{0}", IndexScale);
+                    renderer.WriteFormat("*{0}", IndexScale);
                 sep = ",";
             }
             if (preindex)
             {
-                writer.WriteString("]");
+                renderer.WriteString("]");
                 sep = ",";
             }
             if (OuterDisplacement != null)
             {
-                writer.WriteString(sep);
-                writer.WriteString(MachineOperand.FormatSignedValue(OuterDisplacement));
+                renderer.WriteString(sep);
+                renderer.WriteString(MachineOperand.FormatSignedValue(OuterDisplacement));
             }
-            writer.WriteString(")");
+            renderer.WriteString(")");
         }
     }
 }

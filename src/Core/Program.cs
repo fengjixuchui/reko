@@ -32,6 +32,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Reko.Core.Lib;
 using Reko.Core.Output;
+using Reko.Core.Memory;
 
 namespace Reko.Core
 {
@@ -99,14 +100,22 @@ namespace Reko.Core
         public string Name { get; set; }
 
         /// <summary>
-        /// The processor architecture to use for decompilation.
+        /// The default processor architecture to use for decompilation.
         /// </summary>
+        /// <remarks>
+        /// Individual procedures may have different procedure architectures
+        /// than the default architecture.
+        /// </remarks>
 		public IProcessorArchitecture Architecture
         {
             get { return archDefault; }
             set { SetDefaultArchitecture(value); }
         }
 
+        /// <summary>
+        /// The <see cref="IPlatform"/> describing the operating environment
+        /// of the binary being decompiled.
+        /// </summary>
         public IPlatform Platform { get; set; }
 
         /// <summary>
@@ -286,7 +295,7 @@ namespace Reko.Core
         /// <summary>
         /// The entry points to the program.
         /// </summary>
-        public SortedList<Address, ImageSymbol> EntryPoints { get; private set; }
+        public SortedList<Address, ImageSymbol> EntryPoints { get; set; }
 
         /// <summary>
         /// Absolute path of the file from which this Program was loaded.

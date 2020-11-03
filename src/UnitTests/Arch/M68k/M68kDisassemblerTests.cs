@@ -27,6 +27,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.ComponentModel.Design;
+using Reko.Core.Memory;
 
 namespace Reko.UnitTests.Arch.M68k
 {
@@ -44,8 +45,8 @@ namespace Reko.UnitTests.Arch.M68k
         private IEnumerator<M68kInstruction> CreateDasm(byte[] bytes, uint address)
         {
             Address addr = Address.Ptr32(address);
-            MemoryArea img = new MemoryArea(addr, bytes);
-            return M68kDisassembler.Create68020(arch.Services, img.CreateBeReader(addr)).GetEnumerator();
+            ByteMemoryArea mem = new ByteMemoryArea(addr, bytes);
+            return M68kDisassembler.Create68020(arch.Services, mem.CreateBeReader(addr)).GetEnumerator();
         }
 
         public override IProcessorArchitecture Architecture
@@ -729,12 +730,6 @@ namespace Reko.UnitTests.Arch.M68k
         public void M68kdis_move_pc_relative_indexing()
         {
             RunTest("movea.l\t(0000025C,pc),a0", 0x207B, 0x0170, 0x0000, 0x025C);
-        }
-
-        [Test]
-        public void M68kdis_cinv_invalid()
-        {
-            RunTest("cinv", 0xF400);
         }
 
         [Test]

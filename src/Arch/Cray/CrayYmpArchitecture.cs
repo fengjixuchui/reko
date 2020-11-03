@@ -22,6 +22,7 @@ using Reko.Arch.Cray.Ymp;
 using Reko.Core;
 using Reko.Core.Expressions;
 using Reko.Core.Machine;
+using Reko.Core.Memory;
 using Reko.Core.Rtl;
 using Reko.Core.Types;
 using System;
@@ -47,6 +48,7 @@ namespace Reko.Arch.Cray
             this.Endianness = EndianServices.Big;
             this.FramePointerType = PrimitiveType.Ptr32;
             this.InstructionBitSize = 16;
+            this.MemoryGranularity = 64;
             this.PointerType = PrimitiveType.Ptr32;
             this.StackRegister = null; //$TODO: Ax?
             this.WordWidth = PrimitiveType.Word64;
@@ -65,6 +67,17 @@ namespace Reko.Arch.Cray
         public override IEqualityComparer<MachineInstruction> CreateInstructionComparer(Normalize norm)
         {
             throw new NotImplementedException();
+        }
+
+        public override MemoryArea CreateMemoryArea(Address addr, byte[] bytes)
+        {
+            // NOTE: assumes the bytes are provided in big-endian form.
+            var words = new ulong[bytes.Length / 8];
+            for (int i = 0; i < words.Length; ++i)
+            {
+                words[i] = ByteMemoryArea.ReadBeUInt64(bytes, i * 8);
+            }
+            return new Word64MemoryArea(addr, words);
         }
 
         public override IEnumerable<Address> CreatePointerScanner(SegmentMap map, EndianImageReader rdr, IEnumerable<Address> knownAddresses, PointerScannerFlags flags)
@@ -139,7 +152,7 @@ namespace Reko.Arch.Cray
 
         public override bool TryParseAddress(string txtAddr, out Address addr)
         {
-            throw new NotImplementedException();
+            return Address.TryParse32(txtAddr, out addr);
         }
     }
 }

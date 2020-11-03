@@ -21,6 +21,7 @@
 using Reko.Core;
 using Reko.Core.Configuration;
 using Reko.Core.Lib;
+using Reko.Core.Memory;
 using Reko.Core.Types;
 using Reko.ImageLoaders.Elf.Relocators;
 using System;
@@ -167,9 +168,9 @@ namespace Reko.ImageLoaders.Elf
             return Segments.FirstOrDefault(s => s.IsValidAddress(uAddr));
         }
 
-        public static SortedList<Address, MemoryArea> AllocateMemoryAreas(IEnumerable<Tuple<Address, uint>> segments)
+        public static SortedList<Address, ByteMemoryArea> AllocateMemoryAreas(IEnumerable<Tuple<Address, uint>> segments)
         {
-            var mems = new SortedList<Address, MemoryArea>();
+            var mems = new SortedList<Address, ByteMemoryArea>();
             Address addr = null;
             Address addrEnd = null;
             foreach (var pair in segments)
@@ -182,7 +183,7 @@ namespace Reko.ImageLoaders.Elf
                 else if (addrEnd < pair.Item1)
                 {
                     var size = (uint)(addrEnd - addr);
-                    mems.Add(addr, new MemoryArea(addr, new byte[size]));
+                    mems.Add(addr, new ByteMemoryArea(addr, new byte[size]));
                     addr = pair.Item1;
                     addrEnd = pair.Item1 + pair.Item2;
                 }
@@ -194,7 +195,7 @@ namespace Reko.ImageLoaders.Elf
             if (addr != null)
             {
                 var size = (uint)(addrEnd - addr);
-                mems.Add(addr, new MemoryArea(addr, new byte[size]));
+                mems.Add(addr, new ByteMemoryArea(addr, new byte[size]));
             }
             return mems;
         }
@@ -215,8 +216,9 @@ namespace Reko.ImageLoaders.Elf
             case ElfMachine.EM_NONE: return null; // No machine
             case ElfMachine.EM_SPARC:
             case ElfMachine.EM_SPARC32PLUS:
-            case ElfMachine.EM_SPARCV9:
                 arch = "sparc32"; break;
+            case ElfMachine.EM_SPARCV9:
+                arch = "sparc64"; break;
             case ElfMachine.EM_386: arch = "x86-protected-32"; break;
             case ElfMachine.EM_X86_64: arch = "x86-protected-64"; break;
             case ElfMachine.EM_68K: arch = "m68k"; break;
@@ -226,7 +228,6 @@ namespace Reko.ImageLoaders.Elf
             case ElfMachine.EM_AARCH64: arch = "arm-64"; break;
             case ElfMachine.EM_XTENSA: arch = "xtensa"; break;
             case ElfMachine.EM_AVR: arch = "avr8"; break;
-            case ElfMachine.EM_RISCV: arch = "risc-v"; break;
             case ElfMachine.EM_MSP430: arch = "msp430"; break;
             case ElfMachine.EM_SH:
                 arch = endianness == ELFDATA2LSB ? "superH-le" : "superH-be";
@@ -266,8 +267,11 @@ namespace Reko.ImageLoaders.Elf
             case ElfMachine.EM_AVR32a:
                 arch = "avr32";
                 break;
+            case ElfMachine.EM_HEXAGON:
+                arch = "hexagon";
+                break;
             default:
-                throw new NotSupportedException(string.Format("Processor format {0} is not supported.", machine));
+                throw new NotSupportedException($"Processor format {machine} is not supported.");
             }
             var a = cfgSvc.GetArchitecture(arch);
             a.LoadUserOptions(options);

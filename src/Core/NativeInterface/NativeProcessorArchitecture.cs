@@ -9,6 +9,7 @@ using Reko.Core.Rtl;
 using Reko.Core.Types;
 using Reko.Core.NativeInterface.Interfaces;
 using System.Runtime.InteropServices;
+using Reko.Core.Memory;
 
 namespace Reko.Core.NativeInterface
 {
@@ -74,7 +75,7 @@ namespace Reko.Core.NativeInterface
 			throw new NotImplementedException();
 		}
 
-		public override FlagGroupStorage GetFlagGroup(string name)
+        public override FlagGroupStorage GetFlagGroup(string name)
 		{
 			throw new NotImplementedException();
 		}

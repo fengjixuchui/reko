@@ -30,6 +30,7 @@ using System.Linq;
 using Reko.Core.Machine;
 using Reko.Core.Operators;
 using Reko.Core.Services;
+using Reko.Core.Memory;
 
 namespace Reko.Arch.Vax
 {
@@ -479,7 +480,7 @@ namespace Reko.Arch.Vax
         private void EmitUnitTest()
         {
             var testGenSvc = arch.Services.GetService<ITestGenerationService>();
-            testGenSvc?.ReportMissingRewriter("VaxRw", instr, rdr, "");
+            testGenSvc?.ReportMissingRewriter("VaxRw", instr, instr.Mnemonic.ToString(), rdr, "");
         }
 
         private Expression RewriteSrcOp(int iOp, PrimitiveType width)
@@ -681,7 +682,7 @@ namespace Reko.Arch.Vax
 
         private Identifier FlagGroup(FlagM flags)
         {
-            return binder.EnsureFlagGroup( arch.GetFlagGroup(Registers.psw, (uint)flags));
+            return binder.EnsureFlagGroup(arch.GetFlagGroup(Registers.psw, (uint)flags));
         }
 
         private bool AllFlags(Expression dst)

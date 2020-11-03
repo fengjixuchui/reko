@@ -18,6 +18,8 @@
  */
 #endregion
 
+#pragma warning disable IDE1006
+
 using Reko.Core.Expressions;
 using System;
 using System.Collections.Generic;
@@ -45,6 +47,8 @@ namespace Reko.Core
     /// </remarks>
     public interface EvaluationContext
     {
+        EndianServices Endianness { get; }
+
         /// <summary>
         /// Gets the symbolic value of the identifier <paramref name="id"/>.
         /// </summary>
@@ -79,5 +83,13 @@ namespace Reko.Core
 
         bool IsUsedInPhi(Identifier id);
         Expression MakeSegmentedAddress(Constant c1, Constant c2);
+
+        /// <summary>
+        /// Reinterprets a string of raw bits as a floating point number appropriate
+        /// for the current architecture.
+        /// </summary>
+        /// <param name="rawBits">Raw bits to be interpreted.</param>
+        /// <returns></returns>
+        Constant ReinterpretAsFloat(Constant rawBits);
     }
 }

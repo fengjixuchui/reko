@@ -21,6 +21,7 @@
 using Reko.Core;
 using Reko.Core.Expressions;
 using Reko.Core.Machine;
+using Reko.Core.Memory;
 using Reko.Core.Operators;
 using Reko.Core.Rtl;
 using Reko.Core.Serialization;
@@ -350,8 +351,7 @@ namespace Reko.Arch.X86
 
         public override Address? CreateSegmentedAddress(ushort seg, uint offset)
         {
-            // Segmented addresses are not supported in 32-bit protected mode.
-            return null;
+            return Address.ProtectedSegPtr(seg, offset);
         }
 
         public override Expression CreateStackAccess(IStorageBinder binder, int offset, DataType dataType)

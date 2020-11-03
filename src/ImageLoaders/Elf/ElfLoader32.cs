@@ -21,6 +21,7 @@
 using Reko.Core;
 using Reko.Core.Configuration;
 using Reko.Core.Lib;
+using Reko.Core.Memory;
 using Reko.ImageLoaders.Elf.Relocators;
 using System;
 using System.Collections.Generic;
@@ -58,7 +59,7 @@ namespace Reko.ImageLoaders.Elf
             foreach (var ph in Segments)
             {
                 if (ph.p_vaddr <= addr && addr < ph.p_vaddr + ph.p_filesz)
-                    return addr - ph.p_vaddr;
+                    return (addr - ph.p_vaddr) + ph.p_offset;
             }
             return ~0ul;
         }
@@ -122,6 +123,11 @@ namespace Reko.ImageLoaders.Elf
                     throw new NotSupportedException(string.Format("The MIPS architecture does not support ELF endianness value {0}", endianness));
                 }
                 break;
+            case ElfMachine.EM_RISCV:
+                arch = "risc-v";
+                options["WordSize"] = "32";
+                RiscVElf.SetOptions((RiscVFlags) Header.e_flags, options);
+                break;
             default:
                return base.CreateArchitecture(endianness);
             }
@@ -133,7 +139,6 @@ namespace Reko.ImageLoaders.Elf
                 a.StackRegister = a.GetRegister(stackRegName);
             }
             return a;
-
         }
 
         public override ElfObjectLinker CreateLinker()
@@ -145,22 +150,24 @@ namespace Reko.ImageLoaders.Elf
         {
             switch (machine)
             {
+            case ElfMachine.EM_68K: return new M68kRelocator(this, imageSymbols);
             case ElfMachine.EM_386: return new x86Relocator(this, imageSymbols);
             case ElfMachine.EM_ARM: return new ArmRelocator(this, imageSymbols);
+            case ElfMachine.EM_HEXAGON: return new HexagonRelocator(this, imageSymbols);
             case ElfMachine.EM_MIPS: return new MipsRelocator(this, imageSymbols);
             case ElfMachine.EM_NANOMIPS: return new NanoMipsRelocator(this, imageSymbols);
             case ElfMachine.EM_MSP430: return new Msp430Relocator(this, imageSymbols);
             case ElfMachine.EM_PPC: return new PpcRelocator(this, imageSymbols);
             case ElfMachine.EM_SPARC32PLUS:
-            case ElfMachine.EM_SPARC: return new SparcRelocator(this, imageSymbols);
+            case ElfMachine.EM_SPARC: return new Sparc32Relocator(this, imageSymbols);
             case ElfMachine.EM_XTENSA: return new XtensaRelocator(this, imageSymbols);
-            case ElfMachine.EM_68K: return new M68kRelocator(this, imageSymbols);
             case ElfMachine.EM_AVR: return new AvrRelocator(this, imageSymbols);
             case ElfMachine.EM_AVR32:
             case ElfMachine.EM_AVR32a: return new Avr32Relocator(this, imageSymbols);
             case ElfMachine.EM_SH: return new SuperHRelocator(this, imageSymbols);
             case ElfMachine.EM_BLACKFIN: return new BlackfinRelocator(this, imageSymbols);
             case ElfMachine.EM_PARISC: return new PaRiscRelocator(this, imageSymbols);
+            case ElfMachine.EM_RISCV: return new RiscVRelocator32(this, imageSymbols);
             }
             return base.CreateRelocator(machine, imageSymbols);
         }
@@ -332,6 +339,7 @@ namespace Reko.ImageLoaders.Elf
             var segMap = AllocateMemoryAreas(
                 Segments
                     .Where(p => IsLoadable(p.p_pmemsz, p.p_type))
+                    .OrderBy(p => p.p_vaddr)
                     .Select(p => Tuple.Create(
                         Address.Ptr32((uint) p.p_vaddr),
                         (uint) p.p_pmemsz)));

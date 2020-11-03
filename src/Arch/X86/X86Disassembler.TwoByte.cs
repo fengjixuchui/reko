@@ -347,7 +347,7 @@ namespace Reko.Arch.X86
                     Instr(Mnemonic.pcmpeqd, Pq,Qq),
                     dec66:VexInstr(Mnemonic.pcmpeqd, Mnemonic.vpcmpeqd, Vx,Wx)),
                 VexInstr(
-                    Instr(Mnemonic.emms, InstrClass.System),
+                Instr(Mnemonic.emms, InstrClass.System),
                     s_nyi),//$TODO: vzeroupper, vzeroall
 
 				new PrefixedDecoder(
@@ -452,10 +452,11 @@ namespace Reko.Arch.X86
 
                 new PrefixedDecoder(
                     dec: Instr(Mnemonic.bsf, Gv,Ev),
+                    dec66: Instr(Mnemonic.bsf, Gw,Ew),
                     decF3: Instr(Mnemonic.tzcnt, Gv,Ev)),
                 new PrefixedDecoder(
                     dec: Instr(Mnemonic.bsr, Gv,Ev),
-                    dec66: Instr(Mnemonic.bsr, Gv,Ev),
+                    dec66: Instr(Mnemonic.bsr, Gw,Ew),
                     decF3: Instr(Mnemonic.lzcnt, Gv,Ev)),
 				Instr(Mnemonic.movsx, Gv,Eb),
 				Instr(Mnemonic.movsx, Gv,Ew),

@@ -33,15 +33,37 @@ namespace Reko.UnitTests.Arch.RiscV
     [TestFixture]
     public class RiscVDisassemblerTests : DisassemblerTestBase<RiscVInstruction>
     {
+        private RiscVArchitecture arch;
+        private Address addrLoad;
+
         public RiscVDisassemblerTests()
         {
-            this.Architecture = new RiscVArchitecture(new ServiceContainer(), "riscV");
-            this.LoadAddress = Address.Ptr32(0x00100000);
         }
 
-        public override IProcessorArchitecture Architecture { get; }
+        [SetUp]
+        public void Setup()
+        {
+            this.arch = new RiscVArchitecture(new ServiceContainer(), "riscV");
+            arch.LoadUserOptions(new Dictionary<string, object>
+            {
+                { "WordSize", "64" },
+                { "FloatAbi", 64 }
+            });
+            this.addrLoad = Address.Ptr32(0x00100000);
+        }
 
-        public override Address LoadAddress { get; }
+        private void Given_32bit()
+        {
+            arch.LoadUserOptions(new Dictionary<string, object>
+            {
+                { "WordSize", "32" },
+                { "FloatAbi", 32 }
+            });
+        }
+
+        public override IProcessorArchitecture Architecture => arch;
+
+        public override Address LoadAddress => addrLoad;
 
         private void AssertCode(string sExp, uint uInstr)
         {
@@ -49,40 +71,52 @@ namespace Reko.UnitTests.Arch.RiscV
             Assert.AreEqual(sExp, i.ToString());
         }
 
-        private void AssertCode(string sExp, string bits)
+        private void AssertBitString(string sExp, string bits)
         {
             var i = DisassembleBits(bits);
             Assert.AreEqual(sExp, i.ToString());
         }
 
+        private void AssertCode(string sExp, string hexBytes)
+        {
+            var i = DisassembleHexBytes(hexBytes);
+            Assert.AreEqual(sExp, i.ToString());
+        }
+
+        [Test]
+        public void RiscV_dasm_beq()
+        {
+            AssertCode("beq\ta1,a5,0000000000100000", 0x00F58063u);
+        }
+
         [Test]
         public void RiscV_dasm_lui()
         {
-            AssertCode("lui\tt6,00012345", "00010010001101000101 11111 01101 11");
+            AssertBitString("lui\tt6,00012345", "00010010001101000101 11111 01101 11");
         }
 
         [Test]
         public void RiscV_dasm_sh()
         {
-            AssertCode("sh\ts5,sp,+00000182", "0001100 10101 00010 001 00010 01000 11");
+            AssertBitString("sh\ts5,sp,+00000182", "0001100 10101 00010 001 00010 01000 11");
         }
 
         [Test]
         public void RiscV_dasm_lb()
         {
-            AssertCode("lb\tgp,sp,-00000790", "100001110000 00010 000 00011 00000 11");
+            AssertBitString("lb\tgp,sp,-00000790", "100001110000 00010 000 00011 00000 11");
         }
 
         [Test]
         public void RiscV_dasm_addi()
         {
-            AssertCode("addi\tsp,sp,-000001C0", "1110010000000001000000010 00100 11");
+            AssertBitString("addi\tsp,sp,-000001C0", "1110010000000001000000010 00100 11");
         }
 
         [Test]
         public void RiscV_dasm_auipc()
         {
-            AssertCode("auipc\tgp,000FFFFD", "11111111111111111 101 00011 00101 11");
+            AssertBitString("auipc\tgp,000FFFFD", "11111111111111111 101 00011 00101 11");
         }
 
         [Test]
@@ -128,7 +162,7 @@ namespace Reko.UnitTests.Arch.RiscV
         }
 
         [Test]
-        public void RiscV_dasm_aa()
+        public void RiscV_dasm_add()
         {
             AssertCode("add\ta5,a5,a4", 0x00E787B3u);
         }
@@ -137,6 +171,62 @@ namespace Reko.UnitTests.Arch.RiscV
         public void RiscV_dasm_and()
         {
             AssertCode("and\ta5,s0,a5", 0x00F477B3u);
+        }
+
+
+        [Test]
+        public void RiscV_dasm_c_and()
+        {
+            AssertCode("c.and\ta5,a3", 0x8FF5);
+        }
+
+        [Test]
+        public void RiscV_dasm_c_ebreak()
+        {
+            AssertCode("c.ebreak", "0290");
+        }
+
+        [Test]
+        public void RiscV_dasm_c_j()
+        {
+            AssertCode("c.j\t00000000000FFFE4", 0x0000B7D5);
+        }
+
+        [Test]
+        public void RiscV_dasm_c_j_2()
+        {
+            AssertCode("c.j\t00000000000FFFE8", "E5B7");
+        }
+
+        [Test]
+        public void RiscV_dasm_c_or()
+        {
+            AssertCode("c.or\ta2,a3", 0x8E55);
+        }
+
+        [Test]
+        public void RiscV_dasm_c_nop()
+        {
+            AssertCode("c.nop", "0100");
+        }
+
+        [Test]
+        public void RiscV_dasm_c_sd()
+        {
+            AssertCode("c.sd\ts0,56(s0)", "00FC");
+        }
+
+        [Test]
+        public void RiscV_dasm_c_fsw_32()
+        {
+            Given_32bit();
+            AssertCode("c.fsw\ts1,112(s0)", "A0F8");
+        }
+
+        [Test]
+        public void RiscV_dasm_csrrc()
+        {
+            AssertCode("csrrc\tzero,mstatus,zero", "73B00230");
         }
 
         [Test]
@@ -157,11 +247,6 @@ namespace Reko.UnitTests.Arch.RiscV
             AssertCode("lbu\ta4,s2,+00000000", 0x00094703u);
         }
 
-        [Test]
-        public void RiscV_dasm_beq()
-        {
-            AssertCode("beq\ta1,a5,0000000000100000", 0x00F58063u);
-        }
 
         [Test]
         public void RiscV_dasm_flw()
@@ -234,6 +319,12 @@ namespace Reko.UnitTests.Arch.RiscV
         public void RiscV_dasm_c_lui()
         {
             AssertCode("c.lui\ta1,00001000", 0x00006585);
+        }
+
+        [Test]
+        public void RiscV_dasm_mret()
+        {
+            AssertCode("mret", "73002030");
         }
 
         [Test]
@@ -380,24 +471,6 @@ namespace Reko.UnitTests.Arch.RiscV
         }
 
         [Test]
-        public void RiscV_dasm_c_or()
-        {
-            AssertCode("c.or\ta2,a3", 0x8E55);
-        }
-
-        [Test]
-        public void RiscV_dasm_c_and()
-        {
-            AssertCode("c.and\ta5,a3", 0x8FF5);
-        }
-
-        [Test]
-        public void RiscV_dasm_c_j()
-        {
-            AssertCode("c.j\t00000000001003FC", 0x0000B7D5);
-        }
-
-        [Test]
         public void RiscV_dasm_c_sub()
         {
             AssertCode("c.sub\ta1,a0", 0x8D89);
@@ -406,7 +479,7 @@ namespace Reko.UnitTests.Arch.RiscV
         [Test]
         public void RiscV_dasm_c_j_backward()
         {
-            AssertCode("c.j\t00000000000FFF9E", 0x0000BF1D);
+            AssertCode("c.j\t00000000000FFF36", 0x0000BF1D);
         }
 
         [Test]
@@ -541,6 +614,13 @@ namespace Reko.UnitTests.Arch.RiscV
         public void RiscV_dasm_c_fsdsp()
         {
             AssertCode("c.fsdsp\tfs9,000001C8", 0xA7E6);
+        }
+
+        [Test]
+        public void RiscV_dasm_wfi()
+        {
+            //10500073
+            AssertCode("wfi", "73005010");
         }
     }
 }

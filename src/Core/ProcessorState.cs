@@ -53,6 +53,8 @@ namespace Reko.Core
         }
 #nullable enable
 
+        public EndianServices Endianness => Architecture.Endianness;
+
         /// <summary>
         /// Method to call if an error occurs within the processor state object (such as stack over/underflows).
         /// </summary>
@@ -216,6 +218,11 @@ namespace Reko.Core
         public Expression MakeSegmentedAddress(Constant seg, Constant off)
         {
             return Architecture.MakeSegmentedAddress(seg, off);
+        }
+
+        public Constant ReinterpretAsFloat(Constant rawBits)
+        {
+            return Architecture.ReinterpretAsFloat(rawBits);
         }
 
         public void RemoveIdentifierUse(Identifier id)

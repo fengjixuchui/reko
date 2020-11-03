@@ -71,6 +71,7 @@ namespace Reko.Environments.SysV
             case "ppc-le-64":
                 return new PowerPc64CallingConvention(Architecture);
             case "sparc32":
+            case "sparc64":
                 return new SparcCallingConvention(Architecture);
             case "x86-protected-32":
                 if (this.ccX86 == null)
@@ -117,6 +118,10 @@ namespace Reko.Environments.SysV
                 return new zSeriesCallingConvention(Architecture);
             case "blackfin":
                 return new BlackfinCallingConvention(Architecture);
+            case "hexagon":
+                return new HexagonCallingConvention(Architecture);
+            case "ia64":
+                return new Ia64CallingConvention(Architecture);
             default:
                 throw new NotImplementedException(string.Format("ELF calling convention for {0} not implemented yet.", Architecture.Description));
             }

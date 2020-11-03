@@ -21,6 +21,7 @@
 using Reko.Core;
 using Reko.Core.Configuration;
 using Reko.Core.Lib;
+using Reko.Core.Memory;
 using Reko.ImageLoaders.Elf.Relocators;
 using System;
 using System.Collections.Generic;
@@ -99,7 +100,14 @@ namespace Reko.ImageLoaders.Elf
                 archName = "paRisc";
                 options["WordSize"] = "64";
                 break;
-
+            case ElfMachine.EM_IA_64:
+                archName = "ia64";
+                break;
+            case ElfMachine.EM_RISCV: 
+                archName = "risc-v";
+                options["WordSize"] = "64";
+                RiscVElf.SetOptions((RiscVFlags) Header64.e_flags, options);
+                break;
             default:
                 return base.CreateArchitecture(endianness);
             }
@@ -141,6 +149,8 @@ namespace Reko.ImageLoaders.Elf
             case ElfMachine.EM_ALPHA: return new AlphaRelocator(this, symbols);
             case ElfMachine.EM_S390: return new zSeriesRelocator(this, symbols);
             case ElfMachine.EM_PARISC: return new PaRiscRelocator(this, symbols);
+            case ElfMachine.EM_SPARCV9: return new Sparc64Relocator(this, symbols);
+            case ElfMachine.EM_IA_64: return new Ia64Relocator(this, symbols);
             }
             return base.CreateRelocator(machine, symbols);
         }
@@ -267,6 +277,7 @@ namespace Reko.ImageLoaders.Elf
             var segMap = AllocateMemoryAreas(
                 Segments
                     .Where(p => IsLoadable(p.p_pmemsz, p.p_type))
+                    .OrderBy(p => p.p_vaddr)
                     .Select(p => Tuple.Create(
                         platform.MakeAddressFromLinear(p.p_vaddr, false),
                         (uint) p.p_pmemsz)));

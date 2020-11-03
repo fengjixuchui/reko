@@ -94,6 +94,11 @@ namespace Reko.UnitTests.Analysis
             this.importReferences = pb.Program.ImportReferences;
         }
 
+        private void Given_X86_32_Architecture()
+        {
+            Given_Architecture(new X86ArchitectureFlat32(sc, "x86-protected-32"));
+        }
+
         private void Given_BigEndianArchitecture()
         {
             var arch = new Mock<IProcessorArchitecture>();
@@ -2443,30 +2448,7 @@ proc1_exit:
         {
             var sExp =
             #region Expected
-@"Mem0:Mem
-    def:  def Mem0
-    uses: ax_2 = Mem0[0x2000<32>:word16]
-          bx_3 = Mem0[0x2002<32>:word16]
-ax_2: orig: ax
-    def:  ax_2 = Mem0[0x2000<32>:word16]
-bx_3: orig: bx
-    def:  bx_3 = Mem0[0x2002<32>:word16]
-    uses: bh_8 = SLICE(bx_3, byte, 8) (alias)
-          bl_9 = SLICE(bx_3, byte, 0) (alias)
-al_5: orig: al
-    def:  al_5 = bh_8
-    uses: return al_5
-bx_7: orig: bx
-    def:  bx_7 = SEQ(bh_8, bl_9) (alias)
-    uses: branch bx_7 >= 0<16> m0
-bh_8: orig: bh
-    def:  bh_8 = SLICE(bx_3, byte, 8) (alias)
-    uses: al_5 = bh_8
-          bx_7 = SEQ(bh_8, bl_9) (alias)
-bl_9: orig: bl
-    def:  bl_9 = SLICE(bx_3, byte, 0) (alias)
-    uses: bx_7 = SEQ(bh_8, bl_9) (alias)
-// proc1
+@"// proc1
 // Return size: 0
 define proc1
 proc1_entry:
@@ -2492,7 +2474,7 @@ proc1_exit:
             #endregion
 
             Given_Architecture(new X86ArchitectureFlat32(sc, "x86-real-16"));
-            RunTestOld(sExp, m =>
+            RunTest(sExp, m =>
             {
                 var al = m.Register(Registers.al);
                 var bl = m.Register(Registers.bl);
@@ -4627,8 +4609,8 @@ m1:
 SsaLocalStackSlice_exit:
 ";
             #endregion
-            Given_Architecture(new X86ArchitectureFlat32(sc, "x86-protected-32"));
-            var proc = Given_Procedure(nameof(SsaLocalStackSlice), m =>
+            Given_X86_32_Architecture();
+            var proc = Given_Procedure(nameof(Ssa_StackSlicesInDifferentBlocks), m =>
             {
                 var fp = m.Frame.FramePointer;
 
@@ -4641,6 +4623,65 @@ SsaLocalStackSlice_exit:
 
             When_RunSsaTransform();
             When_RenameFrameAccesses();
+            AssertProcedureCode(sExp);
+        }
+
+        [Test]
+        public void Ssa_SliceSequence()
+        {
+            var sExp =
+            #region Expected
+                @"Ssa_SliceSequence_entry:
+	def Mem0
+l1:
+	ebx_1 = 0<32>
+	bl_5 = SLICE(ebx_1, byte, 0) (alias)
+	ebx_24_8_8 = SLICE(ebx_1, word24, 8) (alias)
+	bh_13 = SLICE(ebx_24_8_8, byte, 0) (alias)
+	ebx_16_16_17 = SLICE(ebx_24_8_8, word16, 8) (alias)
+	branch Mem0[0x10000<32>:byte] m2Skip
+m1:
+	Mem3[0x10004<32>:word32] = 0x42<32>
+m2Skip:
+	Mem6[0x10008<32>:byte] = bl_5
+	ebx_9 = SEQ(ebx_24_8_8, bl_5) (alias)
+	Mem10[0x10020<32>:word32] = ebx_9
+	bx_14 = SEQ(bh_13, bl_5) (alias)
+	branch Mem10[0x100001<32>:byte] m4Skip
+m3:
+	Mem11[0x1000C<32>:word32] = 0x4711<32>
+m4Skip:
+	Mem15[0x10110<32>:word16] = bx_14
+	ebx_18 = SEQ(ebx_16_16_17, bx_14) (alias)
+	Mem19[0x10114<32>:word32] = ebx_18
+Ssa_SliceSequence_exit:
+";
+            #endregion
+            Given_X86_32_Architecture();
+            var proc = Given_Procedure(nameof(Ssa_SliceSequence), m =>
+            {
+                var ebx = m.Frame.EnsureRegister(Registers.ebx);
+                var bl = m.Frame.EnsureRegister(Registers.bl);
+                var bx = m.Frame.EnsureRegister(Registers.bx);
+                m.Assign(ebx, 0);
+                m.BranchIf(m.Mem8(m.Word32(0x0010000)), "m2Skip");
+                m.Label("m1");
+                m.MStore(m.Word32(0x0010004), m.Word32(0x42));
+
+                m.Label("m2Skip");
+                m.MStore(m.Word32(0x0010008), bl);
+                m.MStore(m.Word32(0x0010020), ebx);
+                m.BranchIf(m.Mem8(m.Word32(0x00100001)), "m4Skip");
+                m.Label("m3");
+                m.MStore(m.Word32(0x001000C), m.Word32(0x4711));
+
+                m.Label("m4Skip");
+                m.MStore(m.Word32(0x0010110), bx);
+                m.MStore(m.Word32(0x0010114), ebx);
+
+            });
+
+            When_RunSsaTransform();
             AssertProcedureCode(sExp);
         }
     }

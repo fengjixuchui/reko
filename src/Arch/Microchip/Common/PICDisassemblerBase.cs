@@ -22,6 +22,7 @@
 
 using Reko.Core;
 using Reko.Core.Machine;
+using Reko.Core.Memory;
 using Reko.Libraries.Microchip;
 using System;
 

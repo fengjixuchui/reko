@@ -638,8 +638,11 @@ namespace Reko.Analysis
                 this.IdState = idState;
                 this.ProcFlow = procFlow;
                 this.StackState = stack;
+                this.Endianness = ssa.Procedure.Architecture.Endianness;
                 this.cmp = cmp;
             }
+
+            public EndianServices Endianness { get; }
 
             public bool IsDirty { get; set; }
 
@@ -756,6 +759,11 @@ namespace Reko.Analysis
                 return ssa.Procedure.Architecture.MakeSegmentedAddress(c1, c2);
             }
 
+            public Constant ReinterpretAsFloat(Constant rawBits)
+            {
+                return ssa.Procedure.Architecture.ReinterpretAsFloat(rawBits);
+            }
+            
             public void RemoveExpressionUse(Expression expr)
             {
             }

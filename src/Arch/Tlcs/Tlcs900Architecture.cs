@@ -29,6 +29,7 @@ using Reko.Core.Rtl;
 using Reko.Core.Types;
 using Reko.Core.Lib;
 using Registers = Reko.Arch.Tlcs.Tlcs900.Tlcs900Registers;
+using Reko.Core.Memory;
 
 namespace Reko.Arch.Tlcs
 {
@@ -132,7 +133,7 @@ namespace Reko.Arch.Tlcs
                 return null;
             int key = (range.Extent * 4) + range.Lsb;
             if (subs.TryGetValue(key, out var subreg))
-                return subreg;
+            return subreg;
             else
                 return Registers.regs[regDomain - StorageDomain.Register];
         }

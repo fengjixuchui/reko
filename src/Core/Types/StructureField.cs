@@ -67,7 +67,9 @@ namespace Reko.Core.Types
         {
             if (offset == null)
                 return 0;
-            PrimitiveType pt = (PrimitiveType) offset.DataType;
+            PrimitiveType? pt = offset.DataType.ResolveAs<PrimitiveType>();
+            if (pt is null)
+                return null;
             if (pt.Domain == Domain.SignedInt)
                 return (int) offset.ToInt32();
             else if (pt.Domain == Domain.Real)
@@ -110,20 +112,20 @@ namespace Reko.Core.Types
             int c = innerList.Count;
             if (c >= BinarySearchLimit)
             {
-                for (i = 0; i < innerList.Count; ++i)
-                {
-                    var ff = innerList[i];
-                    if (f.Offset == ff.Offset)
-                    {
-                        if (f.DataType == ff.DataType)
-                            return ff;
-                    }
-                    if (f.Offset <= ff.Offset)
-                        break;
-                }
-                innerList.Insert(i, f);
-                return f;
-            }
+			for (i = 0; i < innerList.Count; ++i)
+			{
+				var ff = innerList[i];
+				if (f.Offset == ff.Offset)
+				{
+					if (f.DataType == ff.DataType)
+						return ff;
+				}
+				if (f.Offset <= ff.Offset)
+					break;
+			}
+			innerList.Insert(i, f);
+            return f;
+		}
             else
             {
                 i = 0;
@@ -204,13 +206,13 @@ namespace Reko.Core.Types
         {
             if (innerList.Count >= BinarySearchLimit)
             {
-                foreach (StructureField f in innerList)
-                {
-                    if (f.Offset == offset)
-                        return f;
-                }
-                return null;
+            foreach (StructureField f in innerList)
+            {
+                if (f.Offset == offset)
+                    return f;
             }
+            return null;
+        }
             else
             {
                 int iMin = 0;

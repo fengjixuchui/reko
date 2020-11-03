@@ -119,6 +119,8 @@ namespace Reko.Analysis
                 this.values = new Dictionary<Identifier, Expression>();
             }
 
+            public EndianServices Endianness => arch.Endianness;
+
             public Expression GetDefiningExpression(Identifier id)
             {
                 return values[id];
@@ -157,6 +159,11 @@ namespace Reko.Analysis
             public Expression MakeSegmentedAddress(Constant seg, Constant off)
             {
                 return arch.MakeSegmentedAddress(seg, off);
+            }
+
+            public Constant ReinterpretAsFloat(Constant rawBits)
+            {
+                return arch.ReinterpretAsFloat(rawBits);
             }
 
             public void RemoveExpressionUse(Expression expr)

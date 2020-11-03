@@ -47,17 +47,16 @@ namespace Reko.UnitTests.Evaluation
         {
             m = new ProcedureBuilder();
             this.rolc_8 = new PseudoProcedure(PseudoProcedure.RolC, PrimitiveType.Byte, 3);
+            arch = new Mock<IProcessorArchitecture>();
         }
 
         private void Given_LittleEndianArchitecture()
         {
-            arch = new Mock<IProcessorArchitecture>();
             arch.Setup(a => a.Endianness).Returns(EndianServices.Little);
         }
 
         private void Given_BigEndianArchitecture()
         {
-            arch = new Mock<IProcessorArchitecture>();
             arch.Setup(a => a.Endianness).Returns(EndianServices.Big);
         }
 
@@ -140,6 +139,9 @@ namespace Reko.UnitTests.Evaluation
         public void Exs_FloatIeeeConstant_Cmp()
         {
             Given_ExpressionSimplifier();
+            arch.Setup(a => a.ReinterpretAsFloat(It.IsAny<Constant>()))
+                .Returns(new Func<Constant,Constant>(c =>
+                    Constant.FloatFromBitpattern(c.ToInt32())));
             var expr = m.FLt(foo, Constant.Word32(0xC0B00000));
             var result = expr.Accept(simplifier);
             Assert.AreEqual("foo_1 < -5.5F", result.ToString());
@@ -528,6 +530,54 @@ namespace Reko.UnitTests.Evaluation
             Given_ExpressionSimplifier();
             var expr = m.Sar(m.Shl(foo, 24), 24);
             Assert.AreEqual("CONVERT(SLICE(foo_1, byte, 0), byte, int32)", expr.Accept(simplifier).ToString());
+        }
+
+        [Test]
+        [Ignore("This requires changes in BinaryOperator.ApplyConstants")]
+        public void Exs_Slice_Constant_Multiplication()
+        {
+            Given_ExpressionSimplifier();
+            var mul = m.UMul(m.Word32(0xAAAA_AAAA), m.Word32(0xBBBB_BBBB));
+            mul.DataType = PrimitiveType.UInt64;
+            var expr = m.Slice(PrimitiveType.Word32, mul, 32);
+            Assert.AreEqual("@@@", expr.Accept(simplifier).ToString());
+        }
+
+        // Adjacent memory accesses can be coalesced.
+        [Test]
+        public void Exs_Seq_Adjacent_LE_Memory_Accesses()
+        {
+            Given_LittleEndianArchitecture();
+            Given_ExpressionSimplifier();
+            var expr = m.Seq(
+                m.Mem(PrimitiveType.Word32, m.Word32(0x00123404)),
+                m.Mem(PrimitiveType.Word32, m.Word32(0x00123400)));
+            expr.DataType = PrimitiveType.Real64;
+            Assert.AreEqual("Mem0[0x123400<32>:real64]", expr.Accept(simplifier).ToString());
+        }
+
+        [Test]
+        public void Exs_Seq_Adjacent_BE_Memory_Accesses()
+        {
+            Given_BigEndianArchitecture();
+            Given_ExpressionSimplifier();
+            var expr = m.Seq(
+                m.Mem(PrimitiveType.Word32, m.Word32(0x00123400)),
+                m.Mem(PrimitiveType.Word32, m.Word32(0x00123404)));
+            expr.DataType = PrimitiveType.Real64;
+            Assert.AreEqual("Mem0[0x123400<32>:real64]", expr.Accept(simplifier).ToString());
+        }
+
+        [Test]
+        public void Exs_Seq_Adjacent_BE_Memory_Accesses_BaseDisplacement()
+        {
+            Given_BigEndianArchitecture();
+            Given_ExpressionSimplifier();
+            var expr = m.Seq(
+                m.Mem(PrimitiveType.Word32, foo),
+                m.Mem(PrimitiveType.Word32, m.IAddS(foo, 4)));
+            expr.DataType = PrimitiveType.Real64;
+            Assert.AreEqual("Mem0[foo_1:real64]", expr.Accept(simplifier).ToString());
         }
     }
 }

@@ -26,6 +26,7 @@ using System.Globalization;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Xml.Schema;
 
 namespace Reko.Core.Expressions
 {
@@ -242,9 +243,13 @@ namespace Reko.Core.Expressions
         // cost of a boxing operation.
         public abstract int GetHashOfValue();
 
-        private static double IntPow(double b, int e)
+        //$REVIEW: move to Reko.Core.Lib?
+        public static double IntPow(double b, int e)
 		{
 			double acc = 1.0;
+            bool negativeExp = e < 0;
+            if (negativeExp)
+                e = -e;
 			while (e != 0)
 			{
 				if ((e & 1) == 1)
@@ -258,7 +263,7 @@ namespace Reko.Core.Expressions
 					e >>= 1;
 				}
 			}
-			return acc;
+			return negativeExp ? 1.0 / acc : acc;
 		}
 
         public override bool IsZero
@@ -1197,6 +1202,11 @@ namespace Reko.Core.Expressions
 
         public override bool IsMaxUnsigned => value == ~0UL;
 
+        public override Constant Negate()
+        {
+            return new ConstantUInt64(this.DataType, ~value + 1);
+        }
+
         public override byte ToByte()
         {
             return (byte)value;
@@ -1519,6 +1529,7 @@ namespace Reko.Core.Expressions
             {
             case 16: return new ConstantReal16(pt, value);
             case 32: return new ConstantReal32(pt, (float)value);
+            case 48: return new ConstantReal64(pt, value);
             case 64: return new ConstantReal64(pt, value);
             }
             // Unsupported floating point constant sizes cannot be represented yet.

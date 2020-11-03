@@ -71,7 +71,7 @@ namespace Reko.Scanning
             this.worklist = new WorkList<SliceState>();
             this.visited = new HashSet<RtlBlock>();
             this.cmp = new ExpressionValueComparer();
-            this.simp = new ExpressionSimplifier(host.SegmentMap, new EvalCtx(), NullDecompilerEventListener.Instance);
+            this.simp = new ExpressionSimplifier(host.SegmentMap, new EvalCtx(state.Endianness), NullDecompilerEventListener.Instance);
         }
 
         /// <summary>
@@ -330,6 +330,13 @@ namespace Reko.Scanning
 
         class EvalCtx : EvaluationContext
         {
+            public EvalCtx(EndianServices e)
+            {
+                this.Endianness = e;
+            }
+
+            public EndianServices Endianness { get; }
+
             public Expression GetDefiningExpression(Identifier id)
             {
                 return id;
@@ -375,6 +382,11 @@ namespace Reko.Scanning
                 return Address.SegPtr(
                     c1.ToUInt16(),
                     c2.ToUInt16());
+            }
+
+            public Constant ReinterpretAsFloat(Constant rawBits)
+            {
+                return Constant.Invalid;
             }
 
             public void RemoveExpressionUse(Expression expr)
