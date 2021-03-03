@@ -21,7 +21,8 @@ namespace Reko.Core.NativeInterface
 
 		private const string SYM_NAME = "gCPUProvider";
 
-		public NativeProcessorArchitecture(IServiceProvider services, string archID, string libPath, ILibraryLoader ldr) : base(services, archID)
+		public NativeProcessorArchitecture(IServiceProvider services, string archID, string libPath, ILibraryLoader ldr, Dictionary<string, object> options)
+            : base(services, archID, options)
 		{
 			loader = ldr;
 			handle = ldr.LoadLibrary(libPath);
@@ -110,7 +111,12 @@ namespace Reko.Core.NativeInterface
 			throw new NotImplementedException();
 		}
 
-		public override string GrfToString(RegisterStorage flagregister, string prefix, uint grf)
+        public override FlagGroupStorage[] GetFlags()
+        {
+            throw new NotImplementedException();
+        }
+
+        public override string GrfToString(RegisterStorage flagregister, string prefix, uint grf)
 		{
 			throw new NotImplementedException();
 		}

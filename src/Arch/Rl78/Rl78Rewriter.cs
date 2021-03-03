@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -120,11 +120,11 @@ namespace Reko.Arch.Rl78
                 case Mnemonic.push: RewritePush(); break;
                 case Mnemonic.ret: RewriteRet(); break;
                 case Mnemonic.reti: RewriteRet(); break;
-                case Mnemonic.rol: RewriteRotate(PseudoProcedure.Rol); break;
-                case Mnemonic.rolc: RewriteRotateC(PseudoProcedure.RolC); break;
-                case Mnemonic.rolwc: RewriteRotateC(PseudoProcedure.RolC); break;
-                case Mnemonic.ror: RewriteRotate(PseudoProcedure.Ror); break;
-                case Mnemonic.rorc: RewriteRotate(PseudoProcedure.RorC); break;
+                case Mnemonic.rol: RewriteRotate(IntrinsicProcedure.Rol); break;
+                case Mnemonic.rolc: RewriteRotateC(IntrinsicProcedure.RolC); break;
+                case Mnemonic.rolwc: RewriteRotateC(IntrinsicProcedure.RolC); break;
+                case Mnemonic.ror: RewriteRotate(IntrinsicProcedure.Ror); break;
+                case Mnemonic.rorc: RewriteRotate(IntrinsicProcedure.RorC); break;
                 case Mnemonic.sar: RewriteShift(m.Sar); break;
                 case Mnemonic.sarw: RewriteShiftw(m.Sar); break;
                 case Mnemonic.sel: RewriteSel(); break;
@@ -164,20 +164,17 @@ namespace Reko.Arch.Rl78
 
         private Identifier C()
         {
-            var c = arch.GetFlagGroup(Registers.psw, (uint) FlagM.CF);
-            return binder.EnsureFlagGroup(c);
+            return binder.EnsureFlagGroup(Registers.C);
         }
 
         private Identifier CZ()
         {
-            var cz = arch.GetFlagGroup(Registers.psw, (uint) (FlagM.CF | FlagM.ZF));
-            return binder.EnsureFlagGroup(cz);
+            return binder.EnsureFlagGroup(Registers.CZ);
         }
 
         private Identifier Z()
         {
-            var z = arch.GetFlagGroup(Registers.psw, (uint) FlagM.ZF);
-            return binder.EnsureFlagGroup(z);
+            return binder.EnsureFlagGroup(Registers.Z);
         }
 
         private Expression RewriteSrc(MachineOperand op)
@@ -212,8 +209,9 @@ namespace Reko.Arch.Rl78
                 return m.Mem(op.Width, ea);
             case BitOperand bit:
                 var bitSrc = RewriteSrc(bit.Operand);
-                return host.PseudoProcedure(
+                return host.Intrinsic(
                     "__bit",
+                    true,
                     PrimitiveType.Bool,
                     bitSrc,
                     Constant.Byte((byte) bit.BitPosition));
@@ -261,8 +259,9 @@ namespace Reko.Arch.Rl78
                 return tmp;
             case BitOperand bit:
                 var left = RewriteSrc(bit.Operand);
-                m.SideEffect(host.PseudoProcedure(
+                m.SideEffect(host.Intrinsic(
                     "__set_bit",
+                    false,
                     VoidType.Instance,
                     left,
                     Constant.Byte((byte) bit.BitPosition),
@@ -381,7 +380,7 @@ namespace Reko.Arch.Rl78
 
         private void RewriteHalt()
         {
-            m.SideEffect(host.PseudoProcedure("__halt", VoidType.Instance));
+            m.SideEffect(host.Intrinsic("__halt", false, VoidType.Instance));
         }
 
         private void RewriteIncDec(Func<Expression, Expression, Expression> fn)
@@ -474,8 +473,9 @@ namespace Reko.Arch.Rl78
         {
             var src = RewriteSrc(instr.Operands[0]);
             var dst = RewriteDst(instr.Operands[0], src, (a, b) =>
-                host.PseudoProcedure(
+                host.Intrinsic(
                     intrinsic,
+                    true,
                     b.DataType,
                     b,
                     RewriteSrc(instr.Operands[1])));
@@ -486,8 +486,9 @@ namespace Reko.Arch.Rl78
         {
             var src = RewriteSrc(instr.Operands[0]);
             var dst = RewriteDst(instr.Operands[0], src, (a, b) =>
-                host.PseudoProcedure(
+                host.Intrinsic(
                     intrinsic,
+                    true,
                     b.DataType,
                     b,
                     C(),
@@ -498,7 +499,7 @@ namespace Reko.Arch.Rl78
         private void RewriteSel()
         {
             var bank = (RegisterBankOperand) instr.Operands[0];
-            m.SideEffect(host.PseudoProcedure("__select_register_bank", VoidType.Instance, Constant.Byte((byte) bank.Bank)));
+            m.SideEffect(host.Intrinsic("__select_register_bank", false, VoidType.Instance, Constant.Byte((byte) bank.Bank)));
         }
 
         private void RewriteSet1()

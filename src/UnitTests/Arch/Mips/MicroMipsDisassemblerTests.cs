@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -42,7 +42,7 @@ namespace Reko.UnitTests.Arch.Mips
         [SetUp]
         public void Setup()
         {
-            this.arch = new MipsBe32Architecture(new ServiceContainer(), "mips-be-micro");
+            this.arch = new MipsBe32Architecture(new ServiceContainer(), "mips-be-micro", new Dictionary<string, object>());
         }
 
         public override IProcessorArchitecture Architecture { get { return arch; } }
@@ -62,7 +62,7 @@ namespace Reko.UnitTests.Arch.Mips
 
         private void Given_Mips64Architecture()
         {
-            this.arch = new MipsBe64Architecture(new ServiceContainer(), "mips-be-micro");
+            this.arch = new MipsBe64Architecture(new ServiceContainer(), "mips-be-micro", new Dictionary<string, object>());
         }
 
         [Test]

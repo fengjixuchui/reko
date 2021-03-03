@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -41,9 +41,11 @@ namespace Reko.UnitTests.Arch.Mips
         [SetUp]
         public void Setup()
         {
-            this.arch = new MipsBe32Architecture(CreateServiceContainer(), "mips-be-32");
+            this.arch = new MipsBe32Architecture(
+                CreateServiceContainer(),
+                "mips-be-32",
+                new Dictionary<string, object> { { "decoder", "mips16e" } });
             this.addr = Address.Ptr32(0x00100000);
-            this.arch.LoadUserOptions(new Dictionary<string, object> { { "decoder", "mips16e" } });
         }
 
         public override IProcessorArchitecture Architecture => arch;

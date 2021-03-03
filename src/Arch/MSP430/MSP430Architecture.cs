@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,9 +36,9 @@ namespace Reko.Arch.Msp430
     public class Msp430Architecture : ProcessorArchitecture
     {
         public readonly static PrimitiveType Word20 = PrimitiveType.CreateWord(20);
-        private Dictionary<uint, FlagGroupStorage> flagGroups;
 
-        public Msp430Architecture(IServiceProvider services, string archName) : base(services, archName)
+        public Msp430Architecture(IServiceProvider services, string archId, Dictionary<string, object> options)
+            : base(services, archId, options)
         {
             this.InstructionBitSize = 16;
             this.StackRegister = Registers.sp;
@@ -46,7 +46,6 @@ namespace Reko.Arch.Msp430
             this.PointerType = PrimitiveType.Word16;
             this.FramePointerType = PrimitiveType.Word16;
             this.Endianness = EndianServices.Little;
-            this.flagGroups = new Dictionary<uint, FlagGroupStorage>();
         }
 
         public override IEnumerable<MachineInstruction> CreateDisassembler(EndianImageReader imageReader)
@@ -89,16 +88,10 @@ namespace Reko.Arch.Msp430
             throw new NotImplementedException();
         }
 
-
         public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)
         {
-            if (flagGroups.TryGetValue(grf, out var f))
-            {
-                return f;
-            }
             var dt = Bits.IsSingleBitSet(grf) ? PrimitiveType.Bool : PrimitiveType.Byte;
             var fl = new FlagGroupStorage(Registers.sr, grf, GrfToString(flagRegister, "", grf), dt);
-            flagGroups.Add(grf, fl);
             return fl;
         }
 
@@ -112,7 +105,7 @@ namespace Reko.Arch.Msp430
             throw new NotImplementedException();
         }
 
-        public override RegisterStorage GetRegister(string name)
+        public override RegisterStorage? GetRegister(string name)
         {
             return Registers.ByName.TryGetValue(name, out var reg)
                 ? reg
@@ -157,7 +150,7 @@ namespace Reko.Arch.Msp430
             return Address.Ptr32(uAddr);
         }
 
-        public override Address ReadCodeAddress(int size, EndianImageReader rdr, ProcessorState state)
+        public override Address ReadCodeAddress(int size, EndianImageReader rdr, ProcessorState? state)
         {
             throw new NotImplementedException();
         }
@@ -167,7 +160,7 @@ namespace Reko.Arch.Msp430
             return Registers.ByName.TryGetValue(name, out reg);
         }
 
-        public override bool TryParseAddress(string txtAddr, out Address addr)
+        public override bool TryParseAddress(string? txtAddr, out Address addr)
         {
             return Address.TryParse16(txtAddr, out addr);
         }

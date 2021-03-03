@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,7 +36,8 @@ namespace Reko.Arch.Mos6502
     {
         private readonly Dictionary<uint, FlagGroupStorage> flagGroups;
 
-        public Mos6502Architecture(IServiceProvider services, string archId) : base(services, archId)
+        public Mos6502Architecture(IServiceProvider services, string archId, Dictionary<string, object> options)
+            : base(services, archId, options)
         {
             CarryFlagMask = (uint)FlagM.CF;
             Endianness = EndianServices.Little;

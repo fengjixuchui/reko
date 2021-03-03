@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,25 +18,19 @@
  */
 #endregion
 
-using Moq;
 using NUnit.Framework;
 using Reko.Arch.LatticeMico;
 using Reko.Core;
 using Reko.Core.Memory;
 using Reko.Core.Rtl;
-using System;
 using System.Collections.Generic;
-using System.ComponentModel.Design;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Reko.UnitTests.Arch.LatticeMico
 {
     [TestFixture]
     public class LatticeMico32RewriterTests : RewriterTestBase
     {
-        private readonly LatticeMico32Architecture arch = new LatticeMico32Architecture(CreateServiceContainer(), "latticeMico32");
+        private readonly LatticeMico32Architecture arch = new LatticeMico32Architecture(CreateServiceContainer(), "latticeMico32", new Dictionary<string, object>());
         private readonly Address addrLoad = Address.Ptr32(0x00100000);
 
         public override IProcessorArchitecture Architecture => arch;

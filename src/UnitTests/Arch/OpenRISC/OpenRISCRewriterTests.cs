@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -41,7 +41,7 @@ namespace Reko.UnitTests.Arch.OpenRISC
         [SetUp]
         public void Setup()
         {
-            this.arch = new OpenRISCArchitecture(CreateServiceContainer(), "openRisc");
+            this.arch = new OpenRISCArchitecture(CreateServiceContainer(), "openRisc", new Dictionary<string, object>());
             this.addr = Address.Ptr32(0x00100000);
         }
 
@@ -275,7 +275,7 @@ namespace Reko.UnitTests.Arch.OpenRISC
             Given_HexString("4D697373");	// l.maci	r9,+00007373
             AssertCode(
                 "0|L--|00100000(4): 2 instructions",
-                "1|L--|v3 = r9 * 29555<i32>",
+                "1|L--|v3 = r9 *64 29555<i32>",
                 "2|L--|MACHI_MACLO = MACHI_MACLO + v3");
         }
 

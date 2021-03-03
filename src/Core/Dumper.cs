@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -89,7 +89,7 @@ namespace Reko.Core
                 }
                 else
                 {
-                    formatter.Write(block.Block.Name);
+                    formatter.Write(block.Block.DisplayName);
                     formatter.Write(":");
                     formatter.WriteLine();
                 }
@@ -487,6 +487,12 @@ namespace Reko.Core
             {
                 WritePrefix();
                 w.WriteHyperlink(text, href);
+            }
+
+            public override void WriteLabel(string label, object block)
+            {
+                WritePrefix();
+                w.Write(label);
             }
 
             public override void WriteKeyword(string keyword)

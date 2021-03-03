@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -231,7 +231,7 @@ namespace Reko.Typing
 			{
                 if (f.DataType is ArrayType array)
                 {
-                    ex.DataType = new MemberPointer(p, array.ElementType, platform.PointerType.Size);
+                    ex.DataType = new MemberPointer(p, array.ElementType, platform.PointerType.BitSize);
                 }
                 else
                 {

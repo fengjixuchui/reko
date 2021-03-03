@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -240,7 +240,7 @@ namespace Reko.UnitTests.Scanning
         [Test]
         public void Vse_segmented_addrs()
         {
-            program.Architecture = new Reko.Arch.X86.X86ArchitectureReal(new ServiceContainer(), "x86-real-16");
+            program.Architecture = new Reko.Arch.X86.X86ArchitectureReal(new ServiceContainer(), "x86-real-16", new Dictionary<string, object>());
             Given_UInt16Array(Address.SegPtr(0xC00, 4), new ushort[] {
                 0x1234,
                 0x0C00,

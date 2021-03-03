@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,9 +33,8 @@ namespace Reko.Arch.OpenRISC
 {
     public class OpenRISCArchitecture : ProcessorArchitecture
     {
-        private Dictionary<uint, FlagGroupStorage> flagGroups = new Dictionary<uint, FlagGroupStorage>();
-
-        public OpenRISCArchitecture(IServiceProvider services, string archId) : base(services, archId)
+        public OpenRISCArchitecture(IServiceProvider services, string archId, Dictionary<string, object> options)
+            : base(services, archId, options)
         {
             this.Endianness = EndianServices.Big;
             this.FramePointerType = PrimitiveType.Word32;
@@ -80,13 +79,9 @@ namespace Reko.Arch.OpenRISC
 
         public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)
         {
-            if (this.flagGroups.TryGetValue(grf, out var stg))
-                return stg;
-
             var dt = Bits.IsSingleBitSet(grf) ? PrimitiveType.Bool : PrimitiveType.Byte;
             var flagregister = Registers.sr;
             var fl = new FlagGroupStorage(flagregister, grf, GrfToString(flagRegister, "", grf), dt);
-            flagGroups.Add(grf, fl);
             return fl;
         }
 

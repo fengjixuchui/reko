@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -79,7 +79,7 @@ namespace Reko.UnitTests
         {
             switch (archName)
             {
-            case "m68k": return new Reko.Arch.M68k.M68kArchitecture(Services, "m68k");
+            case "m68k": return new Reko.Arch.M68k.M68kArchitecture(Services, "m68k", new Dictionary<string, object>());
             default: throw new NotImplementedException();
             }
         }

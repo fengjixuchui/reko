@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,7 +34,7 @@ namespace Reko.UnitTests.Arch.Vax
     [TestFixture]
     public class VaxRewriterTests : RewriterTestBase
     {
-        private readonly VaxArchitecture arch = new VaxArchitecture(CreateServiceContainer(), "vax");
+        private readonly VaxArchitecture arch = new VaxArchitecture(CreateServiceContainer(), "vax", new Dictionary<string, object>());
         private readonly Address baseAddr = Address.Ptr32(0x0010000);
         private VaxProcessorState state;
 
@@ -2273,13 +2273,14 @@ namespace Reko.UnitTests.Arch.Vax
         [Test]
         public void VaxRw_extzv()
         {
-            Given_Bytes(0xEF, 0x05, 0x1B, 0x52, 0x50);    // extzv #00000005,#1B,r2,r0
+            Given_Bytes(0xEF, 0x05, 0x10, 0x52, 0x50);    // extzv #00000005,#1B,r2,r0
             AssertCode(
                 "0|L--|00010000(5): 3 instructions",
-                "1|L--|r0 = CONVERT(SLICE(r2, ui27, 5), ui27, uint32)",
+                "1|L--|r0 = CONVERT(SLICE(r2, ui16, 5), ui16, uint32)",
                 "2|L--|ZN = cond(r0)",
                 "3|L--|V = false");
         }
+
 #if LATER
         [Test]
         public void VaxRw_cmpv()

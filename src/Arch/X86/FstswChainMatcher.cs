@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -64,7 +64,7 @@ namespace Reko.Arch.X86
             {
                 zappedInstructions.Add(i, Mnemonic.nop);
                 rewritten.Add(new Assignment(
-                    orw.FlagGroup(FlagM.ZF | FlagM.CF | FlagM.SF | FlagM.OF),
+                    orw.FlagGroup(Registers.SCZO),
                     orw.AluRegister(Registers.FPUF)));
                 return true;
             }
@@ -81,7 +81,7 @@ namespace Reko.Arch.X86
                     return false;
                 zappedInstructions.Add(i, Mnemonic.nop);
                 rewritten.Add(new Assignment(
-                    orw.FlagGroup(FlagM.ZF | FlagM.CF | FlagM.SF | FlagM.OF),
+                    orw.FlagGroup(Registers.SCZO),
                     orw.AluRegister(Registers.FPUF)));
 
                 i = FindConditionalJumpInstruction(++i);

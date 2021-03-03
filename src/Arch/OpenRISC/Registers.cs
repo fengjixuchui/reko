@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,6 +39,7 @@ namespace Reko.Arch.OpenRISC
         public static readonly FlagGroupStorage F;
         public static readonly FlagGroupStorage C;
         public static readonly FlagGroupStorage V;
+        public static readonly FlagGroupStorage CV;
 
         static Registers()
         {
@@ -84,6 +85,8 @@ namespace Reko.Arch.OpenRISC
             F = new FlagGroupStorage(sr, (uint)FlagM.F, "F", PrimitiveType.Bool);
             C = new FlagGroupStorage(sr, (uint)FlagM.CY, "C", PrimitiveType.Bool);
             V = new FlagGroupStorage(sr, (uint)FlagM.OV, "V", PrimitiveType.Bool);
+            CV = new FlagGroupStorage(sr, (uint) (FlagM.CY | FlagM.OV), "CV", PrimitiveType.Byte);
+
         }
     }
 

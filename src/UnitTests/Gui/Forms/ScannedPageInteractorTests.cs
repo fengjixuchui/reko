@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,6 +27,7 @@ using Reko.Core.Services;
 using Reko.Gui;
 using Reko.Gui.Forms;
 using Reko.UnitTests.Mocks;
+using System.Collections.Generic;
 using System.ComponentModel.Design;
 
 namespace Reko.UnitTests.Gui.Forms
@@ -52,10 +53,12 @@ namespace Reko.UnitTests.Gui.Forms
 
             form = new Mock<IMainForm>();
 
+            var arch = new X86ArchitectureReal(sc, "x86-real-16", new Dictionary<string, object>());
             var platform = new Mock<IPlatform>();
             platform.Setup(p => p.CreateMetadata()).Returns(new TypeLibrary());
+            platform.Setup(p => p.Architecture).Returns(arch);
             program = new Program();
-            program.Architecture = new X86ArchitectureReal(sc, "x86-real-16");
+            program.Architecture = arch;
             program.Platform = platform.Object;
             var mem = new ByteMemoryArea(Address.SegPtr(0xC00, 0), new byte[10000]);
             program.SegmentMap = new SegmentMap(

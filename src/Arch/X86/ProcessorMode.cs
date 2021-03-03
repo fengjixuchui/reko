@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,6 +32,8 @@ using System.Linq;
 
 namespace Reko.Arch.X86
 {
+    using Decoder = X86Disassembler.Decoder;
+
     public abstract class ProcessorMode
     {
         public static readonly ProcessorMode Real = new RealMode();
@@ -71,13 +73,15 @@ namespace Reko.Arch.X86
             get { return Registers.sp; }
         }
 
-        public abstract X86Disassembler CreateDisassembler(IServiceProvider services, EndianImageReader rdr, X86Options options);
+        public abstract X86Disassembler CreateDisassembler(IServiceProvider services, X86Disassembler.Decoder[] rootDecoders, EndianImageReader rdr, Dictionary<string, object> options);
 
         public abstract IProcessorEmulator CreateEmulator(IntelArchitecture arch, SegmentMap segmentMap, IPlatformEmulator envEmulator);
 
         public abstract IEnumerable<Address> CreateInstructionScanner(SegmentMap map, EndianImageReader rdr, IEnumerable<Address> knownAddresses, PointerScannerFlags flags);
 
         public abstract OperandRewriter CreateOperandRewriter(IntelArchitecture arch, ExpressionEmitter m, IStorageBinder binder, IRewriterHost host);
+
+        public abstract X86Disassembler.Decoder[] CreateRootDecoders(Dictionary<string, object> options);
 
         public abstract Address? CreateSegmentedAddress(ushort seg, uint offset);
 
@@ -104,7 +108,7 @@ namespace Reko.Arch.X86
                 return null;
         }
 
-        public virtual List<RtlInstruction>? InlineCall(IServiceProvider services, Address addrCallee, Address addrContinuation, EndianImageReader rdr, IStorageBinder binder)
+        public virtual List<RtlInstruction>? InlineCall(IServiceProvider services, X86Disassembler dasm, Address addrCallee, Address addrContinuation, IStorageBinder binder)
         {
             return null;
         }
@@ -166,18 +170,24 @@ namespace Reko.Arch.X86
         {
         }
 
+        public override X86Disassembler.Decoder[] CreateRootDecoders(Dictionary<string, object> options)
+        {
+            var isa = X86Disassembler.InstructionSet.Create(false, false, options);
+            return isa.CreateRootDecoders();
+        }
+
         public override IEnumerable<Address> CreateInstructionScanner(SegmentMap map, EndianImageReader rdr, IEnumerable<Address> knownAddresses, PointerScannerFlags flags)
         {
             var knownLinAddresses = knownAddresses.Select(a => a.ToUInt32()).ToHashSet();
             return new X86RealModePointerScanner(rdr, knownLinAddresses, flags).Select(li => map.MapLinearAddressToAddress(li));
         }
 
-        public override X86Disassembler CreateDisassembler(IServiceProvider services, EndianImageReader rdr, X86Options options)
+        public override X86Disassembler CreateDisassembler(IServiceProvider services, Decoder[] rootDecoders, EndianImageReader rdr, Dictionary<string, object> options)
         {
-            var dasm = new X86Disassembler(services, this, rdr, PrimitiveType.Word16, PrimitiveType.Word16, false);
-            if (options != null)
+            var dasm = new X86Disassembler(services, rootDecoders, this, rdr, PrimitiveType.Word16, PrimitiveType.Word16, false);
+            if (options.ContainsKey("Emulate8087") && (string) options["Emulate8087"] == "true")
             {
-                dasm.Emulate8087 = options.Emulate8087;
+                dasm.Emulate8087 = true;
             }
             return dasm;
         }
@@ -199,7 +209,10 @@ namespace Reko.Arch.X86
 
         public override Address MakeAddressFromConstant(Constant c)
         {
-            throw new NotSupportedException("Must pass segment:offset to make a segmented address.");
+            var uAddr = c.ToUInt32();
+            var off = (ushort) uAddr;
+            var seg = (ushort) (uAddr >> 16);
+            return Address.SegPtr(seg, off);
         }
 
         public override bool TryReadCodeAddress(int byteSize, EndianImageReader rdr, ProcessorState? state, out Address addr)
@@ -220,9 +233,9 @@ namespace Reko.Arch.X86
         {
         }
 
-        public override X86Disassembler CreateDisassembler(IServiceProvider services, EndianImageReader rdr, X86Options options)
+        public override X86Disassembler CreateDisassembler(IServiceProvider services, Decoder[] rootDecoders, EndianImageReader rdr, Dictionary<string,object> options)
         {
-            return new X86Disassembler(services, this, rdr, PrimitiveType.Word16, PrimitiveType.Word16, false);
+            return new X86Disassembler(services, rootDecoders, this, rdr, PrimitiveType.Word16, PrimitiveType.Word16, false);
         }
 
         public override IProcessorEmulator CreateEmulator(IntelArchitecture arch, SegmentMap segmentMap, IPlatformEmulator envEmulator)
@@ -239,6 +252,12 @@ namespace Reko.Arch.X86
         public override OperandRewriter CreateOperandRewriter(IntelArchitecture arch, ExpressionEmitter m, IStorageBinder binder, IRewriterHost host)
         {
             return new OperandRewriter16(arch, m, binder, host);
+        }
+
+        public override X86Disassembler.Decoder[] CreateRootDecoders(Dictionary<string, object> options)
+        {
+            var isa = X86Disassembler.InstructionSet.Create(false, false, options);
+            return isa.CreateRootDecoders();
         }
 
         public override Address CreateSegmentedAddress(ushort seg, uint offset)
@@ -276,12 +295,11 @@ namespace Reko.Arch.X86
 
         public override List<RtlInstruction>? InlineCall(
             IServiceProvider services,
+            X86Disassembler dasm,
             Address addrCallee, 
             Address addrContinuation, 
-            EndianImageReader rdr,
             IStorageBinder binder)
         {
-            var dasm = CreateDisassembler(services, rdr, new X86Options());
             var instrs = dasm.Take(2).ToArray();
             if (instrs.Length < 2)
                 return null;
@@ -334,9 +352,9 @@ namespace Reko.Arch.X86
             return new X86PointerScanner32(rdr, knownLinaddresses, flags).Select(li => map.MapLinearAddressToAddress(li));
         }
 
-        public override X86Disassembler CreateDisassembler(IServiceProvider services, EndianImageReader rdr, X86Options options)
+        public override X86Disassembler CreateDisassembler(IServiceProvider services, Decoder[] rootDecoders, EndianImageReader rdr, Dictionary<string, object> options)
         {
-            return new X86Disassembler(services, this, rdr, PrimitiveType.Word32, PrimitiveType.Word32, false);
+            return new X86Disassembler(services, rootDecoders, this, rdr, PrimitiveType.Word32, PrimitiveType.Word32, false);
         }
 
         public override IProcessorEmulator CreateEmulator(IntelArchitecture arch, SegmentMap segmentMap, IPlatformEmulator envEmulator)
@@ -347,6 +365,12 @@ namespace Reko.Arch.X86
         public override OperandRewriter CreateOperandRewriter(IntelArchitecture arch, ExpressionEmitter m, IStorageBinder binder, IRewriterHost host)
         {
             return new OperandRewriter32(arch, m, binder, host);
+        }
+
+        public override Decoder[] CreateRootDecoders(Dictionary<string, object> options)
+        {
+            var isa = X86Disassembler.InstructionSet.Create(false, false, options);
+            return isa.CreateRootDecoders();
         }
 
         public override Address? CreateSegmentedAddress(ushort seg, uint offset)
@@ -391,7 +415,6 @@ namespace Reko.Arch.X86
             this.debugRegs = Enumerable.Range(0, 8)
                .Select(n => new RegisterStorage($"dr{n}", Registers.DebugRegisterMin, 0, PrimitiveType.Word64))
                .ToArray();
-
         }
 
         public override RegisterStorage StackRegister
@@ -409,9 +432,9 @@ namespace Reko.Arch.X86
             return Address.Ptr64(offset);
         }
 
-        public override X86Disassembler CreateDisassembler(IServiceProvider services, EndianImageReader rdr, X86Options options)
+        public override X86Disassembler CreateDisassembler(IServiceProvider services, Decoder[] rootDecoders, EndianImageReader rdr, Dictionary<string, object> options)
         {
-            return new X86Disassembler(services, this, rdr, PrimitiveType.Word32, PrimitiveType.Word64, true);
+            return new X86Disassembler(services, rootDecoders, this, rdr, PrimitiveType.Word32, PrimitiveType.Word64, true);
         }
 
         public override IProcessorEmulator CreateEmulator(IntelArchitecture arch, SegmentMap segmentMap, IPlatformEmulator envEmulator)
@@ -428,6 +451,12 @@ namespace Reko.Arch.X86
         public override OperandRewriter CreateOperandRewriter(IntelArchitecture arch, ExpressionEmitter m, IStorageBinder binder, IRewriterHost host)
         {
             return new OperandRewriter64(arch, m, binder, host);
+        }
+
+        public override Decoder[] CreateRootDecoders(Dictionary<string, object> options)
+        {
+            var isa = X86Disassembler.InstructionSet.Create(true, true, options);
+            return isa.CreateRootDecoders();
         }
 
         public override Address? CreateSegmentedAddress(ushort seg, uint offset)

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,18 +23,14 @@ using Reko.Arch.Xtensa;
 using Reko.Core;
 using Reko.Core.Memory;
 using Reko.Core.Rtl;
-using System;
 using System.Collections.Generic;
-using System.ComponentModel.Design;
-using System.Linq;
-using System.Text;
 
 namespace Reko.UnitTests.Arch.Xtensa
 {
     [TestFixture]
     public class XtensaRewriterTests : RewriterTestBase
     {
-        private readonly XtensaArchitecture arch = new XtensaArchitecture(CreateServiceContainer(), "xtensa");
+        private readonly XtensaArchitecture arch = new XtensaArchitecture(CreateServiceContainer(), "xtensa", new Dictionary<string, object>());
         private readonly Address baseAddr = Address.Ptr32(0x0010000);
 
         public override IProcessorArchitecture Architecture => arch;
@@ -215,7 +211,7 @@ namespace Reko.UnitTests.Arch.Xtensa
         {
             Given_UInt32s(0x000000);  // ill
             AssertCode(
-                "0|L--|00010000(3): 1 instructions",
+                "0|---|00010000(3): 1 instructions",
                 "1|L--|__ill()");
         }
 
@@ -1859,7 +1855,7 @@ namespace Reko.UnitTests.Arch.Xtensa
         {
             Given_HexString("305700");    // syscall
             AssertCode(
-                "0|L--|00010000(3): 1 instructions",
+                "0|T--|00010000(3): 1 instructions",
                 "1|L--|__syscall()");
         }
 

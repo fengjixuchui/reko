@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,7 +37,7 @@ namespace Reko.UnitTests.Arch.Mips
     [TestFixture]
     public class MipsRewriterTests : RewriterTestBase
     {
-        private MipsProcessorArchitecture arch = new MipsBe32Architecture(CreateServiceContainer(), "mips-be-32");
+        private MipsProcessorArchitecture arch = new MipsBe32Architecture(CreateServiceContainer(), "mips-be-32", new Dictionary<string, object>());
         private Func<EndianImageReader, IEnumerable<MachineInstruction>> mkDasm;
 
         public override IProcessorArchitecture Architecture { get { return arch; } }
@@ -47,7 +47,7 @@ namespace Reko.UnitTests.Arch.Mips
         [SetUp]
         public void Setup()
         {
-            this.arch = new MipsBe32Architecture(new ServiceContainer(), "mips-be-32");
+            this.arch = new MipsBe32Architecture(new ServiceContainer(), "mips-be-32", new Dictionary<string, object>());
             this.mkDasm = rdr => arch.CreateDisassembler(rdr);
         }
 
@@ -59,7 +59,7 @@ namespace Reko.UnitTests.Arch.Mips
 
         private void Given_Mips64_Architecture()
         {
-            arch = new MipsBe64Architecture(new ServiceContainer(), "mips-be-64");
+            arch = new MipsBe64Architecture(new ServiceContainer(), "mips-be-64", new Dictionary<string, object>());
             mkDasm = rdr => arch.CreateDisassembler(rdr);
         }
 
@@ -468,7 +468,7 @@ namespace Reko.UnitTests.Arch.Mips
             // Test only the known ones, we'll have to see how this changes things later on with dynamic custom registers
             Given_BitStrings("011111 00000 00110 00000 00000 111011");   // CPU number
             AssertCode("0|L--|00100000(4): 1 instructions",
-                       "1|L--|r6 = __read_hardware_register(0<8>)");
+                       "1|L--|r6 = __read_cpu_number()");
 
             Given_BitStrings("011111 00000 01000 00001 00000 111011");   // SYNCI step size
             AssertCode("0|L--|00100000(4): 1 instructions",
@@ -484,7 +484,7 @@ namespace Reko.UnitTests.Arch.Mips
 
             Given_BitStrings("011111 00000 00111 11101 00000 111011");   // OS-specific, thread local pointer on Linux
             AssertCode("0|L--|00100000(4): 1 instructions",
-                       "1|L--|r7 = __read_hardware_register(0x1D<8>)");
+                       "1|L--|r7 = __read_user_local()");
         }
 
         [Test]
@@ -493,7 +493,7 @@ namespace Reko.UnitTests.Arch.Mips
             Given_BitStrings("000000 00011 01001 01010 00000 001010");    // movz
             AssertCode(
                 "0|L--|00100000(4): 2 instructions",
-                "1|T--|if (r9 != 0<32>) branch 00100004", 
+                "1|T--|if (r9 != 0<32>) branch 00100004",
                 "2|L--|r10 = r3");
         }
 
@@ -588,7 +588,7 @@ namespace Reko.UnitTests.Arch.Mips
 
         [Test]
         public void MipsRw_cvt_s_d()
-        {     
+        {
             AssertCode(0x46200820, // cvt.s.d $f0,$f1
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|f0 = CONVERT(f1_f2, real64, real32)");
@@ -938,7 +938,7 @@ namespace Reko.UnitTests.Arch.Mips
         public void MipsRw_sw_4x4()
         {
             Given_NanoDecoder();
-            Given_HexString("F4C0"); 
+            Given_HexString("F4C0");
             AssertCode(
                 "0|L--|00100000(2): 1 instructions",
                 "1|L--|Mem0[r8:word32] = r6");
@@ -975,6 +975,7 @@ namespace Reko.UnitTests.Arch.Mips
         }
 
         [Test]
+
         public void MipsRw_bbeqzc()
         {
             Given_NanoDecoder();
@@ -1071,8 +1072,9 @@ namespace Reko.UnitTests.Arch.Mips
             Given_NanoDecoder();
             Given_HexString("FFFE");   // movep	r22,r23,r7,r8
             AssertCode(
-                "0|L--|00100000(2): 1 instructions",
-                "1|L--|r22_r23 = r7_r8");
+                "0|L--|00100000(2): 2 instructions",
+                "1|L--|r22 = r7",
+                "2|L--|r23 = r8");
         }
 
         [Test]
@@ -1092,18 +1094,9 @@ namespace Reko.UnitTests.Arch.Mips
             Given_HexString("3810");
             AssertCode(   // balc	080485E2
                 "0|T--|00100000(2): 1 instructions",
-                "1|T--|goto 00100012");
+                "1|T--|call 00100012 (0)");
         }
 
-        [Test]
-        public void MipsRw_bltc()
-        {
-            Given_NanoDecoder();
-            Given_HexString("A9AA806C");   // bltc	r10,r13,080485E2
-            AssertCode(
-                "0|T--|00100000(4): 1 instructions",
-                "1|T--|if (r10 < r13) branch 00100070");
-        }
 
         [Test]
         public void MipsRw_bgeiuc()
@@ -1282,7 +1275,7 @@ namespace Reko.UnitTests.Arch.Mips
         {
             AssertCode(0xBCC80000,   // cache	08,0000(r6)
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|__cache(8<8>, Mem0[r6:word32])");
+                "1|L--|__cache(8<8>, &Mem0[r6:word32])");
         }
 
         [Test]
@@ -1298,7 +1291,7 @@ namespace Reko.UnitTests.Arch.Mips
         {
             AssertCode(0x71A60000,   // madd	r13,r6
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|hi_lo = hi_lo + r13 * r6");
+                "1|L--|hi_lo = hi_lo + r13 *64 r6");
         }
 
         [Test]
@@ -1306,7 +1299,7 @@ namespace Reko.UnitTests.Arch.Mips
         {
             AssertCode(0x71670004,   // msub	r11,r7
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|hi_lo = hi_lo - r11 * r7");
+                "1|L--|hi_lo = hi_lo - r11 *64 r7");
         }
 
         [Test]
@@ -1421,7 +1414,7 @@ namespace Reko.UnitTests.Arch.Mips
         {
             AssertCode(0x4E989AF9,   // nmsub_d	f11,f20,f19,f24
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|f11 = -(f20 - f19 * f24)");
+                "1|L--|f11 = -(f20 - f19 *64 f24)");
         }
 
         [Test]

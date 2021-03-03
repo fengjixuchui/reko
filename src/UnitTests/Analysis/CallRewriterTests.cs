@@ -1,7 +1,7 @@
 
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -51,7 +51,6 @@ namespace Reko.UnitTests.Analysis
         private ProcedureFlow flow;
         ProgramBuilder pb;
         private List<SsaState> ssaStates;
-        private IServiceContainer sc;
         private FakeDecompilerEventListener eventListener;
 
         [SetUp]
@@ -59,7 +58,7 @@ namespace Reko.UnitTests.Analysis
         {
             program = new Program();
             sc = new ServiceContainer();
-            program.Architecture = new X86ArchitectureFlat32(sc, "x86-protected-32");
+            program.Architecture = new X86ArchitectureFlat32(sc, "x86-protected-32", new Dictionary<string, object>());
             program.Platform = new DefaultPlatform(sc, program.Architecture);
             crw = new CallRewriter(program.Platform, new ProgramDataFlow(), new FakeDecompilerEventListener());
             proc = new Procedure(program.Architecture, "foo", Address.Ptr32(0x00123400), program.Architecture.CreateFrame());

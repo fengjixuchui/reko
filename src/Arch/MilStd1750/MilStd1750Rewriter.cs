@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -91,6 +91,7 @@ namespace Reko.Arch.MilStd1750
                     break;
                 case Mnemonic.ab: RewriteAb(); break;
                 case Mnemonic.andm:
+                case Mnemonic.andr:
                     RewriteLogical(m.And);
                     break;
                 case Mnemonic.andx: RewriteAndx(); break;
@@ -209,6 +210,7 @@ namespace Reko.Arch.MilStd1750
                 case Mnemonic.tbr: RewriteTbr(); break;
                 case Mnemonic.urs: RewriteUrs(); break;
                 case Mnemonic.xbr: RewriteXbr(); break;
+                case Mnemonic.xorm:
                 case Mnemonic.xorr:
                     RewriteLogical(m.Xor);
                     break;
@@ -326,17 +328,17 @@ namespace Reko.Arch.MilStd1750
 
         private void RewriteBex()
         {
-            m.SideEffect(host.PseudoProcedure(PseudoProcedure.Syscall,VoidType.Instance, Op(0)));
+            m.SideEffect(host.Intrinsic(IntrinsicProcedure.Syscall, false, VoidType.Instance, Op(0)));
         }
 
         private void RewriteBif()
         {
-            m.SideEffect(host.PseudoProcedure("__bif", VoidType.Instance, Op(0)));
+            m.SideEffect(host.Intrinsic("__bif", false, VoidType.Instance, Op(0)));
         }
 
         private void RewriteBpt()
         {
-            m.SideEffect(host.PseudoProcedure("__bpt", VoidType.Instance));
+            m.SideEffect(host.Intrinsic("__bpt", false, VoidType.Instance));
         }
 
         private void RewriteBr()
@@ -397,7 +399,7 @@ namespace Reko.Arch.MilStd1750
         {
             var src = DReg(1);
             var dst = DReg(0);
-            m.Assign(dst, host.PseudoProcedure("abs", PrimitiveType.Int32, src));
+            m.Assign(dst, host.Intrinsic("abs", true, PrimitiveType.Int32, src));
             AssignFlags(PZN, m.Cond(dst));
         }
 
@@ -489,7 +491,7 @@ namespace Reko.Arch.MilStd1750
         {
             var src = Reg(1);
             var dst = DReg(0);
-            m.Assign(dst, host.PseudoProcedure("__shift_arithmetic", dst.DataType, dst, src));
+            m.Assign(dst, host.Intrinsic("__shift_arithmetic", true, dst.DataType, dst, src));
             AssignFlags(PZN, m.Cond(dst));
         }
         private void RewriteDsra()
@@ -581,7 +583,7 @@ namespace Reko.Arch.MilStd1750
         {
             var src = DReg(1);
             var dst = DReg(0);
-            m.Assign(dst, host.PseudoProcedure("fabsf", PrimitiveType.Real32, src));
+            m.Assign(dst, host.Intrinsic("fabsf", true, PrimitiveType.Real32, src));
             AssignFlags(PZN, m.Cond(dst));
         }
 
@@ -756,7 +758,7 @@ namespace Reko.Arch.MilStd1750
             var tmpB = binder.CreateTemporary(PrimitiveType.Ptr16);
             m.Assign(tmpA, ra);
             m.Assign(tmpB, rb);
-            m.SideEffect(host.PseudoProcedure("__mov", VoidType.Instance, tmpA, tmpB));
+            m.SideEffect(host.Intrinsic("__mov", true, VoidType.Instance, tmpA, tmpB));
         }
 
         private void RewriteMisn()
@@ -811,7 +813,7 @@ namespace Reko.Arch.MilStd1750
                 }
                 for (int i = 0; i < rb.Number; ++i)
                 {
-                    m.Assign(binder.EnsureRegister(Registers.GpRegs[ra.Number + i]), m.Mem16(r15));
+                    m.Assign(binder.EnsureRegister(Registers.GpRegs[i]), m.Mem16(r15));
                     m.Assign(r15, m.AddSubSignedInt(r15, 1));
                 }
             }
@@ -853,7 +855,7 @@ namespace Reko.Arch.MilStd1750
         {
             var src = Reg(1);
             var dst = Reg(0);
-            m.Assign(dst, host.PseudoProcedure("__shift_arithmetic", dst.DataType, dst, src));
+            m.Assign(dst, host.Intrinsic("__shift_arithmetic", true, dst.DataType, dst, src));
             AssignFlags(PZN, m.Cond(dst));
         }
 
@@ -875,8 +877,19 @@ namespace Reko.Arch.MilStd1750
 
         private void RewriteSjs()
         {
-            var dst = Addr(1);
+            Expression dst;
+            if (instr.Operands.Length == 2)
+            {
+                dst = Addr(1);
+            }
+            else
+            {
+                var imm = Op(1);
+                var reg = Op(2);
+                dst = m.IAdd(reg, imm);
+            }
             m.Call(dst, 2);
+
         }
 
         private void RewriteSll()
@@ -891,7 +904,7 @@ namespace Reko.Arch.MilStd1750
         {
             var src = Reg(1);
             var dst = Reg(0);
-            m.Assign(dst, host.PseudoProcedure("__shift_logical", dst.DataType, dst, src));
+            m.Assign(dst, host.Intrinsic("__shift_logical", true, dst.DataType, dst, src));
             AssignFlags(PZN, m.Cond(dst));
         }
 
@@ -974,7 +987,7 @@ namespace Reko.Arch.MilStd1750
         private void RewriteXbr()
         {
             var dst = Reg(0);
-            m.Assign(dst, host.PseudoProcedure("__xbr", PrimitiveType.Word32, dst));
+            m.Assign(dst, host.Intrinsic("__xbr", true, PrimitiveType.Word32, dst));
             AssignFlags(PZN, m.Cond(dst));
         }
 

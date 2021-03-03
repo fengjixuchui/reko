@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,6 +29,9 @@ namespace Reko.Arch.Sparc
 {
     public class SparcInstruction : MachineInstruction
     {
+        public SparcInstruction()
+        {
+        }//$DEBUG
         public Mnemonic Mnemonic { get; set; }
 
         public override int MnemonicAsInteger => (int) Mnemonic;

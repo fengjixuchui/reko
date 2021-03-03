@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,12 +29,12 @@ namespace Reko.Arch.MilStd1750
     {
         private void RewriteXioCo()
         {
-            m.SideEffect(host.PseudoProcedure("__console_output", VoidType.Instance, Op(0)));
+            m.SideEffect(host.Intrinsic("__console_output", false, VoidType.Instance, Op(0)));
         }
 
         private void RewriteXioUnknown()
         {
-            m.SideEffect(host.PseudoProcedure("__xio_unknown", VoidType.Instance, Op(0)));
+            m.SideEffect(host.Intrinsic("__xio_unknown", false, VoidType.Instance, Op(0)));
         }
     }
 }

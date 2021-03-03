@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -41,7 +41,7 @@ namespace Reko.Arch.Cray
 
         public override HashSet<RegisterStorage> CreateTrashedRegisters()
         {
-            throw new NotImplementedException();
+            return new HashSet<RegisterStorage>();
         }
 
         public override SystemService FindService(int vector, ProcessorState state, SegmentMap segmentMap)
@@ -49,7 +49,7 @@ namespace Reko.Arch.Cray
             throw new NotImplementedException();
         }
 
-        public override int GetByteSizeFromCBasicType(CBasicType cb)
+        public override int GetBitSizeFromCBasicType(CBasicType cb)
         {
             throw new NotImplementedException();
         }

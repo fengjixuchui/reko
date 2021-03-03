@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,9 +31,16 @@ namespace Reko.Arch.V850
 {
     public class V850Architecture : ProcessorArchitecture
     {
-        public V850Architecture(IServiceProvider services, string archId) : base(services, archId)
+        public V850Architecture(IServiceProvider services, string archId, Dictionary<string, object> options)
+            : base(services, archId, options)
         {
             Endianness = EndianServices.Little;
+            InstructionBitSize = 16;
+            //StackRegister = Registers.sp;
+            //CarryFlagMask  = { get { throw new NotImplementedException(); } }
+            FramePointerType = PrimitiveType.Ptr32;
+            PointerType = PrimitiveType.Ptr32;
+            WordWidth = PrimitiveType.Word32;
         }
 
         public override IEnumerable<MachineInstruction> CreateDisassembler(EndianImageReader imageReader)
@@ -58,12 +65,13 @@ namespace Reko.Arch.V850
 
         public override ProcessorState CreateProcessorState()
         {
-            throw new NotImplementedException();
+            return new V850State(this);
         }
 
         public override IEnumerable<RtlInstructionCluster> CreateRewriter(EndianImageReader rdr, ProcessorState state, IStorageBinder binder, IRewriterHost host)
         {
-            throw new NotImplementedException();
+            var arch = this;
+            return new V850Rewriter(arch, rdr, state, binder, host);
         }
 
         public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)

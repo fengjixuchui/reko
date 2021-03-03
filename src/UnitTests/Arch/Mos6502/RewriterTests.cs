@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,7 +35,7 @@ namespace Reko.UnitTests.Arch.Mos6502
     [TestFixture]
     public class RewriterTests : RewriterTestBase
     {
-        private readonly Mos6502Architecture arch = new Mos6502Architecture(CreateServiceContainer(), "mos6502");
+        private readonly Mos6502Architecture arch = new Mos6502Architecture(CreateServiceContainer(), "mos6502", new Dictionary<string, object>());
         private readonly Address addrBase = Address.Ptr16(0x0200);
 
         public override IProcessorArchitecture Architecture => arch;

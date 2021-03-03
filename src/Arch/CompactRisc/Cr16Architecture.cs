@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,7 +34,8 @@ namespace Reko.Arch.CompactRisc
     {
         public static PrimitiveType Word24 = PrimitiveType.CreateWord(24);
 
-        public Cr16Architecture(IServiceProvider services, string archId) : base(services, archId)
+        public Cr16Architecture(IServiceProvider services, string archId, Dictionary<string, object> options)
+            : base(services, archId, options)
         {
             this.Endianness = EndianServices.Little;
             this.FramePointerType = PrimitiveType.Ptr16;
@@ -66,12 +67,12 @@ namespace Reko.Arch.CompactRisc
 
         public override ProcessorState CreateProcessorState()
         {
-            throw new NotImplementedException();
+            return new Cr16State(this);
         }
 
         public override IEnumerable<RtlInstructionCluster> CreateRewriter(EndianImageReader rdr, ProcessorState state, IStorageBinder binder, IRewriterHost host)
         {
-            throw new NotImplementedException();
+            return new Cr16Rewriter(this, rdr, state, binder, host);
         }
 
         public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)

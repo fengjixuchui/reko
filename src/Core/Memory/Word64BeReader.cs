@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -92,6 +92,8 @@ namespace Reko.Core.Memory
             return false;
         }
 
+        public bool TryReadInt16(out short _) => throw new System.NotImplementedException();
+
         public bool TryReadInt32(out int value)
         {
             throw new System.NotImplementedException();
@@ -109,7 +111,10 @@ namespace Reko.Core.Memory
 
         public bool TryReadUInt32(out uint value)
         {
-            throw new System.NotImplementedException();
+            if (!mem.TryReadBeUInt32(Offset, out value))
+                return false;
+            Offset += 1;
+            return true;
         }
 
         public bool TryReadUInt64(out ulong value)

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -49,7 +49,7 @@ namespace Reko.UnitTests.Arch.X86.Assembler
             var segmentMap = new SegmentMap(
                 addrBase,
                 new ImageSegment("code", bmem, AccessMode.ReadWriteExecute));
-            var arch = (IProcessorArchitecture) new X86ArchitectureFlat32(new ServiceContainer(), "x86-protected-32");
+            var arch = (IProcessorArchitecture) new X86ArchitectureFlat32(new ServiceContainer(), "x86-protected-32", new Dictionary<string, object>());
             this.program = new Program(segmentMap, arch, null);
         }
 

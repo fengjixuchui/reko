@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,9 +35,8 @@ namespace Reko.Arch.M6800
 
     public class M6812Architecture : ProcessorArchitecture
     {
-        private readonly Dictionary<uint, FlagGroupStorage> flagGroups;
-
-        public M6812Architecture(IServiceProvider services, string archId) : base(services, archId)
+        public M6812Architecture(IServiceProvider services, string archId, Dictionary<string, object> options)
+            : base(services, archId, options)
         {
             Endianness = EndianServices.Big;
             InstructionBitSize = 8;
@@ -45,7 +44,6 @@ namespace Reko.Arch.M6800
             PointerType = PrimitiveType.Ptr16;
             WordWidth = PrimitiveType.Word16;
             StackRegister = M6812.Registers.sp;
-            this.flagGroups = new Dictionary<uint, FlagGroupStorage>();
         }
 
         public override IEnumerable<MachineInstruction> CreateDisassembler(EndianImageReader imageReader)
@@ -80,15 +78,9 @@ namespace Reko.Arch.M6800
 
         public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)
         {
-            if (flagGroups.TryGetValue(grf, out var f))
-            {
-                return f;
-            }
-
             var dt = Bits.IsSingleBitSet(grf) ? PrimitiveType.Bool : PrimitiveType.Byte;
             var flagregister = M6812.Registers.ccr;
             var fl = new FlagGroupStorage(flagregister, grf, GrfToString(flagRegister, "", grf), dt);
-            flagGroups.Add(grf, fl);
             return fl;
         }
 
@@ -137,7 +129,7 @@ namespace Reko.Arch.M6800
             return Address.Ptr16(c.ToUInt16());
         }
 
-        public override Address ReadCodeAddress(int size, EndianImageReader rdr, ProcessorState state)
+        public override Address ReadCodeAddress(int size, EndianImageReader rdr, ProcessorState? state)
         {
             throw new NotImplementedException();
         }
@@ -147,7 +139,7 @@ namespace Reko.Arch.M6800
             throw new NotImplementedException();
         }
 
-        public override bool TryParseAddress(string txtAddr, out Address addr)
+        public override bool TryParseAddress(string? txtAddr, out Address addr)
         {
             return Address.TryParse16(txtAddr, out addr);
         }

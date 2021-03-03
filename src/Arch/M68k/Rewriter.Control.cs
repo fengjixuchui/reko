@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,7 +32,7 @@ namespace Reko.Arch.M68k
 {
     public partial class Rewriter
     {
-        private void RewriteBcc(ConditionCode cc, FlagM flags)
+        private void RewriteBcc(ConditionCode cc, FlagGroupStorage flags)
         {
             var addr = ((M68kAddressOperand)instr.Operands[0]).Address;
             if ((addr.ToUInt32() & 1) != 0)
@@ -43,7 +43,7 @@ namespace Reko.Arch.M68k
             else
             {
                 m.Branch(
-                    m.Test(cc, orw.FlagGroup(flags)),
+                    m.Test(cc, binder.EnsureFlagGroup(flags)),
                     addr,
                     InstrClass.ConditionalTransfer);
             }
@@ -85,7 +85,7 @@ namespace Reko.Arch.M68k
                 instr.Address + instr.Length,
                 InstrClass.ConditionalTransfer);
             m.SideEffect(
-                host.PseudoProcedure(PseudoProcedure.Syscall, VoidType.Instance, m.Byte(6)));
+                host.Intrinsic(IntrinsicProcedure.Syscall, false, VoidType.Instance, m.Byte(6)));
         }
 
         private void RewriteChk2()
@@ -102,8 +102,8 @@ namespace Reko.Arch.M68k
                         m.Le(reg, hiBound)),
                     instr.Address + instr.Length,
                     InstrClass.ConditionalTransfer);
-                new RtlSideEffect(
-                    host.PseudoProcedure(PseudoProcedure.Syscall, VoidType.Instance, m.Byte(6)),
+                m.SideEffect(
+                    host.Intrinsic(IntrinsicProcedure.Syscall, false, VoidType.Instance, m.Byte(6)),
                     InstrClass.Linear);
             }
             else
@@ -130,7 +130,7 @@ namespace Reko.Arch.M68k
             m.Call(src, 4);
         }
 
-        private void RewriteDbcc(ConditionCode cc, FlagM flags)
+        private void RewriteDbcc(ConditionCode cc, FlagGroupStorage? flags)
         {
             var addr = (Address)orw.RewriteSrc(instr.Operands[1], instr.Address, true);
             if (cc == ConditionCode.ALWAYS)
@@ -138,32 +138,35 @@ namespace Reko.Arch.M68k
                 iclass = InstrClass.Transfer;
                 m.Goto(addr);
             }
-            iclass = InstrClass.ConditionalTransfer;
-            if (cc != ConditionCode.None)
+            else
             {
-                m.BranchInMiddleOfInstruction(
-                    m.Test(cc, orw.FlagGroup(flags)),
-                    instr.Address + 4,
+                iclass = InstrClass.ConditionalTransfer;
+                if (cc != ConditionCode.None)
+                {
+                    m.BranchInMiddleOfInstruction(
+                        m.Test(cc, binder.EnsureFlagGroup(flags!)),
+                        instr.Address + 4,
+                        InstrClass.ConditionalTransfer);
+                }
+                var src = orw.RewriteSrc(instr.Operands[0], instr.Address);
+                var tmp = binder.CreateTemporary(PrimitiveType.Word16);
+                var tmpHi = binder.CreateTemporary(PrimitiveType.Word16);
+                m.Assign(tmp, m.Slice(tmp.DataType, src, 0));
+                m.Assign(tmp, m.ISubS(tmp, 1));
+                m.Assign(tmpHi, m.Slice(tmpHi.DataType, src, 16));
+                m.Assign(src, m.Seq(tmpHi, tmp));
+                m.Branch(
+                    m.Ne(tmp, m.Word16(0xFFFF)),
+                    addr,
                     InstrClass.ConditionalTransfer);
             }
-            var src = orw.RewriteSrc(instr.Operands[0], instr.Address);
-            var tmp = binder.CreateTemporary(PrimitiveType.Word16);
-            var tmpHi = binder.CreateTemporary(PrimitiveType.Word16);
-            m.Assign(tmp, m.Slice(tmp.DataType, src, 0));
-            m.Assign(tmp, m.ISubS(tmp, 1));
-            m.Assign(tmpHi, m.Slice(tmpHi.DataType, src, 16));
-            m.Assign(src, m.Seq(tmpHi, tmp));
-            m.Branch(
-                m.Ne(tmp, m.Word16(0xFFFF)),
-                addr,
-                InstrClass.ConditionalTransfer);
         }
 
         private void RewriteIllegal()
         {
             if (this.instr.Operands.Length > 0)
             {
-                m.SideEffect(host.PseudoProcedure(PseudoProcedure.Syscall, VoidType.Instance, RewriteSrcOperand(this.instr.Operands[0])));
+                m.SideEffect(host.Intrinsic(IntrinsicProcedure.Syscall, false, VoidType.Instance, RewriteSrcOperand(this.instr.Operands[0])));
                 iclass = InstrClass.Call | InstrClass.Transfer;
             }
             else
@@ -201,16 +204,16 @@ namespace Reko.Arch.M68k
 
         private void RewriteStop()
         {
-            m.SideEffect(host.PseudoProcedure("__stop", VoidType.Instance));
+            m.SideEffect(host.Intrinsic("__stop", false, VoidType.Instance));
         }
 
         private void RewriteTrap()
         {
             var vector = orw.RewriteSrc(instr.Operands[0], instr.Address);
-            m.SideEffect(host.PseudoProcedure(PseudoProcedure.Syscall, VoidType.Instance, vector));
+            m.SideEffect(host.Intrinsic(IntrinsicProcedure.Syscall, false, VoidType.Instance, vector));
         }
 
-        private void RewriteTrapCc(ConditionCode cc, FlagM flags)
+        private void RewriteTrapCc(ConditionCode cc, FlagGroupStorage? flags)
         {
             if (cc == ConditionCode.NEVER)
             {
@@ -221,7 +224,7 @@ namespace Reko.Arch.M68k
             {
                 iclass |= InstrClass.Conditional;
                 m.Branch(
-                    m.Test(cc, orw.FlagGroup(flags)).Invert(),
+                    m.Test(cc, binder.EnsureFlagGroup(flags!)).Invert(),
                     instr.Address + instr.Length,
                     InstrClass.ConditionalTransfer);
             }
@@ -230,7 +233,7 @@ namespace Reko.Arch.M68k
             {
                 args.Add(orw.RewriteSrc(instr.Operands[0], instr.Address));
             }
-            m.SideEffect(host.PseudoProcedure(PseudoProcedure.Syscall, VoidType.Instance, args.ToArray()));
+            m.SideEffect(host.Intrinsic(IntrinsicProcedure.Syscall, false, VoidType.Instance, args.ToArray()));
         }
     }
 }

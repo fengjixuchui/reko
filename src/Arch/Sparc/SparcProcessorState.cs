@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -73,10 +73,17 @@ namespace Reko.Arch.Sparc
 
         public override void SetRegister(RegisterStorage reg, Constant v)
         {
-            if (v.IsValid && arch.Registers.IsGpRegister(reg))
-            {
-                valid[reg.Number] = true;
-                regs[reg.Number] = v.ToUInt64();
+            if (arch.Registers.IsGpRegister(reg))
+            { 
+                if (v.IsValid)
+                {
+                    valid[reg.Number] = true;
+                    regs[reg.Number] = v.ToUInt64();
+                }
+                else
+                {
+                    valid[reg.Number] = false;
+                }
             }
         }
 

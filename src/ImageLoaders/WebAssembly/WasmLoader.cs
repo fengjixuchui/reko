@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -52,7 +52,7 @@ namespace Reko.ImageLoaders.WebAssembly
             var rdr = LoadHeader();
             var sections = LoadSections(rdr);
             var segmentMap = BuildSegmentMap(sections);
-            var arch = new WasmArchitecture(Services, "wasm");
+            var arch = new WasmArchitecture(Services, "wasm", new Dictionary<string, object>());
             var platform = new DefaultPlatform(Services, arch);
             return new Program()
             {

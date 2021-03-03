@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,7 +37,7 @@ namespace Reko.UnitTests.Arch.Sparc
 
         public Sparc64DisassemblerTests()
         {
-            this.arch = new SparcArchitecture64(CreateServiceContainer(), "sparc64");
+            this.arch = new SparcArchitecture64(CreateServiceContainer(), "sparc64", new Dictionary<string, object>());
             this.addrLoad = Address.Ptr64(0x10_0000_0000);
         }
 

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -539,9 +539,9 @@ namespace Reko.Arch.M68k
             return src;
         }
 
-        public Identifier FlagGroup(FlagM flags)
+        public Identifier FlagGroup(FlagGroupStorage flags)
         {
-            return binder.EnsureFlagGroup(arch.GetFlagGroup(Registers.ccr, (uint)flags));
+            return binder.EnsureFlagGroup(flags);
         }
     }
 }

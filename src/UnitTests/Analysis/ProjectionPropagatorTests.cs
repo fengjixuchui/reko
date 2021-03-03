@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -66,17 +66,17 @@ namespace Reko.UnitTests.Analysis
 
         private void Given_X86_16_Arch()
         {
-            this.arch = new Reko.Arch.X86.X86ArchitectureReal(new ServiceContainer(), "x86-real-16");
+            this.arch = new Reko.Arch.X86.X86ArchitectureReal(new ServiceContainer(), "x86-real-16", new Dictionary<string, object>());
         }
 
         private void Given_X86_64_Arch()
         {
-            this.arch = new Reko.Arch.X86.X86ArchitectureFlat64(new ServiceContainer(), "x86-protected-64");
+            this.arch = new Reko.Arch.X86.X86ArchitectureFlat64(new ServiceContainer(), "x86-protected-64", new Dictionary<string, object>());
         }
 
         private void Given_Z80_Arch()
         {
-            this.arch = new Z80ProcessorArchitecture(new ServiceContainer(), "z80");
+            this.arch = new Z80ProcessorArchitecture(new ServiceContainer(), "z80", new Dictionary<string, object>());
         }
 
         /// <summary>

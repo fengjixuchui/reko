@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -43,12 +43,14 @@ namespace Reko.UnitTests.Arch.RiscV
         [SetUp]
         public void Setup()
         {
-            this.arch = new RiscVArchitecture(new ServiceContainer(), "riscV");
-            arch.LoadUserOptions(new Dictionary<string, object>
-            {
-                { "WordSize", "64" },
-                { "FloatAbi", 64 }
-            });
+            this.arch = new RiscVArchitecture(
+                new ServiceContainer(),
+                "riscV", 
+                new Dictionary<string, object>
+                {
+                    { "WordSize", "64" },
+                    { "FloatAbi", 64 }
+                });
             this.addrLoad = Address.Ptr32(0x00100000);
         }
 
@@ -86,7 +88,7 @@ namespace Reko.UnitTests.Arch.RiscV
         [Test]
         public void RiscV_dasm_beq()
         {
-            AssertCode("beq\ta1,a5,0000000000100000", 0x00F58063u);
+            AssertCode("beq\ta1,a5,00100000", 0x00F58063u);
         }
 
         [Test]
@@ -122,7 +124,7 @@ namespace Reko.UnitTests.Arch.RiscV
         [Test]
         public void RiscV_dasm_jal()
         {
-            AssertCode("jal\tzero,00000000000FF1F4", 0x9F4FF06F);
+            AssertCode("jal\tzero,000FF1F4", 0x9F4FF06F);
         }
 
         [Test]
@@ -140,7 +142,7 @@ namespace Reko.UnitTests.Arch.RiscV
         [Test]
         public void RiscV_dasm_x1()
         {
-            AssertCode("beq\ta0,a4,0000000000100128", 0x12E50463u);
+            AssertCode("beq\ta0,a4,00100128", 0x12E50463u);
         }
 
         [Test]
@@ -189,13 +191,13 @@ namespace Reko.UnitTests.Arch.RiscV
         [Test]
         public void RiscV_dasm_c_j()
         {
-            AssertCode("c.j\t00000000000FFFE4", 0x0000B7D5);
+            AssertCode("c.j\t000FFFE4", 0x0000B7D5);
         }
 
         [Test]
         public void RiscV_dasm_c_j_2()
         {
-            AssertCode("c.j\t00000000000FFFE8", "E5B7");
+            AssertCode("c.j\t000FFFE8", "E5B7");
         }
 
         [Test]
@@ -217,10 +219,16 @@ namespace Reko.UnitTests.Arch.RiscV
         }
 
         [Test]
+        public void RiscV_dasm_c_fld()
+        {
+            AssertCode("c.fld\tfs1,216(a2)", 0x00002E64);
+        }
+
+        [Test]
         public void RiscV_dasm_c_fsw_32()
         {
             Given_32bit();
-            AssertCode("c.fsw\ts1,112(s0)", "A0F8");
+            AssertCode("c.fsw\ts0,112(s1)", "A0F8");
         }
 
         [Test]
@@ -300,7 +308,7 @@ namespace Reko.UnitTests.Arch.RiscV
         [Test]
         public void RiscV_dasm_c_sw()
         {
-            AssertCode("c.sw\ta3,0(a5)", 0xC29C);
+            AssertCode("c.sw\ta5,0(a3)", 0xC29C);
         }
 
         [Test]
@@ -312,7 +320,7 @@ namespace Reko.UnitTests.Arch.RiscV
         [Test]
         public void RiscV_dasm_c_beqz()
         {
-            AssertCode("c.beqz\ta0,0000000000100040", 0x0000C121);
+            AssertCode("c.beqz\ta0,00100040", 0x0000C121);
         }
 
         [Test]
@@ -342,7 +350,7 @@ namespace Reko.UnitTests.Arch.RiscV
         [Test]
         public void RiscV_dasm_c_bnez()
         {
-            AssertCode("c.bnez\ta4,000000000010001A", 0x0000EF09);
+            AssertCode("c.bnez\ta4,0010001A", 0x0000EF09);
         }
 
         [Test]
@@ -360,7 +368,7 @@ namespace Reko.UnitTests.Arch.RiscV
         [Test]
         public void RiscV_dasm_c_swsp()
         {
-            AssertCode("c.swsp\ta0,00000080", 0xC22A);
+            AssertCode("c.swsp\ta0,00000004", 0xC22A);
         }
 
         [Test]
@@ -372,7 +380,7 @@ namespace Reko.UnitTests.Arch.RiscV
         [Test]
         public void RiscV_dasm_c_lwsp()
         {
-            AssertCode("c.lwsp\ttp,00000044", 0x00004512);
+            AssertCode("c.lwsp\ta0,00000004", 0x00004512);
         }
 
         [Test]
@@ -384,7 +392,7 @@ namespace Reko.UnitTests.Arch.RiscV
         [Test]
         public void RiscV_dasm_c_lw()
         {
-            AssertCode("c.lw\ta5,68(a3)", 0x000043F4);
+            AssertCode("c.lw\ta3,68(a5)", 0x000043F4);
         }
 
         [Test]
@@ -402,7 +410,7 @@ namespace Reko.UnitTests.Arch.RiscV
         [Test]
         public void RiscV_dasm_beqz_backward()
         {
-            AssertCode("c.beqz\ta5,00000000000FFF06", 0xD399);
+            AssertCode("c.beqz\ta5,000FFF06", 0xD399);
         }
 
         [Test]
@@ -420,13 +428,13 @@ namespace Reko.UnitTests.Arch.RiscV
         [Test]
         public void RiscV_dasm_beqz_0000C3F1()
         {
-            AssertCode("c.beqz\ta5,00000000001000C4", 0x0000C3F1);
+            AssertCode("c.beqz\ta5,001000C4", 0x0000C3F1);
         }
 
         [Test]
         public void RiscV_dasm_c_bnez_backward()
         {
-            AssertCode("c.bnez\ta4,00000000000FFF30", 0xFB05);
+            AssertCode("c.bnez\ta4,000FFF30", 0xFB05);
         }
 
         [Test]
@@ -479,7 +487,7 @@ namespace Reko.UnitTests.Arch.RiscV
         [Test]
         public void RiscV_dasm_c_j_backward()
         {
-            AssertCode("c.j\t00000000000FFF36", 0x0000BF1D);
+            AssertCode("c.j\t000FFF36", 0x0000BF1D);
         }
 
         [Test]
@@ -533,7 +541,7 @@ namespace Reko.UnitTests.Arch.RiscV
         [Test]
         public void RiscV_dasm_c_ldsp()
         {
-            AssertCode("c.ldsp\ts0,000001D0", 0x00006BA2);
+            AssertCode("c.ldsp\ts7,00000008", 0x00006BA2);
         }
 
         [Test]
@@ -542,11 +550,7 @@ namespace Reko.UnitTests.Arch.RiscV
             AssertCode("c.slli\ts0,03", 0x0000040E);
         }
 
-        [Test]
-        public void RiscV_dasm_c_fld()
-        {
-            AssertCode("c.fld\tfa2,216(s1)", 0x00002E64);
-        }
+
 
         [Test]
         public void RiscV_dasm_sll()
@@ -607,7 +611,7 @@ namespace Reko.UnitTests.Arch.RiscV
         [Test]
         public void RiscV_dasm_c_fsd()
         {
-            AssertCode("c.fsd\tfa2,8(s1)", 0x0000A604);
+            AssertCode("c.fsd\tfs1,8(a2)", 0x0000A604);
         }
 
         [Test]

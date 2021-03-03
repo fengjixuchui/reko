@@ -1,6 +1,6 @@
 #region License
 /* 
-* Copyright (C) 1999-2020 John Källén.
+* Copyright (C) 1999-2021 John Källén.
 *
 * This program is free software; you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -224,6 +224,12 @@ namespace Reko.UserInterfaces.WindowsForms
                 Architecture = arch,
                 RegisterValues = regValues,
             };
+            return dlg;
+        }
+
+        public IBlockNameDialog CreateBlockNameDialog(Procedure proc, Block block)
+        {
+            var dlg = new BlockNameDialog(proc, block);
             return dlg;
         }
     }

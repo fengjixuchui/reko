@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,7 +34,7 @@ namespace Reko.UnitTests.Arch.X86
     [TestFixture]
     public class NasmSyntaxTests
     {
-        private readonly X86ArchitectureFlat32 arch = new X86ArchitectureFlat32(new ServiceContainer(), "x86-protected-32");
+        private readonly X86ArchitectureFlat32 arch = new X86ArchitectureFlat32(new ServiceContainer(), "x86-protected-32", new Dictionary<string, object>());
 
         private X86Instruction Disassemble32(params byte[] bytes)
         {

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,7 +50,7 @@ namespace Reko.Arch.Alpha
             }
             else
             {
-                RewriteInstrinsic(intrinsic);
+                RewriteInstrinsic(intrinsic, false);
             }
         }
 
@@ -93,7 +93,14 @@ namespace Reko.Arch.Alpha
             }
             else
             {
-                src = m.Convert(Rewrite(instr.Operands[0]), dtFrom, dtTo);
+                src = Rewrite(instr.Operands[0]);
+                if (src.DataType.BitSize > dtFrom.BitSize)
+                {
+                    var tmp = binder.CreateTemporary(dtFrom);
+                    m.Assign(tmp, m.Slice(src, dtFrom, 0));
+                    src = tmp;
+                }    
+                src = m.Convert(src, dtFrom, dtTo);
             }
             var dst = Rewrite(instr.Operands[1]);
             m.Assign(dst, src);

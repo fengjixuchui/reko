@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,7 +39,8 @@ namespace Reko.Arch.Sparc
     {
         private readonly Dictionary<uint, FlagGroupStorage> flagGroups;
 
-        public SparcArchitecture(IServiceProvider services, string archId, Registers registers, Decoder rootDecoder, PrimitiveType wordWidth) : base(services, archId)
+        public SparcArchitecture(IServiceProvider services, string archId, Registers registers, Decoder rootDecoder, PrimitiveType wordWidth, Dictionary<string, object> options)
+            : base(services, archId, options)
         {
             this.Registers = registers;
             this.Decoder = rootDecoder;
@@ -127,7 +128,10 @@ namespace Reko.Arch.Sparc
         {
             return
                 Registers.IntegerRegisters
-                .Concat(Registers.FloatRegisters).ToArray();
+                .Concat(Registers.QFloatRegisters)
+                .Concat(Registers.DFloatRegisters)
+                .Concat(Registers.FFloatRegisters)
+                .ToArray();
         }
 
         public override bool TryGetRegister(string name, out RegisterStorage reg)
@@ -235,8 +239,8 @@ namespace Reko.Arch.Sparc
         private static readonly Registers registers = new Registers(PrimitiveType.Word32);
         private static readonly Decoder rootDecoder = InstructionSet.Create32BitDecoder();
 
-        public SparcArchitecture32(IServiceProvider services, string archId) :
-            base(services, archId, registers, rootDecoder, PrimitiveType.Word32)
+        public SparcArchitecture32(IServiceProvider services, string archId, Dictionary<string, object> options) :
+            base(services, archId, registers, rootDecoder, PrimitiveType.Word32, options)
         {
         }
     }
@@ -246,8 +250,8 @@ namespace Reko.Arch.Sparc
         private static readonly Registers registers = new Registers(PrimitiveType.Word64);
         private static readonly Decoder rootDecoder = InstructionSet.Create64BitDecoder();
 
-        public SparcArchitecture64(IServiceProvider services, string archId) : 
-            base(services, archId, registers, rootDecoder, PrimitiveType.Word64)
+        public SparcArchitecture64(IServiceProvider services, string archId, Dictionary<string, object> options) : 
+            base(services, archId, registers, rootDecoder, PrimitiveType.Word64, options)
         {
         }
     }

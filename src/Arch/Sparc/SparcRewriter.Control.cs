@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -61,14 +61,25 @@ namespace Reko.Arch.Sparc
         {
             var rtlClass = instrCur.InstructionClass;
             this.iclass = rtlClass;
-            var reg = RewriteRegister(instrCur.Operands[0]);
+            var reg = RewriteRegister(0);
             m.Branch(fn(reg), ((AddressOperand) instrCur.Operands[1]).Address, rtlClass);
         }
 
         private void RewriteCall()
         {
-            iclass = InstrClass.Transfer | InstrClass.Call;
-            m.CallD(((AddressOperand)instrCur.Operands[0]).Address, 0);
+            // A special case is when we call to the location after
+            // the delay slot. This is an idiom to capture the 
+            // program counter in the la register.
+            var dst = ((AddressOperand) instrCur.Operands[0]).Address;
+            if (instrCur.Address.ToLinear() + 8 == dst.ToLinear())
+            {
+                iclass = InstrClass.Linear;
+                m.Assign(binder.EnsureRegister(arch.Registers.o7), dst);
+            }
+            else
+            {
+                m.CallD(dst, 0);
+            }
         }
 
         private void RewriteJmpl()
@@ -120,8 +131,9 @@ namespace Reko.Arch.Sparc
                 instrCur.Address + instrCur.Length,
                 InstrClass.ConditionalTransfer);
             m.SideEffect(
-                    host.PseudoProcedure(
-                        PseudoProcedure.Syscall, 
+                    host.Intrinsic(
+                        IntrinsicProcedure.Syscall, 
+                        false,
                         VoidType.Instance, 
                     SimplifySum(src1, src2)));
         }

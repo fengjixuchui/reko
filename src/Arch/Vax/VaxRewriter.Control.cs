@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,7 +39,7 @@ namespace Reko.Arch.Vax
             var limit = RewriteSrcOp(0, width);
             var add = RewriteSrcOp(1, width);
             var index = RewriteDstOp(2, width, e => m.FAdd(e, add));
-            if (!NZV(index))
+            if (!VZN(index))
                 return;
             if (!(add is Constant cAdd))
             {
@@ -77,7 +77,7 @@ namespace Reko.Arch.Vax
             var limit = RewriteSrcOp(0, width);
             var add = RewriteSrcOp(1, width);
             var index = RewriteDstOp(2, width, e => m.IAdd(e, add));
-            if (!NZV(index))
+            if (!VZN(index))
                 return;
             if (!(add is Constant cAdd))
             {
@@ -157,7 +157,7 @@ namespace Reko.Arch.Vax
             var bas = RewriteSrcOp(1, PrimitiveType.Word32);
             var dst = ((AddressOperand)this.instr.Operands[2]).Address;
             var tst = binder.CreateTemporary(PrimitiveType.Word32);
-            m.SideEffect(host.PseudoProcedure("__set_interlock", VoidType.Instance));
+            m.SideEffect(host.Intrinsic("__set_interlock", false, VoidType.Instance));
             m.Assign(tst, m.And(bas, m.Shl(Constant.Int32(1), pos)));
             if (testBit)
             {
@@ -167,7 +167,7 @@ namespace Reko.Arch.Vax
             {
                 m.Assign(bas, m.And(bas, m.Comp(m.Shl(Constant.Int32(1), pos))));
             }
-            m.SideEffect(host.PseudoProcedure("__release_interlock", VoidType.Instance));
+            m.SideEffect(host.Intrinsic("__release_interlock", false, VoidType.Instance));
             var t = testBit
                 ? m.Ne0(tst)
                 : m.Eq0(tst);
@@ -207,7 +207,7 @@ namespace Reko.Arch.Vax
             }
         }
 
-        private void RewriteBranch(ConditionCode cc, FlagM flags)
+        private void RewriteBranch(ConditionCode cc, FlagGroupStorage flags)
         {
             m.Branch(
                 m.Test(cc, FlagGroup(flags)),

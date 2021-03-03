@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -30,9 +30,9 @@ namespace Reko.Arch.Msp430
     public class Msp430Instruction : MachineInstruction
     {
         public Mnemonics Mnemonic;
-        public PrimitiveType dataWidth;
+        public PrimitiveType? dataWidth;
         public int repeatImm;
-        public RegisterStorage repeatReg;
+        public RegisterStorage? repeatReg;
 
         public override int MnemonicAsInteger => (int) Mnemonic;
 

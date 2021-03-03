@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,9 +38,8 @@ namespace Reko.Arch.M68k
     [Designer("Reko.Arch.M68k.Design.M68kArchitectureDesigner,Reko.Arch.M68k.Design")]
     public class M68kArchitecture : ProcessorArchitecture
     {
-        private Dictionary<uint, FlagGroupStorage> flagGroups;
-
-        public M68kArchitecture(IServiceProvider services, string archId) : base(services, archId)
+        public M68kArchitecture(IServiceProvider services, string archId, Dictionary<string, object> options)
+            : base(services, archId, options)
         {
             InstructionBitSize = 16;
             Endianness = EndianServices.Big;
@@ -49,7 +48,6 @@ namespace Reko.Arch.M68k
             WordWidth = PrimitiveType.Word32;
             CarryFlagMask = (uint)FlagM.CF;
             StackRegister = Registers.a7;
-            flagGroups = new Dictionary<uint, FlagGroupStorage>();
         }
 
         public override IEnumerable<MachineInstruction> CreateDisassembler(EndianImageReader rdr)
@@ -117,6 +115,11 @@ namespace Reko.Arch.M68k
             return Registers.regs;
         }
 
+        public override FlagGroupStorage[] GetFlags()
+        {
+            return Registers.flags;
+        }
+
         public override IEnumerable<FlagGroupStorage> GetSubFlags(FlagGroupStorage flags)
         {
             uint grf = flags.FlagGroupBits;
@@ -134,14 +137,8 @@ namespace Reko.Arch.M68k
 
         public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)
         {
-            if (flagGroups.TryGetValue(grf, out FlagGroupStorage f))
-            {
-                return f;
-            }
-
             var dt = Bits.IsSingleBitSet(grf) ? PrimitiveType.Bool : PrimitiveType.Byte;
             var fl = new FlagGroupStorage(Registers.ccr, grf, GrfToString(Registers.ccr, "", grf), dt);
-            flagGroups.Add(grf, fl);
             return fl;
         }
 

@@ -1,8 +1,8 @@
 #region License
 /* 
- * Copyright (C) 2017-2020 Christian Hostelet.
+ * Copyright (C) 2017-2021 Christian Hostelet.
  * inspired by work of:
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -72,7 +72,7 @@ namespace Reko.UnitTests.Arch.Microchip.Common
 
         protected void SetPICModel(string picName, PICExecMode mode = PICExecMode.Traditional)
         {
-            arch = new PICArchitecture(new ServiceContainer(), "pic") { Options = new PICArchitectureOptions(picName, mode) };
+            arch = new PICArchitecture(new ServiceContainer(), "pic", new Dictionary<string, object>()) { Options = new PICArchitectureOptions(picName, mode) };
             picModel = arch.ProcessorModel;
             arch.CreatePICProcessorModel();
             PICMemoryDescriptor.ExecMode = mode;

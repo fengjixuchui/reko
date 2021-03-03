@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,6 +22,7 @@ using NUnit.Framework;
 using Reko.Arch.Arm;
 using Reko.Arch.Arm.AArch64;
 using Reko.Core;
+using System.Collections.Generic;
 
 namespace Reko.UnitTests.Arch.Arm
 {
@@ -34,7 +35,7 @@ namespace Reko.UnitTests.Arch.Arm
 
         public Arm64DisassemblerTests()
         {
-            this.arch = new Arm64Architecture(CreateServiceContainer(), "aarch64");
+            this.arch = new Arm64Architecture(CreateServiceContainer(), "aarch64", new Dictionary<string, object>());
             this.baseAddress = Address.Ptr64(0x00100000);
         }
 
@@ -361,6 +362,12 @@ namespace Reko.UnitTests.Arch.Arm
         {
             Given_Instruction(0xB9400001);
             Expect_Code("ldr\tw1,[x0]");
+        }
+
+        [Test]
+        public void AArch64Dis_ldxr()
+        {
+            AssertCode("@@@", "A1235D88");
         }
 
         [Test]
@@ -1858,6 +1865,7 @@ namespace Reko.UnitTests.Arch.Arm
         {
             AssertCode("st4 {v0.8h-v3.8h},[x11], #64", "60059F4C");
         }
+
 
         /*
          * //$BORED: amuse yourself by making these tests pass.

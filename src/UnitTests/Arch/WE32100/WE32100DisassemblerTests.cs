@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,7 +38,7 @@ namespace Reko.UnitTests.Arch.WE32100
 
         public WE32100DisassemblerTests()
         {
-            this.arch = new WE32100Architecture(new ServiceContainer(), "we32100");
+            this.arch = new WE32100Architecture(new ServiceContainer(), "we32100", new Dictionary<string, object>());
             this.addr = Address.Ptr32(0x00100000);
         }
 
@@ -74,6 +74,36 @@ namespace Reko.UnitTests.Arch.WE32100
         public void WE32100Dis_add3b()
         {
             AssertCode("addb3\t*-4(%r5),%r4,%r3", "DFD5FC4443");
+        }
+
+        [Test]
+        public void WE32100Dis_movb_deferred_short()
+        {
+            AssertCode("movb\t06,*31688(%sp)", "8706BCC87B");
+        }
+
+        [Test]
+        public void WE32100Dis_addb3()
+        {
+            AssertCode("addb3\tFA,*-45(%r7),2(%ap)", "DFFAD7D372"); // 46DEF06F57F3DC06FB274C");
+        }
+
+        [Test]
+        public void WE32100Dis_movb_deferred()
+        {
+            AssertCode("movb\t0C,*969639990(%pc)", "870C9F3688CB39"); // E8110FF6AB36EDCADF");
+        }
+
+        [Test]
+        public void WE32100Dis_movb_register_deferred()
+        {
+            AssertCode("movb\t22,0(%r1)", "872251"); // E05FEE0AC1CC7F38E3B5F38E92");
+        }
+
+        [Test]
+        public void WE32100Dis_xorh2_fpoffset()
+        {
+            AssertCode("xorh2\t003E,13(%fp)", "B63E6D");// AD3B86740534DE74DF38FC18C6");
         }
     }
 }

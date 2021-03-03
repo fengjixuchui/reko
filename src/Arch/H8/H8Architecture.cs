@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,7 +35,8 @@ namespace Reko.Arch.H8
     {
         private readonly Dictionary<uint, FlagGroupStorage> flagGroups;
 
-        public H8Architecture(IServiceProvider services, string archId) : base(services, archId)
+        public H8Architecture(IServiceProvider services, string archId, Dictionary<string, object> options)
+            : base(services, archId, options)
         {
             this.CarryFlagMask = (uint) FlagM.CF;
             this.Endianness = EndianServices.Big;

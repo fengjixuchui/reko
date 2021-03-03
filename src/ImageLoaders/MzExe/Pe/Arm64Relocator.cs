@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,7 +44,7 @@ namespace Reko.ImageLoaders.MzExe.Pe
             ushort fixup = rdr.ReadLeUInt16();
             var rt = (Arm64Rt) (fixup >> 12);
             Address offset = baseOfImage + page + (fixup & 0x0FFFu);
-            DebugEx.Verbose(PeImageLoader.trace, "  {0:X4} {1}", fixup, rt);
+            PeImageLoader.trace.Verbose("  {0:X4} {1}", fixup, rt);
             var imgR = program.CreateImageReader(program.Architecture, offset);
             var imgW = program.CreateImageWriter(program.Architecture, offset);
             switch (rt)

@@ -1,5 +1,5 @@
 #region License
-/* Copyright (C) 1999-2020 John Källén.
+/* Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -153,7 +153,7 @@ namespace Reko
                             proc.Signature.Emit(proc.Name, FunctionType.EmitFlags.LowLevelInfo, f);
                         output.WriteLine();
                         WriteProcedureCallers(program, proc, output);
-                    flow.Emit(proc.Architecture, output);
+                        flow.Emit(proc.Architecture, output);
                         foreach (Block block in new DfsIterator<Block>(proc.ControlGraph).PostOrder().Reverse())
                         {
                             if (block == null)
@@ -179,8 +179,10 @@ namespace Reko
         /// <param name="fileName">The filename to load.</param>
         /// <param name="loaderName">Optional .NET class name of a custom
         /// image loader</param>
+        /// <param name="addrLoad">Optional address at which to load the image.
+        /// </param>
         /// <returns>True if the file could be loaded.</returns>
-        public bool Load(string fileName, string? loaderName = null)
+        public bool Load(string fileName, string? loaderName = null, Address? addrLoad = null)
         {
             eventListener.ShowStatus("Loading source program.");
             byte[] image = loader.LoadImageBytes(fileName, 0);
@@ -189,7 +191,7 @@ namespace Reko
             this.Project = projectLoader.LoadProject(fileName, image);
             if (Project == null)
             {
-                var program = loader.LoadExecutable(fileName, image, loaderName, null);
+                var program = loader.LoadExecutable(fileName, image, loaderName, addrLoad);
                 if (program == null)
                     return false;
                 this.Project = AddProgramToProject(fileName, program);
@@ -445,7 +447,7 @@ namespace Reko
             w.WriteLine("#include \"{0}\"", headerfile);
             w.WriteLine();
             var fmt = new AbsynCodeFormatter(new TextFormatter(w));
-            var gdw = new GlobalDataWriter(program, fmt.InnerFormatter, false, this.services);
+            var gdw = new GlobalDataWriter(program, fmt.InnerFormatter, false, true, this.services);
             IAddressable? prev = null;
             foreach (var o in objects)
             {
@@ -512,7 +514,7 @@ namespace Reko
             WriteHeaderComment(filename, program, w);
             w.WriteLine("#include \"{0}\"", headerfile);
             w.WriteLine();
-            var gdw = new GlobalDataWriter(program, new TextFormatter(w), true, services);
+            var gdw = new GlobalDataWriter(program, new TextFormatter(w), true, true, services);
             gdw.Write();
             w.WriteLine();
         }

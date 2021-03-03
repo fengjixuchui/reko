@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -60,7 +60,7 @@ namespace Reko.Environments.C64
                     return program;
                 }
             }
-            var arch = new Mos6502Architecture(Services, "mos6502");
+            var arch = new Mos6502Architecture(Services, "mos6502", new Dictionary<string, object>());
             var mem = new ByteMemoryArea(Address.Ptr16(0), RawImage);
             var segmentMap = new SegmentMap(mem.BaseAddress);
             segmentMap.AddSegment(mem, "code", AccessMode.ReadWriteExecute);

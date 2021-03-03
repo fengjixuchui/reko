@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -112,7 +112,7 @@ namespace Reko.UnitTests.Scanning
                 })
                 .SelectMany(w => w)
                 .ToArray());
-            var arch = new MipsLe32Architecture(new ServiceContainer(), "mips-le-32");
+            var arch = new MipsLe32Architecture(new ServiceContainer(), "mips-le-32", new Dictionary<string, object>());
             CreateProgram(image, arch);
         }
 
@@ -122,14 +122,14 @@ namespace Reko.UnitTests.Scanning
                 Address.Ptr32(0x10000),
                 bytes);
             this.rd = image.Relocations;
-            var arch = new X86ArchitectureFlat32(new ServiceContainer(), "x86-protected-32");
+            var arch = new X86ArchitectureFlat32(new ServiceContainer(), "x86-protected-32", new Dictionary<string,object>());
             CreateProgram(image, arch);
         }
 
         private void Given_x86_Image(Action<X86Assembler> asm)
         {
             var addrBase = Address.Ptr32(0x100000);
-            var arch = new X86ArchitectureFlat32(new ServiceContainer(), "x86-protected-32");
+            var arch = new X86ArchitectureFlat32(new ServiceContainer(), "x86-protected-32", new Dictionary<string, object>());
             var entry = ImageSymbol.Procedure(arch, addrBase);
             var m = new X86Assembler(arch, addrBase, new List<ImageSymbol> { entry });
             asm(m);
@@ -142,7 +142,7 @@ namespace Reko.UnitTests.Scanning
             var bmem = new ByteMemoryArea(
                 Address.Ptr64(0x0100000000000000),
                 bytes);
-            var arch = new X86ArchitectureFlat64(new ServiceContainer(), "x86-protected-64");
+            var arch = new X86ArchitectureFlat64(new ServiceContainer(), "x86-protected-64", new Dictionary<string, object>());
             CreateProgram(bmem, arch);
         }
 
@@ -176,11 +176,12 @@ namespace Reko.UnitTests.Scanning
         {
             this.host = new Mock<IRewriterHost>();
             var dev = new Mock<DecompilerEventListener>();
-            //host.Setup(h => h.EnsurePseudoProcedure(null, null, 0))
+            //host.Setup(h => h.EnsureIntrinsicProcedure(null, null, 0))
             //    .IgnoreArguments()
-            //    .Return(new PseudoProcedure("<>", PrimitiveType.Word32, 2));
-            host.Setup(h => h.PseudoProcedure(
+            //    .Return(new IntrinsicProcedure("<>", PrimitiveType.Word32, 2));
+            host.Setup(h => h.Intrinsic(
                 It.IsAny<string>(),
+                It.IsAny<bool>(),
                 It.IsAny<DataType>(),
                 It.IsAny<Expression[]>())).Returns((Expression)null);
             host.Setup(h => h.GetImport(

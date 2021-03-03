@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,6 +45,7 @@ namespace Reko.Evaluation
         private EvaluationContext ctx;
         private readonly ExpressionValueComparer cmp;
         private readonly ExpressionEmitter m;
+        private readonly Unifier unifier;
 
         private readonly AddTwoIdsRule add2ids;
         private readonly Add_e_c_cRule addEcc;
@@ -72,6 +73,7 @@ namespace Reko.Evaluation
         private readonly MkSeqFromSlices_Rule mkSeqFromSlicesRule;
         private readonly ComparisonConstOnLeft constOnLeft;
         private readonly SliceSequence sliceSeq;
+        private readonly SliceConvert sliceConvert;
         private readonly LogicalNotFollowedByNegRule logicalNotFollowedByNeg;
         private readonly LogicalNotFromArithmeticSequenceRule logicalNotFromBorrow;
         private readonly UnaryNegEqZeroRule unaryNegEqZero;
@@ -82,11 +84,11 @@ namespace Reko.Evaluation
             this.ctx = ctx;
             this.cmp = new ExpressionValueComparer();
             this.m = new ExpressionEmitter();
-
+            this.unifier = new Unifier();
             this.add2ids = new AddTwoIdsRule(ctx);
             this.addEcc = new Add_e_c_cRule(ctx);
             this.addMici = new Add_mul_id_c_id_Rule(ctx);
-            this.idConst = new IdConstant(ctx, new Unifier(), listener);
+            this.idConst = new IdConstant(ctx, unifier, listener);
             this.idCopyPropagation = new IdCopyPropagationRule(ctx);
             this.idBinIdc = new IdBinIdc_Rule(ctx);
             this.sliceConst = new SliceConstant_Rule();
@@ -109,6 +111,7 @@ namespace Reko.Evaluation
             this.mkSeqFromSlicesRule = new MkSeqFromSlices_Rule(ctx);
             this.constOnLeft = new ComparisonConstOnLeft();
             this.sliceSeq = new SliceSequence(ctx);
+            this.sliceConvert = new SliceConvert();
             this.logicalNotFollowedByNeg = new LogicalNotFollowedByNegRule();
             this.logicalNotFromBorrow = new LogicalNotFromArithmeticSequenceRule();
             this.unaryNegEqZero = new UnaryNegEqZeroRule();
@@ -161,28 +164,71 @@ namespace Reko.Evaluation
             // Rotations-with-carries that rotate in a false carry 
             // flag can be simplified to shifts.
             if (appl.Procedure is ProcedureConstant pc && 
-                pc.Procedure is PseudoProcedure intrinsic)
+                pc.Procedure is IntrinsicProcedure intrinsic)
             {
                 switch (intrinsic.Name)
                 {
-                case PseudoProcedure.RolC:
+                case IntrinsicProcedure.RolC:
                     if (IsSingleBitRotationWithClearCarryIn(args))
                     {
+                        Changed = true;
                         return new BinaryExpression(Operator.Shl, appl.DataType, args[0], args[1]);
                     }
                     break;
-                case PseudoProcedure.RorC:
+                case IntrinsicProcedure.RorC:
                     if (IsSingleBitRotationWithClearCarryIn(args))
                     {
+                        Changed = true;
                         return new BinaryExpression(Operator.Shr, appl.DataType, args[0], args[1]);
+                    }
+                    break;
+                case IntrinsicProcedure.Rol:
+                    var rol = CombineRotations(intrinsic.Name, appl, args);
+                    if (rol != null)
+                    {
+                        Changed = true;
+                        return rol;
+                    }
+                    break;
+                case IntrinsicProcedure.Ror:
+                    var ror = CombineRotations(intrinsic.Name, appl, args);
+                    if (ror != null)
+                    {
+                        Changed = true;
+                        return ror;
                     }
                     break;
                 }
             }
-            appl = new Application(appl.Procedure.Accept(this),
+            appl = new Application(
+                appl.Procedure.Accept(this),
                 appl.DataType,
                 args);
             return ctx.GetValue(appl);
+        }
+
+        private Expression? CombineRotations(string rotationName, Application appl, Expression[] args)
+        {
+            if (args[1] is Constant cOuter &&
+                args[0] is Application appInner &&
+                appInner.Procedure is ProcedureConstant pcInner &&
+                pcInner.Procedure is IntrinsicProcedure intrinsicInner)
+            {
+                if (intrinsicInner.Name == rotationName)
+                {
+                    if (appInner.Arguments[1] is Constant cInner)
+                    {
+                        var cTot = Operator.IAdd.ApplyConstants(cOuter, cInner);
+                        Changed = true;
+                        return new Application(
+                            appl.Procedure,
+                            appl.DataType,
+                            appInner.Arguments[0],
+                            cTot);
+                    }
+                }
+            }
+            return null;
         }
 
         private static bool IsSingleBitRotationWithClearCarryIn(Expression[] args)
@@ -809,8 +855,6 @@ namespace Reko.Evaluation
 
         private Expression? FuseAdjacentMemoryAccesses(DataType dt, Expression[] elems)
         {
-            if (elems[0].ToString().Contains("80497D4"))
-                elems.ToString(); //$DEBUG
             var (access, seg, ea, offset) = AsMemoryAccess(elems[0]);
             if (access == null)
                 return null;
@@ -1089,7 +1133,11 @@ namespace Reko.Evaluation
                 Changed = true;
                 return sliceSeq.Transform();
             }
-
+            if (sliceConvert.Match(slice))
+            {
+                Changed = true;
+                return sliceConvert.Transform();
+            }
             if (e is Identifier id &&
                 ctx.GetDefiningExpression(id) is MkSequence seq)
             {

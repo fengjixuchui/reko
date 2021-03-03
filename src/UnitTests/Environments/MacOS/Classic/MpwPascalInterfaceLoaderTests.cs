@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,6 +24,7 @@ using Reko.Arch.M68k;
 using Reko.Core;
 using Reko.Core.Services;
 using Reko.Environments.MacOS.Classic;
+using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Linq;
 using System.Text;
@@ -42,7 +43,7 @@ namespace Reko.UnitTests.Environments.MacOS.Classic
         public void Setup()
         {
             this.sc = new ServiceContainer();
-            this.platform = new MacOSClassic(sc, new M68kArchitecture(sc, "m68k"));
+            this.platform = new MacOSClassic(sc, new M68kArchitecture(sc, "m68k", new Dictionary<string, object>()));
             this.tlib = new TypeLibrary();
             this.listener = new Moq.Mock<DecompilerEventListener>();
             this.sc.AddService(listener.Object);

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,6 +29,7 @@ using Reko.Core.Services;
 using Reko.Core.Types;
 using Reko.Scanning;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Diagnostics;
 using System.Linq;
@@ -72,15 +73,16 @@ namespace Reko.UnitTests.Scanning
         protected void Given_RewriterHost()
         {
             host = new Mock<IRewriterHost>();
-            host.Setup(h => h.PseudoProcedure(
+            host.Setup(h => h.Intrinsic(
                 It.IsAny<string>(),
+                It.IsAny<bool>(),
                 It.IsAny<DataType>(),
                 It.IsAny<Expression[]>()))
-               .Returns((string n, DataType dt, Expression[] a) =>
+               .Returns((string n, bool i, DataType dt, Expression[] a) =>
                 {
                     var fn = new FunctionType();
-                    var ppp = new PseudoProcedure(n, fn);
-                    return new Application(new ProcedureConstant(fn, ppp),
+                    var intrinsic = new IntrinsicProcedure(n, i, fn);
+                    return new Application(new ProcedureConstant(fn, intrinsic),
                         dt,
                         a);
             });
@@ -142,7 +144,7 @@ namespace Reko.UnitTests.Scanning
         protected void Given_x86_32()
         {
             var sc = new ServiceContainer();
-            program.Architecture = new X86ArchitectureFlat32(sc, "x86-protected-32");
+            program.Architecture = new X86ArchitectureFlat32(sc, "x86-protected-32", new Dictionary<string, object>());
             program.Platform = new DefaultPlatform(sc, program.Architecture);
             program.Platform.Heuristics.ProcedurePrologs = new MaskedPattern[] {
                 new MaskedPattern
@@ -155,7 +157,7 @@ namespace Reko.UnitTests.Scanning
 
         internal void Given_x86_16()
         {
-            program.Architecture = new X86ArchitectureReal(new ServiceContainer(), "x86-real-16");
+            program.Architecture = new X86ArchitectureReal(new ServiceContainer(), "x86-real-16", new Dictionary<string, object>());
         }
 
         internal void Given_ImageSeg(ushort seg, ushort offset, string sBytes)

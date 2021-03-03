@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@ using Reko.Arch.M68k;
 using Reko.Core;
 using Reko.Core.Memory;
 using Reko.Environments.MacOS.Classic;
+using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Text;
 
@@ -37,7 +38,7 @@ namespace Reko.UnitTests.Environments.MacOS.Classic
         public void Setup()
         {
             this.w = new BeImageWriter();
-            this.arch = new M68kArchitecture(new ServiceContainer(), "m68k");
+            this.arch = new M68kArchitecture(new ServiceContainer(), "m68k", new Dictionary<string, object>());
         }
 
         private void Given_Link(int amount)
@@ -90,11 +91,11 @@ namespace Reko.UnitTests.Environments.MacOS.Classic
             while (count > 0)
             {
                 w.WriteByte((byte)count);
+                --count;
             }
             if ((w.Position & 1) == 1)
                 w.WriteByte(0x00);
         }
-
 
         [Test]
         public void MacsBug_ScanProcedures()
@@ -114,6 +115,32 @@ namespace Reko.UnitTests.Environments.MacOS.Classic
             Assert.AreEqual(SymbolType.Procedure, sym.Type);
             Assert.AreEqual("my_printf", sym.Name);
             Assert.AreEqual(Address.Ptr32(0x00100000), sym.Address);
+        }
+
+        [Test]
+        public void MacsBug_ScanProcedures_WithConstantData()
+        {
+            Given_Link(4);
+            Given_Body(3);
+            Given_Rts();
+            Given_Variable_Length_Symbol("some_symbol");
+            Given_ProgramData(5);
+
+            Given_Link(4);
+            Given_Body(8);
+            Given_Rts();
+            Given_Variable_Length_Symbol("other_symbol");
+            Given_ProgramData(0);
+
+            Given_Link(6);
+            Given_Body(3);
+            Given_Rts();    // no symbol.
+
+            var mem = new ByteMemoryArea(Address.Ptr32(0x00100000), w.ToArray());
+            var scan = new MacsBugSymbolScanner(arch, mem);
+            var symbols = scan.ScanForSymbols();
+
+            Assert.AreEqual(2, symbols.Count);
         }
     }
 }

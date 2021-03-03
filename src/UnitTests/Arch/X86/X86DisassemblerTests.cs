@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,7 +27,6 @@ using Reko.Core.Machine;
 using Reko.Core.Memory;
 using Reko.Core.Services;
 using Reko.Core.Types;
-using Reko.Environments.Msdos;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.IO;
@@ -41,7 +40,7 @@ namespace Reko.UnitTests.Arch.X86
     {
         private ServiceContainer sc;
         private X86Disassembler dasm;
-        private X86Options options;
+        private Dictionary<string,object> options;
 
         public X86DisassemblerTests()
         {
@@ -51,12 +50,13 @@ namespace Reko.UnitTests.Arch.X86
 
         private X86Instruction Disassemble16(params byte[] bytes)
         {
-            ByteMemoryArea img = new ByteMemoryArea(Address.SegPtr(0xC00, 0), bytes);
-            EndianImageReader rdr = img.CreateLeReader(img.BaseAddress);
-            var dasm =  ProcessorMode.Real.CreateDisassembler(sc, rdr, options);
-            if (options != null)
+            ByteMemoryArea mem = new ByteMemoryArea(Address.SegPtr(0xC00, 0), bytes);
+            EndianImageReader rdr = mem.CreateLeReader(mem.BaseAddress);
+            var decoders = ProcessorMode.Real.CreateRootDecoders(options);
+            var dasm = ProcessorMode.Real.CreateDisassembler(sc, decoders, rdr, options);
+            if (options.ContainsKey("Emuate8087"))
             {
-                dasm.Emulate8087 = options.Emulate8087;
+                dasm.Emulate8087 = true;
             }
             return dasm.First();
         }
@@ -65,7 +65,8 @@ namespace Reko.UnitTests.Arch.X86
         {
             var img = new ByteMemoryArea(Address.Ptr32(0x10000), bytes);
             var rdr = img.CreateLeReader(img.BaseAddress);
-            var dasm = new X86Disassembler(sc, ProcessorMode.Protected32, rdr, PrimitiveType.Word32, PrimitiveType.Word32, false);
+            var decoders = ProcessorMode.Protected32.CreateRootDecoders(options);
+            var dasm = new X86Disassembler(sc, decoders, ProcessorMode.Protected32, rdr, PrimitiveType.Word32, PrimitiveType.Word32, false);
             return dasm.First();
         }
 
@@ -73,8 +74,10 @@ namespace Reko.UnitTests.Arch.X86
         {
             var img = new ByteMemoryArea(Address.Ptr64(0x10000), bytes);
             var rdr = img.CreateLeReader(img.BaseAddress);
+            var decoders = ProcessorMode.Protected64.CreateRootDecoders(options);
             var dasm = new X86Disassembler(
                 sc,
+                decoders,
                 ProcessorMode.Protected64,
                 rdr,
                 PrimitiveType.Word32,
@@ -91,23 +94,27 @@ namespace Reko.UnitTests.Arch.X86
 
         private void CreateDisassembler16(MemoryArea mem)
         {
+            var decoders = ProcessorMode.Real.CreateRootDecoders(options);
             dasm = new X86Disassembler(
                 sc,
+                decoders,
                 ProcessorMode.Real,
                 mem.CreateLeReader(mem.BaseAddress),
                 PrimitiveType.Word16,
                 PrimitiveType.Word16,
                 false);
-            if (options != null)
+            if (options!= null && options.ContainsKey("Emulate8087"))
             {
-                dasm.Emulate8087 = options.Emulate8087;
+                dasm.Emulate8087 = true;
             }
         }
 
         private void CreateDisassembler32(MemoryArea mem)
         {
+            var decoders = ProcessorMode.Protected32.CreateRootDecoders(options);
             dasm = new X86Disassembler(
                 sc,
+                decoders,
                 ProcessorMode.Protected32,
                 mem.CreateLeReader(mem.BaseAddress),
                 PrimitiveType.Word32,
@@ -117,8 +124,10 @@ namespace Reko.UnitTests.Arch.X86
 
         private void CreateDisassembler16(EndianImageReader rdr)
         {
+            var decoders = ProcessorMode.Real.CreateRootDecoders(options);
             dasm = new X86Disassembler(
                 sc,
+                decoders,
                 ProcessorMode.Real,
                 rdr,
                 PrimitiveType.Word16,
@@ -166,13 +175,13 @@ namespace Reko.UnitTests.Arch.X86
         [SetUp]
         public void Setup()
         {
-            options = null;
+            options = new Dictionary<string, object>();
         }
 
         [Test]
         public void X86dis_Sequence()
         {
-            var arch = new X86ArchitectureReal(sc, "x86-real-16");
+            var arch = new X86ArchitectureReal(sc, "x86-real-16", new Dictionary<string, object>());
             X86TextAssembler asm = new X86TextAssembler(arch);
             var program = asm.AssembleFragment(
                 Address.SegPtr(0xB96, 0),
@@ -205,7 +214,7 @@ foo:
         [Test]
         public void SegmentOverrides()
         {
-            var arch = new X86ArchitectureReal(sc, "x86-real-16");
+            var arch = new X86ArchitectureReal(sc, "x86-real-16", new Dictionary<string, object>());
             X86TextAssembler asm = new X86TextAssembler(arch);
             var program = asm.AssembleFragment(
                 Address.SegPtr(0xB96, 0),
@@ -224,7 +233,7 @@ foo:
         [Test]
         public void X86Dis_Rotations()
         {
-            var arch = new X86ArchitectureReal(sc, "x86-real-16");
+            var arch = new X86ArchitectureReal(sc, "x86-real-16", new Dictionary<string, object>());
             X86TextAssembler asm = new X86TextAssembler(arch);
             var lr = asm.AssembleFragment(
                 Address.SegPtr(0xB96, 0),
@@ -258,7 +267,7 @@ foo:
         [Test]
         public void X86Dis_Extensions()
         {
-            var arch = new X86ArchitectureReal(sc, "x86-real-16");
+            var arch = new X86ArchitectureReal(sc, "x86-real-16", new Dictionary<string, object>());
             IAssembler asm = arch.CreateAssembler(null);
             var program = asm.AssembleFragment(
                 Address.SegPtr(0xA14, 0),
@@ -294,7 +303,7 @@ movzx	ax,byte ptr [bp+4h]
         [Test]
         public void X86Dis_InvalidKeptStateRegression()
         {
-            var arch = new X86ArchitectureFlat32(sc, "x86-protected-32");
+            var arch = new X86ArchitectureFlat32(sc, "x86-protected-32", new Dictionary<string, object>());
             X86TextAssembler asm = new X86TextAssembler(arch);
             var lr = asm.AssembleFragment(
                 Address.Ptr32(0x01001000),
@@ -331,7 +340,7 @@ movzx	ax,byte ptr [bp+4h]
         [Test]
         public void DisEdiTimes2()
         {
-            var arch = new X86ArchitectureFlat32(sc, "x86-protected-32");
+            var arch = new X86ArchitectureFlat32(sc, "x86-protected-32", new Dictionary<string, object>());
             X86TextAssembler asm = new X86TextAssembler(arch);
             var program = asm.AssembleFragment(Address.SegPtr(0x0B00, 0),
                 @"	.i386
@@ -350,7 +359,7 @@ movzx	ax,byte ptr [bp+4h]
         {
             using (FileUnitTester fut = new FileUnitTester("Intel/DisFpuInstructions.txt"))
             {
-                var arch = new X86ArchitectureReal(sc, "x86-real-16");
+                var arch = new X86ArchitectureReal(sc, "x86-real-16", new Dictionary<string, object>());
                 X86TextAssembler asm = new X86TextAssembler(arch);
                 Program lr;
                 using (var rdr = new StreamReader(FileUnitTester.MapTestPath("Fragments/fpuops.asm")))
@@ -411,8 +420,10 @@ movzx	ax,byte ptr [bp+4h]
             ByteMemoryArea img = new ByteMemoryArea(Address.Ptr32(0x00100000), image);
             img.Relocations.AddPointerReference(0x00100001ul, 0x12345678);
             EndianImageReader rdr = img.CreateLeReader(img.BaseAddress);
+            var decoders = ProcessorMode.Protected32.CreateRootDecoders(new Dictionary<string, object>());
             X86Disassembler dasm = new X86Disassembler(
                 sc,
+                decoders,
                 ProcessorMode.Protected32,
                 rdr,
                 PrimitiveType.Word32,
@@ -782,7 +793,7 @@ movzx	ax,byte ptr [bp+4h]
         [Test]
         public void X86Dis_emulate_x87_int_39()
         {
-            options = new X86Options { Emulate8087 = true };
+            options = new Dictionary<string, object> { { "Emulate8087", "true" } };
             CreateDisassembler16(0xCD, 0x39, 0x5E, 0xEA);
             var instrs = dasm.Take(2)
                 .Select(i => i.ToString())
@@ -794,7 +805,7 @@ movzx	ax,byte ptr [bp+4h]
         [Test]
         public void X86Dis_emulate_x87_int_3C()
         {
-            options = new X86Options { Emulate8087 = true };
+            options = new Dictionary<string, object> { { "Emulate8087", "true" } };
             CreateDisassembler16(0xCD, 0x3C, 0xDD, 0x06, 0x8B, 0x04);
             var instrs = dasm.Take(2)
                 .Select(i => i.ToString())
@@ -813,7 +824,7 @@ movzx	ax,byte ptr [bp+4h]
         [Test]
         public void X86Dis_StringOps()
         {
-            X86TextAssembler asm = new X86TextAssembler(new X86ArchitectureFlat32(sc, "x86-protected-32"));
+            X86TextAssembler asm = new X86TextAssembler(new X86ArchitectureFlat32(sc, "x86-protected-32", new Dictionary<string, object>()));
             var lr = asm.AssembleFragment(
                 Address.Ptr32(0x01001000),
 
@@ -1114,6 +1125,18 @@ movzx	ax,byte ptr [bp+4h]
         public void X86dis_invd()
         {
             AssertCode32("invd", 0x0F, 0x08);
+        }
+
+        [Test]
+        public void X86Dis_64_vzeroall()
+        {
+            AssertCode64("vzeroall", "C5FC77");
+        }
+
+        [Test]
+        public void X86Dis_64_vzeroupper()
+        {
+            AssertCode64("vzeroupper", "C5F877");
         }
 
         [Test]
@@ -2404,11 +2427,9 @@ movzx	ax,byte ptr [bp+4h]
         }
 
         [Test]
-        [Ignore("Intel opcode map _appears_ to imply that 0x66 prefix is required, but none seen.")]
         public void X86Dis_vmaskmovps_2()
         {
-            var instr = Disassemble64(0xc4, 0x02, 0x75, 0x2e, 0x80, 0xcc, 0x02);
-            Assert.AreEqual("vmaskmovps\tymmword ptr [r8-0x76befd34<32>],ymm1,ymm8", instr.ToString());
+            AssertCode64("vmaskmovps\t[r8-0F734h],ymm1,ymm8", "C402752E80CC08FFFF");
         }
 
         [Test]
@@ -2491,14 +2512,6 @@ movzx	ax,byte ptr [bp+4h]
         {
             var instr = Disassemble64(0xc4, 0x02, 0x75, 0xdc, 0x43, 0xe0, 0xf7, 0x00);
             Assert.AreEqual("vaesenc\txmm8,xmm1,[r11-20h]", instr.ToString());
-        }
-
-        [Test]
-        [Ignore("Intel opcode map _appears_ to imply that 0x66 prefix is required, but none seen.")]
-        public void X86Dis_vaesenc_2()
-        {
-            var instr = Disassemble64(0xc4, 0x02, 0x75, 0xdc, 0x83, 0xe0, 0xf7, 0x00);
-            Assert.AreEqual("vaesenc\tymm8,ymm1,YMMWORD PTR [r11-76bb0820h]", instr.ToString());
         }
 
         [Test]

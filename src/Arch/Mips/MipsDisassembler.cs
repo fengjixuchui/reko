@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,7 +32,7 @@ using System.Diagnostics;
 
 namespace Reko.Arch.Mips
 {
-    using Decoder = Reko.Core.Machine.Decoder<MipsDisassembler, Mnemonic, MipsInstruction>;
+    using Decoder = Decoder<MipsDisassembler, Mnemonic, MipsInstruction>;
 
     public partial class MipsDisassembler : DisassemblerBase<MipsInstruction, Mnemonic>
     {

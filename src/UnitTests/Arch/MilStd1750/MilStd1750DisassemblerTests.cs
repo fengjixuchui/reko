@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,7 +38,7 @@ namespace Reko.UnitTests.Arch.MilStd1750
 
         public MilStd1750DisassemblerTests()
         {
-            this.arch = new MilStd1750Architecture(CreateServiceContainer(), "mil-std-1750a");
+            this.arch = new MilStd1750Architecture(CreateServiceContainer(), "mil-std-1750a", new Dictionary<string, object>());
             this.addrLoad = Address.Ptr16(0x0100);
         }
 

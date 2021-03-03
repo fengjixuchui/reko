@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -119,8 +119,8 @@ namespace Reko.UnitTests.Environments.C64
         {
             lines = new SortedList<ushort, C64BasicInstruction>();
             sc = CreateServiceContainer();
-            arch = new C64Basic(sc, "c64");
-            arch6502 = new Mos6502Architecture(sc, "m6502");
+            arch = new C64Basic(sc, "c64", new Dictionary<string, object>());
+            arch6502 = new Mos6502Architecture(sc, "m6502", new Dictionary<string, object>());
             m = new BasicProcessor(lines);
             host = new Mock<RewriterHost>(arch) { CallBase = true };
             host.Setup(h => h.GetArchitecture("m6502"))
@@ -180,7 +180,7 @@ namespace Reko.UnitTests.Environments.C64
             AssertCode(
                 "0|L--|0801(1): 2 instructions",
                 "1|L--|__PrintLine(3<i16>)",
-                "2|L--|__PrintEmptyLine()");
+                "2|L--|__PrintLine()");
         }
 
         [Test]
@@ -347,10 +347,10 @@ namespace Reko.UnitTests.Environments.C64
             m.Add(10, Token.PRINT,":",Token.PRINT,"\"FOO: \";CM$(MA):",Token.PRINT);
             AssertCode(
                 "0|L--|0801(1): 4 instructions",
-                "1|L--|__PrintEmptyLine()",
+                "1|L--|__PrintLine()",
                 "2|L--|__Print(\"FOO: \")",
                 "3|L--|__PrintLine(CM_s[MA_r])",
-                "4|L--|__PrintEmptyLine()");
+                "4|L--|__PrintLine()");
         }
 
         [Test]
@@ -390,7 +390,7 @@ namespace Reko.UnitTests.Environments.C64
             m.Add(10, "S", Token.eq, "S", Token.mul,"3");
             AssertCode(
                 "0|L--|0801(1): 1 instructions",
-                "1|L--|S_r = S_r * 3<i16>");
+                "1|L--|S_r = S_r *32 3<i16>");
         }
 
         [Test]

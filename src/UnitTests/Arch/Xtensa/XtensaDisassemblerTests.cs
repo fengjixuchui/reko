@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,16 +20,12 @@
 
 using NUnit.Framework;
 using Reko.Arch.Xtensa;
+using Reko.Core;
+using Reko.Core.Memory;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using Reko.Core;
-using System.IO;
-using System.Text.RegularExpressions;
-using System.Diagnostics;
 using System.ComponentModel.Design;
-using Reko.Core.Memory;
+using System.Linq;
 
 namespace Reko.UnitTests.Arch.Xtensa
 {
@@ -40,7 +36,7 @@ namespace Reko.UnitTests.Arch.Xtensa
 
         public XtensaDisassemblerTests()
         {
-            this.arch = new XtensaArchitecture(new ServiceContainer(), "xtensa");
+            this.arch = new XtensaArchitecture(new ServiceContainer(), "xtensa", new Dictionary<string, object>());
         }
 
         public override IProcessorArchitecture Architecture
@@ -503,15 +499,11 @@ namespace Reko.UnitTests.Arch.Xtensa
             AssertCode("bnez.n\ta2,00100007", 0x32CC);
         }
 
-        
-
         [Test]
         public void Xtdasm_rfe()
         {
             AssertCode("rfe", 0x003000);
         }
-
- 
 
         [Test]
         public void Xtdasm_bnez()
@@ -661,11 +653,6 @@ namespace Reko.UnitTests.Arch.Xtensa
             AssertCode("bbc\ta2,a4,00100008", 0x045247);
         }
 
- 
-
-
-
-
         [Test]
         public void Xtdasm_l32ai()
         {
@@ -703,6 +690,13 @@ namespace Reko.UnitTests.Arch.Xtensa
         }
 
         [Test]
+        public void Xtdasm_lsi()
+        {
+            AssertCode("lsi\tf9,a15,03FC", "93 0F FF");
+        }
+
+        [Test]
+
         public void Xtdasm_lsiu()
         {
             AssertCode("lsiu\tf3,a1,0000", 0x008133);
@@ -864,13 +858,22 @@ namespace Reko.UnitTests.Arch.Xtensa
             AssertCode("muls.dd.ll\tmr0,mr2", "04012C");
         }
 
-
-
-
         [Test]
         public void Xtdasm_neg()
         {
             AssertCode("neg\ta2,a2", 0x602020);
+        }
+
+        [Test]
+        public void Xtdasm_nop()
+        {
+            AssertCode("nop", "F0 20 00");
+        }
+
+        [Test]
+        public void Xtdasm_nop_n()
+        {
+            AssertCode("nop.n", "3D F0 00");
         }
 
         [Test]
@@ -1186,6 +1189,12 @@ namespace Reko.UnitTests.Arch.Xtensa
         }
 
         [Test]
+        public void Xtdasm_wsr_intenable()
+        {
+            AssertCode("wsr\ta0,INTENABLE", "00E413");
+        }
+
+        [Test]
         public void Xtdasm_wur()
         {
             AssertCode("wur\ta0,user14", "00E0F3");
@@ -1196,8 +1205,6 @@ namespace Reko.UnitTests.Arch.Xtensa
         {
             AssertCode("xor\ta5,a5,a4", 0x305540);
         }
-
-
     }
 }
 

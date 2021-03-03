@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -209,13 +209,13 @@ namespace Reko.Arch.OpenRISC
 
         private void CV(Identifier dst)
         {
-            var cv = binder.EnsureFlagGroup(arch.GetFlagGroup(Registers.sr, (uint) (FlagM.CY | FlagM.OV)));
+            var cv = binder.EnsureFlagGroup(Registers.CV);
             m.Assign(cv, m.Cond(dst));
         }
 
         private void V(Identifier dst)
         {
-            var v = binder.EnsureFlagGroup(arch.GetFlagGroup(Registers.sr, (uint) FlagM.OV));
+            var v = binder.EnsureFlagGroup(Registers.V);
             m.Assign(v, m.Cond(dst));
         }
 
@@ -242,7 +242,7 @@ namespace Reko.Arch.OpenRISC
             var dst = Reg(instrCur.Operands[0]);
             var src1 = Reg0(instrCur.Operands[1]);
             var src2 = Reg0(instrCur.Operands[2]);
-            var c = binder.EnsureFlagGroup(arch.GetFlagGroup(Registers.sr, (uint) FlagM.CY));
+            var c = binder.EnsureFlagGroup(Registers.C);
             m.Assign(dst, m.IAdd(m.IAdd(src1, src2), c));
             CV(dst);
         }
@@ -268,7 +268,7 @@ namespace Reko.Arch.OpenRISC
             var dst = Reg(instrCur.Operands[0]);
             var src = Reg0(instrCur.Operands[1]);
             var imm = Imm(instrCur.Operands[2]);
-            var c = binder.EnsureFlagGroup(arch.GetFlagGroup(Registers.sr, (uint) FlagM.CY));
+            var c = binder.EnsureFlagGroup(Registers.C);
             m.Assign(dst, m.IAdd(m.IAdd(src, imm), c));
             CV(dst);
         }
@@ -318,7 +318,7 @@ namespace Reko.Arch.OpenRISC
 
         private void RewriteCsync()
         {
-            m.SideEffect(host.PseudoProcedure("__csync", VoidType.Instance));
+            m.SideEffect(host.Intrinsic("__csync", false, VoidType.Instance));
         }
 
         private void RewriteJ()
@@ -367,7 +367,7 @@ namespace Reko.Arch.OpenRISC
             var fnType = new FunctionType(
                 new Identifier("", PrimitiveType.Word32, null),
                 new Identifier("ea", new Pointer(PrimitiveType.Word32, 32), null));
-            var e = host.CallIntrinsic("__atomic_load_w32", fnType, ea);
+            var e = host.CallIntrinsic("__atomic_load_w32", false, fnType, ea);
             if (mem.DataType.BitSize < dtDst.BitSize)
             {
                 e = m.Convert(e, e.DataType, dtDst);
@@ -379,7 +379,7 @@ namespace Reko.Arch.OpenRISC
         {
             var dst = Reg(instrCur.Operands[0]);
             var spr = Spr(instrCur.Operands[2]);
-            m.Assign(dst, host.PseudoProcedure("__mfspr", PrimitiveType.Word32, spr));
+            m.Assign(dst, host.Intrinsic("__mfspr", false, PrimitiveType.Word32, spr));
         }
 
         private void RewriteMaci()
@@ -418,19 +418,19 @@ namespace Reko.Arch.OpenRISC
 
         private void RewriteMsync()
         {
-            m.SideEffect(host.PseudoProcedure("__msync", VoidType.Instance));
+            m.SideEffect(host.Intrinsic("__msync", false, VoidType.Instance));
         }
 
         private void RewriteMtspr()
         {
             var src = Reg(instrCur.Operands[1]);
             var spr = Spr(instrCur.Operands[2]);
-            m.SideEffect(host.PseudoProcedure("__mtspr", VoidType.Instance, spr, src));
+            m.SideEffect(host.Intrinsic("__mtspr", false, VoidType.Instance, spr, src));
         }
 
         private void RewritePsync()
         {
-            m.SideEffect(host.PseudoProcedure("__psync", VoidType.Instance));
+            m.SideEffect(host.Intrinsic("__psync", false, VoidType.Instance));
         }
 
         private void RewriteRfe()
@@ -468,7 +468,7 @@ namespace Reko.Arch.OpenRISC
         private void RewriteSys()
         {
             var vector = Imm(instrCur.Operands[0]);
-            m.SideEffect(host.PseudoProcedure(PseudoProcedure.Syscall, VoidType.Instance, vector));
+            m.SideEffect(host.Intrinsic(IntrinsicProcedure.Syscall, false, VoidType.Instance, vector));
         }
     }
 }

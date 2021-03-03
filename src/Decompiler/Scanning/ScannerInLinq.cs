@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -203,11 +203,11 @@ namespace Reko.Scanning
             while (e.MoveNext())
             {
                 var next = e.Current;
-                yield return (prev, item, next);
+                yield return (prev!, item, next!);
                 prev = item;
                 item = next;
             }
-            yield return (prev, item, default(T));
+            yield return (prev!, item, default(T)!);
         }
 
         /// <summary>

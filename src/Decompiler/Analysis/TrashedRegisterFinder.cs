@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -327,7 +327,7 @@ namespace Reko.Analysis
         public bool VisitAssignment(Assignment ass)
         {
             var value = ass.Src.Accept(eval!);
-            DebugEx.Verbose(trace, "{0} = [{1}]", ass.Dst, value);
+            trace.Verbose("{0} = [{1}]", ass.Dst, value);
             ctx!.SetValue(ass.Dst, value);
             return true;
         }
@@ -346,7 +346,7 @@ namespace Reko.Analysis
                 foreach (var d in ci.Definitions)
                 {
                     ctx.SetValue((Identifier) d.Expression, Constant.Invalid);
-                    DebugEx.Verbose(trace, "  {0} = [{1}]", d.Expression, Constant.Invalid);
+                    trace.Verbose("  {0} = [{1}]", d.Expression, Constant.Invalid);
                 }
                 return true;
             }
@@ -377,13 +377,12 @@ namespace Reko.Analysis
             }
 
             var flow = this.flow[callee];
-            Dump(block!);
             foreach (var d in ci.Definitions)
             {
                 if (flow.Trashed.Contains(d.Storage))
                 {
                     ctx.SetValue((Identifier)d.Expression, Constant.Invalid);
-                    DebugEx.Verbose(trace, "  {0} = [{1}]", d.Expression, Constant.Invalid);
+                    trace.Verbose("  {0} = [{1}]", d.Expression, Constant.Invalid);
                 }
                 if (flow.Preserved.Contains(d.Storage))
                 {
@@ -392,7 +391,7 @@ namespace Reko.Analysis
                         .Select(u => u.Expression.Accept(eval!))
                         .SingleOrDefault();
                     ctx.SetValue((Identifier)d.Expression, before);
-                    DebugEx.Verbose(trace, "  {0} = [{1}]", d.Expression, before);
+                    trace.Verbose("  {0} = [{1}]", d.Expression, before);
                 }
             }
             return true;
@@ -455,7 +454,7 @@ namespace Reko.Analysis
             {
                 ctx.SetValue(phi.Dst, total);
             }
-            DebugEx.Verbose(trace, "{0} = φ[{1}]", phi.Dst, total!);
+            trace.Verbose("{0} = φ[{1}]", phi.Dst, total!);
             return true;
         }
 
@@ -593,11 +592,11 @@ namespace Reko.Analysis
             var b = block ?? this.block!;
             foreach (var de in blockCtx![b].IdState.OrderBy(i => i.Key.Name))
             {
-                DebugEx.Verbose(trace, "{0}: [{1}]", de.Key, de.Value);
+                trace.Verbose("{0}: [{1}]", de.Key, de.Value);
             }
             foreach (var de in blockCtx[b].StackState.OrderBy(i => i.Key))
             {
-                DebugEx.Verbose(trace, "fp {0} {1}: [{2}]", de.Key >= 0 ? "+" : "-", Math.Abs(de.Key), de.Value);
+                trace.Verbose("fp {0} {1}: [{2}]", de.Key >= 0 ? "+" : "-", Math.Abs(de.Key), de.Value);
             }
         }
 
@@ -783,13 +782,13 @@ namespace Reko.Analysis
                 {
                     if (!StackState.TryGetValue(stack.StackOffset, out Expression oldValue))
                     {
-                        DebugEx.Verbose(trace, "Trf: Stack offset {0:X4} now has value {1}", stack.StackOffset, value);
+                        trace.Verbose("Trf: Stack offset {0:X4} now has value {1}", stack.StackOffset, value);
                         IsDirty = true;
                         StackState.Add(stack.StackOffset, value);
                     }
                     else if (!cmp.Equals(oldValue, value) && oldValue != Constant.Invalid)
                     {
-                        DebugEx.Verbose(trace, "Trf: Stack offset {0:X4} now has value {1}, was {2}", stack.StackOffset, value, oldValue);
+                        trace.Verbose("Trf: Stack offset {0:X4} now has value {1}, was {2}", stack.StackOffset, value, oldValue);
                         IsDirty = true;
                         StackState[stack.StackOffset] = Constant.Invalid;
                     }
@@ -798,13 +797,13 @@ namespace Reko.Analysis
                 {
                     if (!IdState.TryGetValue(id, out Tuple<Expression, BitRange> oldValue))
                     {
-                        DebugEx.Verbose(trace, "Trf: id {0} now has value {1}", id, value);
+                        trace.Verbose("Trf: id {0} now has value {1}", id, value);
                         IsDirty = true;
                         IdState.Add(id, Tuple.Create(value, range));
                     }
                     else if (!cmp.Equals(oldValue.Item1, value) && oldValue.Item1 != Constant.Invalid)
                     {
-                        DebugEx.Verbose(trace, "Trf: id {0} now has value {1}, was {2}", id, value, oldValue);
+                        trace.Verbose("Trf: id {0} now has value {1}, was {2}", id, value, oldValue);
                         IsDirty = true;
                         IdState[id] = Tuple.Create((Expression)Constant.Invalid, range);
                     }
@@ -820,13 +819,13 @@ namespace Reko.Analysis
                 if (!StackState.TryGetValue(offset.Value, out Expression oldValue))
                 {
                     IsDirty = true;
-                    DebugEx.Verbose(trace, "Trf: Stack offset {0:X4} now has value {1}", offset.Value, value);
+                    trace.Verbose("Trf: Stack offset {0:X4} now has value {1}", offset.Value, value);
                     StackState.Add(offset.Value, value);
                 }
                 else if (!cmp.Equals(oldValue, value) && oldValue != Constant.Invalid)
                 {
                     IsDirty = true;
-                    DebugEx.Verbose(trace, "Trf: Stack offset {0:X4} now has value {1}, was {2}", offset.Value, value, oldValue);
+                    trace.Verbose("Trf: Stack offset {0:X4} now has value {1}, was {2}", offset.Value, value, oldValue);
                     StackState[offset.Value] = Constant.Invalid;
                 }
             }

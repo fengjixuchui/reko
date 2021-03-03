@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,9 +36,8 @@ namespace Reko.Arch.i8051
 {
     public class i8051Architecture : ProcessorArchitecture
     {
-        private Dictionary<uint, FlagGroupStorage> flagGroups;
-        
-        public i8051Architecture(IServiceProvider services, string archId) : base(services, archId)
+        public i8051Architecture(IServiceProvider services, string archId, Dictionary<string, object> options)
+            : base(services, archId, options)
         {
             this.Endianness = EndianServices.Big;
             this.StackRegister = Registers.SP;
@@ -46,7 +45,6 @@ namespace Reko.Arch.i8051
             this.PointerType = PrimitiveType.Ptr16;
             this.FramePointerType = PrimitiveType.Byte; // tiny stack pointer!
             this.InstructionBitSize = 8;
-            this.flagGroups = new Dictionary<uint, FlagGroupStorage>();
 
             this.DataMemory = new RegisterStorage("__data", 300, 0, PrimitiveType.SegmentSelector); 
         }
@@ -96,12 +94,8 @@ namespace Reko.Arch.i8051
 
         public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)
         {
-            if (flagGroups.TryGetValue(grf, out var grfStg))
-                return grfStg;
-
             PrimitiveType dt = Bits.IsSingleBitSet(grf) ? PrimitiveType.Bool : PrimitiveType.Byte;
-            grfStg = new FlagGroupStorage(Registers.PSW, grf, GrfToString(flagRegister, "", grf), dt);
-            flagGroups.Add(grfStg.FlagGroupBits, grfStg);
+            var grfStg = new FlagGroupStorage(Registers.PSW, grf, GrfToString(flagRegister, "", grf), dt);
             return grfStg;
         }
 

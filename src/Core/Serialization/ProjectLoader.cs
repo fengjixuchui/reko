@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,7 +34,6 @@ using System.Text;
 using Reko.Core.Types;
 using Reko.Core.Expressions;
 using System.Globalization;
-using Reko.Core.Output;
 using Reko.Core.Memory;
 
 namespace Reko.Core.Serialization
@@ -534,6 +533,11 @@ namespace Reko.Core.Serialization
                     .Where(s => s != null)
                     .ToList();
             }
+            if (sUser.BlockLabels != null)
+            {
+                program.User.BlockLabels = sUser.BlockLabels
+                    .ToDictionary(u => u.Location, u => u.Name);
+            }
             program.User.ShowAddressesInDisassembly = sUser.ShowAddressesInDisassembly;
             program.User.ShowBytesInDisassembly = sUser.ShowBytesInDisassembly;
             program.User.ExtractResources = sUser.ExtractResources;
@@ -551,6 +555,15 @@ namespace Reko.Core.Serialization
         private SortedList<Address, List<UserRegisterValue>> LoadRegisterValues(
             RegisterValue_v2[] sRegValues)
         {
+            Storage GetStorage(string name)
+            {
+                if (name is null)
+                    return null;
+                if (platform.Architecture.TryGetRegister(name, out var reg))
+                    return reg;
+                return platform.Architecture.GetFlagGroup(name);
+            }
+
             var allLists = new SortedList<Address, List<UserRegisterValue>>();
             foreach (var sRegValue in sRegValues)
             {
@@ -561,15 +574,15 @@ namespace Reko.Core.Serialization
                         list = new List<UserRegisterValue>();
                         allLists.Add(addr, list);
                     }
-                    var reg = platform.Architecture.GetRegister(sRegValue.Register);
+                    var stg = GetStorage(sRegValue.Register);
                     var c = sRegValue.Value != "*"
-                        ? Constant.Create(reg.DataType, Convert.ToUInt64(sRegValue.Value, 16))
+                        ? Constant.Create(stg.DataType, Convert.ToUInt64(sRegValue.Value, 16))
                         : Constant.Invalid;
-                    if (reg != null)
+                    if (stg != null)
                     {
                         list.Add(new UserRegisterValue
                         {
-                            Register = reg,
+                            Register = stg,
                             Value = c
                         });
                     }

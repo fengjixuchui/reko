@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -397,7 +397,7 @@ namespace Reko.UnitTests.Scanning
         public void Bwi_CallingAllocaWithConstant()
         {
             var sc = new ServiceContainer();
-            program.Architecture = new X86ArchitectureFlat32(sc, "x86-protected-32");
+            program.Architecture = new X86ArchitectureFlat32(sc, "x86-protected-32", new Dictionary<string, object>());
             program.Platform = new DefaultPlatform(sc, program.Architecture);
             var sig = CreateSignature(Registers.esp, Registers.eax);
             var alloca = new ExternalProcedure("alloca", sig)
@@ -480,7 +480,7 @@ namespace Reko.UnitTests.Scanning
             Given_SimpleTrace(trace);
 
             trace.Add(m => m.Call(Address.Ptr32(0x00102000), 4));
-            trace.Add(m => m.SideEffect(new ProcedureConstant(VoidType.Instance, new PseudoProcedure("shouldnt_decompile_this", VoidType.Instance, 0))));
+            trace.Add(m => m.SideEffect(new ProcedureConstant(VoidType.Instance, new IntrinsicProcedure("shouldnt_decompile_this", false, VoidType.Instance, 0))));
 
             var wi = CreateWorkItem(Address.Ptr32(0x2000));
             wi.Process();
@@ -625,7 +625,7 @@ testProc_exit:
             Assert.AreEqual("r0 = r1", block.Statements[0].ToString());
             Assert.AreEqual("goto 0x00100100<p32>", block.Statements[1].ToString());
 
-            Assert.AreEqual("l00101000", block.Succ[0].Name);
+            Assert.AreEqual("l00101000", block.Succ[0].DisplayName);
             scanner.Verify();
         }
 
@@ -660,17 +660,17 @@ testProc_exit:
             Assert.AreEqual("branch r1 l00100000_ds_t", block.Statements[0].ToString());
             var blFalse = block.ElseBlock;
             var blTrue = block.ThenBlock;
-            Assert.AreEqual("l00100000_ds_f", blFalse.Name);     // delay-slot-false
+            Assert.AreEqual("l00100000_ds_f", blFalse.DisplayName);     // delay-slot-false
             Assert.AreEqual(1, blFalse.Statements.Count);
             Assert.AreEqual("r0 = r1", blFalse.Statements[0].ToString());
             Assert.AreEqual(1, blFalse.Succ.Count);
-            Assert.AreEqual("l00100008", blFalse.Succ[0].Name);
+            Assert.AreEqual("l00100008", blFalse.Succ[0].DisplayName);
 
-            Assert.AreEqual("l00100000_ds_t", blTrue.Name);      // delay-slot-true
+            Assert.AreEqual("l00100000_ds_t", blTrue.DisplayName);      // delay-slot-true
             Assert.AreEqual(1, blTrue.Statements.Count);
             Assert.AreEqual("r0 = r1", blTrue.Statements[0].ToString());
             Assert.AreEqual(1, blTrue.Succ.Count);
-            Assert.AreEqual("l00101000", blTrue.Succ[0].Name);
+            Assert.AreEqual("l00101000", blTrue.Succ[0].DisplayName);
         }
 
         [Test]
@@ -769,15 +769,15 @@ testProc_exit:
             Assert.AreEqual("branch r1 l00100000_ds_t", block.Statements[0].ToString());
             var blFalse = block.ElseBlock;
             var blTrue = block.ThenBlock;
-            Assert.AreEqual("l00100008", blFalse.Name);     // delay-slot was anulled.
+            Assert.AreEqual("l00100008", blFalse.DisplayName);     // delay-slot was anulled.
             Assert.AreEqual(1, blFalse.Statements.Count);
             Assert.AreEqual("r2 = r1", blFalse.Statements[0].ToString());
 
-            Assert.AreEqual("l00100000_ds_t", blTrue.Name);      // delay-slot-true
+            Assert.AreEqual("l00100000_ds_t", blTrue.DisplayName);      // delay-slot-true
             Assert.AreEqual(1, blTrue.Statements.Count);
             Assert.AreEqual("r0 = r1", blTrue.Statements[0].ToString());
             Assert.AreEqual(1, blTrue.Succ.Count);
-            Assert.AreEqual("l00101000", blTrue.Succ[0].Name);
+            Assert.AreEqual("l00101000", blTrue.Succ[0].DisplayName);
         }
 
 

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,6 +34,11 @@ namespace Reko.Core.Lib
         /// Returns true if the bit at position <paramref name="pos"/> is set.
         /// </summary>
         public static bool IsBitSet(uint u, int pos)
+        {
+            return ((u >> pos) & 1) != 0;
+        }
+
+        public static bool IsBitSet(ulong u, int pos)
         {
             return ((u >> pos) & 1) != 0;
         }

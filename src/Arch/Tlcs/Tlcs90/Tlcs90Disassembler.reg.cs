@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,7 +32,7 @@ namespace Reko.Arch.Tlcs.Tlcs90
 
     partial class Tlcs90Disassembler
     {
-        private static Decoder[] regEncodings = new Decoder[]
+        private static readonly Decoder[] regEncodings = new Decoder[]
         {
             // 00
             invalid,

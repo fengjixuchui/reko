@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,6 +36,8 @@ using Reko.Core.Memory;
 
 namespace Reko.Arch.X86
 {
+    using Decoder = X86Disassembler.Decoder;
+
 	// X86 flag masks.
 
 	[Flags]
@@ -57,13 +59,13 @@ namespace Reko.Arch.X86
     [Designer("Reko.Arch.X86.Design.X86ArchitectureDesigner,Reko.Arch.X86.Design")]
 	public class IntelArchitecture : ProcessorArchitecture
 	{
-		private ProcessorMode mode;
-        private Dictionary<uint, FlagGroupStorage> flagGroupCache;
+        private ProcessorMode mode;
+        private Decoder[]? rootDecoders;
 
-        public IntelArchitecture(IServiceProvider services, string archId, ProcessorMode mode) : base(services, archId)
+        public IntelArchitecture(IServiceProvider services, string archId, ProcessorMode mode, Dictionary<string, object> options)
+            : base(services, archId, options)
         {
             this.mode = mode;
-            this.flagGroupCache = new Dictionary<uint, FlagGroupStorage>();
             this.Endianness = EndianServices.Little;
             this.InstructionBitSize = 8;
             this.CarryFlagMask = (uint)FlagM.CF;
@@ -72,7 +74,8 @@ namespace Reko.Arch.X86
             this.FramePointerType = mode.FramePointerType;
             this.StackRegister = mode.StackRegister;
             this.FpuStackRegister = Registers.Top;
-            this.Options = new X86Options();
+            this.Options = options;
+            this.LoadUserOptions(options);
         }
 
         public override IAssembler CreateAssembler(string? asmDialect)
@@ -82,7 +85,7 @@ namespace Reko.Arch.X86
 
         public X86Disassembler CreateDisassemblerImpl(EndianImageReader imageReader)
         {
-            return mode.CreateDisassembler(this.Services, imageReader, Options);
+            return mode.CreateDisassembler(this.Services, EnsureRootDecoders(), imageReader, Options);
         }
 
         public override IProcessorEmulator CreateEmulator(SegmentMap segmentMap, IPlatformEmulator envEmulator)
@@ -162,6 +165,15 @@ namespace Reko.Arch.X86
             return new MemoryAccess(Registers.ST, e, dataType);
         }
 
+        private Decoder[] EnsureRootDecoders()
+        {
+            if (this.rootDecoders is null)
+            {
+                rootDecoders = mode.CreateRootDecoders(Options);
+            }
+            return rootDecoders;
+        }
+
         public override Address MakeAddressFromConstant(Constant c, bool codeAlign)
         {
             return mode.MakeAddressFromConstant(c);
@@ -186,14 +198,8 @@ namespace Reko.Arch.X86
 
         public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)
 		{
-            if (flagGroupCache.TryGetValue(grf, out FlagGroupStorage f))
-			{
-				return f;
-			}
-
 			var dt = Bits.IsSingleBitSet(grf) ? PrimitiveType.Bool : PrimitiveType.Byte;
-            f = new FlagGroupStorage(Registers.eflags, grf, GrfToString(flagRegister, "", grf), dt);
-			flagGroupCache.Add(grf, f);
+            var f = new FlagGroupStorage(Registers.eflags, grf, GrfToString(flagRegister, "", grf), dt);
 			return f;
 		}
 
@@ -294,19 +300,23 @@ namespace Reko.Arch.X86
             return Registers.All.Where(a => a != null).ToArray();
         }
 
+        public override FlagGroupStorage[] GetFlags()
+        {
+            return Registers.EflagsBits;
+        }
+
         public override List<RtlInstruction>? InlineCall(Address addrCallee, Address addrContinuation, EndianImageReader rdr, IStorageBinder binder)
         {
-            return this.mode.InlineCall(this.Services, addrCallee, addrContinuation, rdr, binder);
+            var dasm = mode.CreateDisassembler(Services, EnsureRootDecoders(), rdr, this.Options);
+            return this.mode.InlineCall(this.Services, dasm, addrCallee, addrContinuation, binder);
         }
 
         public override void LoadUserOptions(Dictionary<string, object>? options)
         {
             if (options != null)
             {
-                this.Options = new X86Options
-                {
-                    Emulate8087 = options.ContainsKey("Emulate8087") && (string)options["Emulate8087"] == "true"
-                };
+                this.rootDecoders = null;
+                this.Options = options;
             }
         }
 
@@ -314,11 +324,7 @@ namespace Reko.Arch.X86
         {
             if (Options == null)
                 return null;
-            var dict = new Dictionary<string, object>();
-            if (Options.Emulate8087)
-            {
-                dict["Emulate8087"] = "true";
-            }
+            var dict = new Dictionary<string, object>(Options);
             return dict;
         }
 
@@ -343,19 +349,27 @@ namespace Reko.Arch.X86
 		public override string GrfToString(RegisterStorage flagregister, string prefix, uint grf)
 		{
 			StringBuilder s = new StringBuilder();
-            foreach (var fr in Registers.EflagsBits)
+            if (flagregister == Registers.eflags)
             {
-                if ((fr.FlagGroupBits & grf) != 0) s.Append(fr.Name);
-			}
-			return s.ToString();
+                foreach (var fr in Registers.EflagsBits)
+                {
+                    if ((fr.FlagGroupBits & grf) != 0) s.Append(fr.Name);
+                }
+            }
+            else if (flagregister == Registers.FPUF)
+            {
+                foreach (var fr in Registers.FpuFlagsBits)
+                {
+                    if ((fr.FlagGroupBits & grf) != 0) s.Append(fr.Name);
+                }
+            }
+            return s.ToString();
 		}
 
 		public ProcessorMode ProcessorMode
 		{
 			get { return mode; }
 		}
-
-        public X86Options Options { get; set; }
 
         public override bool TryParseAddress(string? txtAddress, out Address addr)
         {
@@ -365,32 +379,32 @@ namespace Reko.Arch.X86
 
     public class X86ArchitectureReal : IntelArchitecture
     {
-        public X86ArchitectureReal(IServiceProvider services, string archId)
-            : base(services, archId, ProcessorMode.Real)
+        public X86ArchitectureReal(IServiceProvider services, string archId, Dictionary<string, object> options)
+            : base(services, archId, ProcessorMode.Real, options)
         {
         }
     }
 
     public class X86ArchitectureProtected16 : IntelArchitecture
     {
-        public X86ArchitectureProtected16(IServiceProvider services, string archId)
-            : base(services, archId, ProcessorMode.ProtectedSegmented)
+        public X86ArchitectureProtected16(IServiceProvider services, string archId, Dictionary<string, object> options)
+            : base(services, archId, ProcessorMode.ProtectedSegmented, options)
         {
         }
     }
 
     public class X86ArchitectureFlat32 : IntelArchitecture
     {
-        public X86ArchitectureFlat32(IServiceProvider services, string archId)
-            : base(services, archId, ProcessorMode.Protected32)
+        public X86ArchitectureFlat32(IServiceProvider services, string archId, Dictionary<string, object> options)
+            : base(services, archId, ProcessorMode.Protected32, options)
         {
         }
     }
 
     public class X86ArchitectureFlat64 : IntelArchitecture
     {
-        public X86ArchitectureFlat64(IServiceProvider services, string archId)
-            : base(services, archId, ProcessorMode.Protected64)
+        public X86ArchitectureFlat64(IServiceProvider services, string archId, Dictionary<string, object> options)
+            : base(services, archId, ProcessorMode.Protected64, options)
         {
         }
     }

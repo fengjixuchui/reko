@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,7 +45,6 @@ namespace Reko.Arch.Z80
         private readonly EndianImageReader rdr;
         private readonly List<MachineOperand> ops;
         private Address addr;
-        //private Z80Instruction instr;
         private RegisterStorage? IndexRegister;
 
         public Z80Disassembler(Z80ProcessorArchitecture arch, EndianImageReader rdr)
@@ -202,7 +201,7 @@ namespace Reko.Arch.Z80
                 Mnemonic.rr,
                 Mnemonic.sla,
                 Mnemonic.sra,
-                Mnemonic.swap,
+                Mnemonic.sll,
                 Mnemonic.srl,
             };
 

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,6 +22,7 @@ using NUnit.Framework;
 using Reko.Arch.Sparc;
 using Reko.Core;
 using Reko.Core.Memory;
+using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Linq;
 
@@ -34,14 +35,30 @@ namespace Reko.UnitTests.Arch.Sparc
         {
             var bytes = new byte[4];
             new BeImageWriter(bytes).WriteBeUInt32(0, instr);
-            var img = new ByteMemoryArea(Address.Ptr32(0x00100000), bytes);
-            return Disassemble(img);
+            var mem = new ByteMemoryArea(Address.Ptr32(0x00100000), bytes);
+            return Disassemble(mem);
+        }
+
+        private static SparcInstruction DisassembleWord64(uint instr)
+        {
+            var bytes = new byte[4];
+            new BeImageWriter(bytes).WriteBeUInt32(0, instr);
+            var mem = new ByteMemoryArea(Address.Ptr64(0x00100000), bytes);
+            return Disassemble64(mem);
         }
 
         private static SparcInstruction Disassemble(ByteMemoryArea bmem)
         {
             var sc = new ServiceContainer();
-            var arch = new SparcArchitecture32(sc, "sparc");
+            var arch = new SparcArchitecture32(sc, "sparc", new Dictionary<string, object>());
+            var dasm = new SparcDisassembler(arch, arch.Decoder, bmem.CreateBeReader(0U));
+            return dasm.First();
+        }
+
+        private static SparcInstruction Disassemble64(ByteMemoryArea bmem)
+        {
+            var sc = new ServiceContainer();
+            var arch = new SparcArchitecture64(sc, "sparc", new Dictionary<string, object>());
             var dasm = new SparcDisassembler(arch, arch.Decoder, bmem.CreateBeReader(0U));
             return dasm.First();
         }
@@ -49,6 +66,12 @@ namespace Reko.UnitTests.Arch.Sparc
         private void AssertInstruction(uint word, string expected)
         {
             var instr = DisassembleWord(word);
+            Assert.AreEqual(expected, instr.ToString());
+        }
+
+        private void AssertInstruction64(uint word, string expected)
+        {
+            var instr = DisassembleWord64(word);
             Assert.AreEqual(expected, instr.ToString());
         }
 
@@ -217,7 +240,19 @@ namespace Reko.UnitTests.Arch.Sparc
         [Test]
         public void SparcDis_fcmpd()
         {
-            AssertInstruction(0x81A90A47, "fcmpd\t%f4,%f38");
+            AssertInstruction(0x81A90A47, "fcmpd\t%d2,%d19");
+        }
+
+        [Test]
+        public void SparcDasm_movrz()
+        {
+            AssertInstruction64(0x837E2401, "movrz\t%i0,+00000001,%g1");
+        }
+
+        [Test]
+        public void SparcDasm_wrtbr()
+        {
+            AssertInstruction(0x9999999A, "wrtbr\t%g6,%i2");
         }
     }
 }

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -306,13 +306,13 @@ namespace Reko.Analysis
                 return TransformAddOrSub(a, binUse);
             if (a.Src is Application app && app.Procedure is ProcedureConstant pc)
             {
-                if (pc.Procedure is PseudoProcedure pseudo)
+                if (pc.Procedure is IntrinsicProcedure pseudo)
                 {
-                    if (pseudo.Name == PseudoProcedure.RorC)
+                    if (pseudo.Name == IntrinsicProcedure.RorC)
                     {
                         return TransformRorC(app, a);
                     }
-                    else if (pseudo.Name == PseudoProcedure.RolC)
+                    else if (pseudo.Name == IntrinsicProcedure.RolC)
                     {
                         return TransformRolC(app, a);
                     }
@@ -345,24 +345,36 @@ namespace Reko.Analysis
             return a;
         }
 
-        private Instruction TransformRolC(Application rolc, Assignment a)
+        /// <summary>
+        /// Transform a (Shl a,1; Rolc b,1) pair to shl SEQ(b,a),1
+        /// </summary>
+        private Instruction TransformRolC(Application rolc, Assignment assRolc)
         {
-            var sidOrigHi = ssaIds[a.Dst];
-            var sidCarry = ssaIds[(Identifier)rolc.Arguments[2]];
+            var sidOrigHi = ssaIds[assRolc.Dst];
+            var sidCarryUsedInRolc = ssaIds[(Identifier)rolc.Arguments[2]];
+            var defStatements = ClosureOfReachingDefinitions(sidCarryUsedInRolc);
+            if (defStatements.Count != 1)
+                return assRolc;
+            var sidCarry = defStatements.First();
+            if (sidCarry.Uses.Count != 1)
+                return assRolc;
             if (!(sidCarry.DefExpression is ConditionOf cond))
-                return a;
+                return assRolc;
             if (!(cond.Expression is Identifier condId))
-                return a;
+                return assRolc;
             var sidOrigLo = ssaIds[condId];
             if (!(sidOrigLo.DefExpression is BinaryExpression shift) || shift.Operator != Operator.Shl)
-                return a;
+                return assRolc;
 
             var block = sidOrigHi.DefStatement!.Block;
             var expShrSrc = shift.Left;
             var expRorSrc = rolc.Arguments[0];
 
-            var stmGrf = sidGrf!.DefStatement;
-            block.Statements.Remove(stmGrf!);
+            // Discard the unused statements that generate the carry that 
+            // ties the SHL and RCL together.
+            sidCarryUsedInRolc.Uses.Remove(sidOrigHi.DefStatement);
+            ssa.RemoveUses(sidCarry.DefStatement!);
+            block.Statements.Remove(sidCarry.DefStatement!);
 
             // xx = lo
             var tmpLo = ssa.Procedure.Frame.CreateTemporary(expShrSrc.DataType);
@@ -377,16 +389,16 @@ namespace Reko.Analysis
             var dt = PrimitiveType.Create(Domain.Integer, expShrSrc.DataType.BitSize + expRorSrc.DataType.BitSize);
             var tmp = ssa.Procedure.Frame.CreateTemporary(dt);
             var expMkLongword = m.Shl(m.Seq(sidTmpHi.Identifier, sidTmpLo.Identifier), 1);
-            var sidTmp = ssaIds.Add(tmp, sidGrf.DefStatement, expMkLongword, false);
+            var sidTmp = ssaIds.Add(tmp, sidGrf!.DefStatement, expMkLongword, false);
             var stmTmp = block.Statements.Insert(iRolc + 1, sidOrigHi.DefStatement.LinearAddress,
                 new Assignment(sidTmp.Identifier, expMkLongword));
             sidTmp.DefStatement = stmTmp;
             sidTmpLo.Uses.Add(stmTmp);
             sidTmpHi.Uses.Add(stmTmp);
 
-            ssa.RemoveUses(sidCarry.DefStatement!);
-            block.Statements.Remove(sidCarry.DefStatement!);
-            ssaIds.Remove(sidCarry);
+            //ssa.RemoveUses(sidCarry.DefStatement!);
+            // block.Statements.Remove(sidCarry.DefStatement!);
+            //ssaIds.Remove(sidCarry);
 
             var expNewLo = m.Slice(
                 PrimitiveType.CreateWord(tmpHi.DataType.BitSize),
@@ -595,7 +607,7 @@ namespace Reko.Analysis
             Expression e = new Application(
                 new ProcedureConstant(
                     program.Platform.PointerType,
-                    new PseudoProcedure("OVERFLOW", sig)),
+                    new IntrinsicProcedure("OVERFLOW", true, sig)),
                 PrimitiveType.Bool,
                 bin);
 			if (isNegated)
@@ -613,7 +625,7 @@ namespace Reko.Analysis
             Expression e = new Application(
                 new ProcedureConstant(
                     program.Platform.PointerType,
-                    new PseudoProcedure("PARITY_EVEN", sig)),
+                    new IntrinsicProcedure("PARITY_EVEN", true, sig)),
                 PrimitiveType.Bool,
                 bin);
             if (isNegated)
@@ -636,7 +648,7 @@ namespace Reko.Analysis
             Expression e = m.Fn(
                 new ProcedureConstant(
                     program.Platform.PointerType,
-                    new PseudoProcedure("isunordered", sig)),
+                    new IntrinsicProcedure("isunordered", true, sig)),
                 bin.Left,
                 bin.Right);
             if (isNegated)

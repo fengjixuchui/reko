@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -286,7 +286,9 @@ namespace Reko.Arch.Arc
             };
         }
 
-        // Memory access with index register
+        /// <summary>
+        /// Memory access with index register
+        /// </summary>
         private static Mutator<ArcDisassembler> Mrr(
             PrimitiveType dt,
             Bitfield[] baseRegFields,
@@ -312,7 +314,7 @@ namespace Reko.Arch.Arc
                 }
                 else
                 {
-                    var indexReg = Registers.CoreRegisters[iIndexReg];
+                    var indexReg = Registers.CoreRegisters[iIndexReg & 0x3F];
                     mem = new MemoryOperand(dt)
                     {
                         Base = baseReg,

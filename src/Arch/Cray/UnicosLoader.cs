@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,6 +29,8 @@ namespace Reko.Arch.Cray
 {
     public class UnicosLoader : ImageLoader
     {
+        private ulong a_entry;
+
         public UnicosLoader(IServiceProvider services, string filename, byte[] rawImage)
             : base(services, filename, rawImage)
         {
@@ -100,7 +102,7 @@ struct exec {
 
             if (!rdr.TryReadBeUInt64(out ulong a_yms))
                 throw new NotImplementedException();
-            if (!rdr.TryReadBeUInt64(out ulong a_entry))
+            if (!rdr.TryReadBeUInt64(out this.a_entry))
                 throw new NotImplementedException();
             if (!rdr.TryReadBeUInt64(out ulong a_origin))
                 throw new NotImplementedException();
@@ -123,8 +125,9 @@ struct exec {
  
         public override RelocationResults Relocate(Program program, Address addrLoad)
         {
+            var entry = ImageSymbol.Procedure(program.Architecture, Address.Ptr32((uint) a_entry), "_start");
             return new RelocationResults(
-                new List<ImageSymbol>(),
+                new List<ImageSymbol> { entry },
                 new SortedList<Address, ImageSymbol>());
         }
 
@@ -139,7 +142,8 @@ struct exec {
             default:
                 throw new NotImplementedException($"Architecture {machineType} not implemented.");
             }
-            return cfgSvc.GetArchitecture(sArch);
+            //$REFACTOR: don't need the dict.
+            return cfgSvc.GetArchitecture(sArch, new Dictionary<string,object>());
         }
 
         private ushort[] ReadWords16(EndianImageReader rdr, ulong count)
@@ -163,6 +167,5 @@ struct exec {
             }
             return words;
         }
-
     }
 }

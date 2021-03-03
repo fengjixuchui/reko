@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -41,7 +41,8 @@ namespace Reko.Arch.MilStd1750
 
         public static PrimitiveType Real48 { get; } 
 
-        public MilStd1750Architecture(IServiceProvider services, string archId) : base(services, archId)
+        public MilStd1750Architecture(IServiceProvider services, string archId, Dictionary<string, object> options)
+            : base(services, archId, options)
         {
             this.Endianness = EndianServices.Big;
             this.FramePointerType = PrimitiveType.Ptr16;

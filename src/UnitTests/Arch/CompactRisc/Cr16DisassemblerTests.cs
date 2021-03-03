@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,7 +39,7 @@ namespace Reko.UnitTests.Arch.CompactRisc
 
         public Cr16DisassemblerTests()
         {
-            this.arch = new Cr16Architecture(CreateServiceContainer(), "cr16c");
+            this.arch = new Cr16Architecture(CreateServiceContainer(), "cr16c", new Dictionary<string, object>());
             this.addrLoad = Address.Ptr16(0x8000);
         }
 

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -136,8 +136,8 @@ namespace Reko.Core.Output
                 addr = Address.FromConstant(c);
                 if (visited.Contains(addr))
                     return 0;
-                // Don't chase null pointers (//$REVIEW: but some architectures have valid data at addr 0)
-                if (c.IsZero)
+                // Don't chase unmapped pointers
+                if (!program.SegmentMap.IsValidAddress(addr))
                     return 0;
                 // Don't chase decompiled procedures.
                 if (program.Procedures.ContainsKey(addr))

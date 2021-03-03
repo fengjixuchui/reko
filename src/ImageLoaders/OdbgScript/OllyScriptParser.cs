@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -46,8 +46,8 @@ namespace Reko.ImageLoaders.OdbgScript
             Level = TraceLevel.Warning
         };
         private static readonly UnknownType unk = new UnknownType();
-        private static readonly ProcedureConstant interpolate = new ProcedureConstant(unk, new PseudoProcedure("Interpolate", unk, 1));
-        private static readonly ProcedureConstant hexString = new ProcedureConstant(unk, new PseudoProcedure("HexString", unk, 1));
+        private static readonly ProcedureConstant interpolate = new ProcedureConstant(unk, new IntrinsicProcedure("Interpolate", true, unk, 1));
+        private static readonly ProcedureConstant hexString = new ProcedureConstant(unk, new IntrinsicProcedure("HexString", true, unk, 1));
 
         private readonly string currentDir;
         private readonly IOdbgScriptHost host;

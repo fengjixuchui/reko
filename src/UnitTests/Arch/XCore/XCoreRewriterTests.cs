@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,8 +27,6 @@ using Reko.Core.Rtl;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Reko.UnitTests.Arch.XCore
 {
@@ -40,7 +38,7 @@ namespace Reko.UnitTests.Arch.XCore
 
         public XCoreRewriterTests()
         {
-            this.arch = new XCore200Architecture(CreateServiceContainer(), "xcore");
+            this.arch = new XCore200Architecture(CreateServiceContainer(), "xcore", new Dictionary<string, object>());
             this.addr = Address.Ptr32(0x00100000);
         }
 

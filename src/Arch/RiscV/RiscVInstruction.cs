@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -118,8 +118,13 @@ namespace Reko.Arch.RiscV
                 return;
             case AddressOperand addrop:
                 //$TODO: 32-bit?
-                renderer.WriteAddress(string.Format("{0:X16}", addrop.Address.ToLinear()), addrop.Address);
-                return;
+                if (addrop.Width.BitSize == 32)
+                {
+                    renderer.WriteAddress(string.Format("{0:X8}", addrop.Address.ToLinear()), addrop.Address);
+                } else {
+                    renderer.WriteAddress(string.Format("{0:X16}", addrop.Address.ToLinear()), addrop.Address);
+                }
+                    return;
             case MemoryOperand memop:
                 memop.Render(renderer, options);
                 return;

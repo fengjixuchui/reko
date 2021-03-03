@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,12 +22,8 @@ using NUnit.Framework;
 using Reko.Arch.PowerPC;
 using Reko.Core;
 using Reko.Core.Memory;
-using System;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Reko.UnitTests.Arch.PowerPC
 {
@@ -41,7 +37,7 @@ namespace Reko.UnitTests.Arch.PowerPC
         public PowerPcEmulatorTests()
         {
             this.sc = new ServiceContainer();
-            this.arch = new PowerPcBe64Architecture(sc, "ppc-be-64");
+            this.arch = new PowerPcBe64Architecture(sc, "ppc-be-64", new Dictionary<string, object>());
         }
 
         private void Given_Code(params uint [] uInstrs)

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,7 +50,7 @@ namespace Reko.UnitTests.Environments.MacOS.Classic
         private void Given_Relocator()
         {
             var sc = new ServiceContainer();
-            var arch = new M68kArchitecture(sc, "m68k");
+            var arch = new M68kArchitecture(sc, "m68k", new Dictionary<string, object>());
             var platform = new MacOSClassic(sc, arch)
             {
                 A5World = a5world,

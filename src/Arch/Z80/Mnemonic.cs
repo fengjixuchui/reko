@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -103,7 +103,6 @@ namespace Reko.Arch.Z80
         @out,
         outd,
         outi,
-        outr,
         pop,
         push,
         res,
@@ -127,7 +126,7 @@ namespace Reko.Arch.Z80
         srl,
         sra,
         set,
-        swap,
+        sll,
         xor,
 
         // Shared mnemonics

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -62,9 +62,8 @@ namespace Reko.Arch.Vax
         private static Dictionary<string, RegisterStorage> regsByName = regs
             .ToDictionary(r => r.Name);
 
-        private Dictionary<uint, FlagGroupStorage> flagGroups;
-
-        public VaxArchitecture(IServiceProvider services, string name) : base(services, name)
+        public VaxArchitecture(IServiceProvider services, string archId, Dictionary<string, object> options)
+            : base(services, archId, options)
         {
             this.Endianness = EndianServices.Little;
             this.InstructionBitSize = 8;
@@ -72,7 +71,6 @@ namespace Reko.Arch.Vax
             this.WordWidth = PrimitiveType.Word32;
             this.PointerType = PrimitiveType.Ptr32;
             this.StackRegister = Registers.sp;
-            this.flagGroups = new Dictionary<uint, FlagGroupStorage>();
         }
 
         public override IEnumerable<MachineInstruction> CreateDisassembler(EndianImageReader imageReader)
@@ -112,14 +110,8 @@ namespace Reko.Arch.Vax
 
         public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)
         {
-            if (flagGroups.TryGetValue(grf, out var f))
-            {
-                return f;
-            }
-
             PrimitiveType dt = Bits.IsSingleBitSet(grf) ? PrimitiveType.Bool : PrimitiveType.Byte;
             var fl = new FlagGroupStorage(flagRegister, grf, GrfToString(Registers.psw, "", grf), dt);
-            flagGroups.Add(grf, fl);
             return fl;
         }
 

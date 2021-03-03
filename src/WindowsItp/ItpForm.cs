@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -211,7 +211,7 @@ namespace Reko.WindowsItp
         private void assumeRegistesToolStripMenuItem_Click(object sender, EventArgs e)
         {
             var dlg = new AssumedRegisterValuesDialog();
-            dlg.Architecture = new X86ArchitectureFlat64(new ServiceContainer(), "x86-protected-64");
+            dlg.Architecture = new X86ArchitectureFlat64(new ServiceContainer(), "x86-protected-64", new Dictionary<string, object>());
             dlg.ShowDialog(this);
         }
 

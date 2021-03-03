@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -46,7 +46,7 @@ namespace Reko.UnitTests.Arch.X86.Assembler
 		{
             this.sc = new ServiceContainer();
             sc.AddService<IFileSystemService>(new FileSystemServiceImpl());
-            arch = new X86ArchitectureReal(sc, "x86-real-16");
+            arch = new X86ArchitectureReal(sc, "x86-real-16", new Dictionary<string, object>());
             asm = new X86TextAssembler(arch);
         }
 
@@ -122,7 +122,7 @@ namespace Reko.UnitTests.Arch.X86.Assembler
 
         private void AssembleFragment(string asmSrc)
         {
-            var arch = new X86ArchitectureReal(sc, "x86-real-16");
+            var arch = new X86ArchitectureReal(sc, "x86-real-16", new Dictionary<string, object>());
             program = asm.AssembleFragment(Address.SegPtr(0x0C00, 0), asmSrc);
             bmem = (ByteMemoryArea) program.SegmentMap.Segments.Values.First().MemoryArea;
         }
@@ -140,7 +140,7 @@ hello	endp
             var segment = program.SegmentMap.Segments.Values.First();
 			using (FileUnitTester fut = new FileUnitTester("Intel/AsFragment.txt"))
 			{
-				var arch = new X86ArchitectureReal(sc, "x86-real-16");
+				var arch = new X86ArchitectureReal(sc, "x86-real-16", new Dictionary<string, object>());
 				var d = new Dumper(program);
 				d.DumpData(program.SegmentMap, arch, segment.Address, segment.ContentSize, new TextFormatter(fut.TextWriter));
 				fut.AssertFilesEqual();
@@ -359,8 +359,10 @@ foo		endp
             Address addr = Address.SegPtr(0x0C00, 0);
             var program = asm.AssembleFragment(addr, "mov [0x400],0x1234\n");
             var mem = program.SegmentMap.Segments.Values.First().MemoryArea;
+            var decoders = ProcessorMode.Real.CreateRootDecoders(new Dictionary<string, object>());
             var dasm = new X86Disassembler(
                 sc,
+                decoders,
                 ProcessorMode.Real,
                 mem.CreateLeReader(addr),
                 PrimitiveType.Word16,

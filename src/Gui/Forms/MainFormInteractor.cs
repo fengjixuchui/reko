@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -208,6 +208,9 @@ namespace Reko.Gui.Forms
 
             var testGenSvc = svcFactory.CreateTestGenerationService();
             sc.AddService<ITestGenerationService>(testGenSvc);
+
+            var userEventSvc = svcFactory.CreateUserEventService();
+            sc.AddService<IUserEventService>(userEventSvc);
         }
 
         public virtual TextWriter CreateTextWriter(string filename)
@@ -385,7 +388,7 @@ namespace Reko.Gui.Forms
                     EntryPoint = entry,
                 };
 
-                OpenBinary(dlg.FileName.Text, (f) =>pageInitial.OpenBinaryAs(f, details), f => false);
+                OpenBinary(dlg.FileName.Text, (f) => pageInitial.OpenBinaryAs(f, details), f => false);
             }
             catch (Exception ex)
             {
@@ -676,14 +679,15 @@ namespace Reko.Gui.Forms
 
         public void ViewCallGraph()
         {
-            var brSvc = sc.RequireService<IProjectBrowserService>();
-            var program = brSvc.CurrentProgram;
-            if (program != null)
-            {
-                var cgvSvc = sc.RequireService<ICallGraphViewService>();
-                var title = string.Format("{0} {1}", program.Name, Resources.CallGraphTitle);
-                cgvSvc.ShowCallgraph(program, title);
-            }
+            var project = decompilerSvc.Decompiler.Project;
+            //$TODO: what about mutiple programs in project?
+            if (project is null || project.Programs.Count != 1)
+                return;
+
+            var program = project.Programs[0];
+            var cgvSvc = sc.RequireService<ICallGraphViewService>();
+            var title = string.Format("{0} {1}", program.Name, Resources.CallGraphTitle);
+            cgvSvc.ShowCallgraph(program, title);
         }
 
         public void ToolsOptions()

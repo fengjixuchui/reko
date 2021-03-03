@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,7 +32,8 @@ namespace Reko.Arch.XCore
 {
     public class XCore200Architecture : ProcessorArchitecture
     {
-        public XCore200Architecture(IServiceProvider services, string moniker) : base(services, moniker)
+        public XCore200Architecture(IServiceProvider services, string archId, Dictionary<string, object> options)
+            : base(services, archId, options)
         {
             this.Endianness = EndianServices.Little;
             this.FramePointerType = PrimitiveType.Ptr32;

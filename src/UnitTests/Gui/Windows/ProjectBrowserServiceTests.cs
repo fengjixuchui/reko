@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -398,7 +398,7 @@ namespace Reko.UnitTests.Gui.Windows
             var mem = new ByteMemoryArea(Address.Ptr32(0x12340000), new byte[0x1000]);
             var segmentMap = new SegmentMap(Address.Ptr32(0x12300000));
             segmentMap.AddSegment(mem, ".text", AccessMode.ReadExecute);
-            var arch = new Mock<ProcessorArchitecture>(sc, "mmix");
+            var arch = new Mock<ProcessorArchitecture>(sc, "mmix", new Dictionary<string, object>());
             arch.Object.Description = "Foo Processor";
             var platform = new DefaultPlatform(sc, arch.Object);
             this.program = new Program(segmentMap, arch.Object, platform);

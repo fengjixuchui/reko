@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -61,6 +61,17 @@ namespace Reko.Arch.Mos6502
             instr.Address = addr;
             instr.Length = (int) (rdr.Address - addr);
             this.addr = rdr.Address;
+            return instr;
+        }
+
+        public override Instruction MakeInstruction(InstrClass iclass, Mnemonic mnemonic)
+        {
+            var instr = new Instruction
+            {
+                InstructionClass = iclass,
+                Mnemonic = mnemonic,
+                Operands = this.ops.ToArray(),
+            };
             return instr;
         }
 

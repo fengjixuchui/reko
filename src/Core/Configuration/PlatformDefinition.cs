@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -65,7 +65,6 @@ namespace Reko.Core.Configuration
             if (type == null)
                 throw new TypeLoadException(
                     string.Format("Unable to load {0} environment.", Description));
-            var cs = type.GetConstructors();
             var platform = (Platform)Activator.CreateInstance(type, services, arch);
             LoadSettingsFromConfiguration(services, platform);
             return platform;

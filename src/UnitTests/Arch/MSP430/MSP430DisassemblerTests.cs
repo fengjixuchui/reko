@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,7 +34,7 @@ namespace Reko.UnitTests.Arch.Tlcs
     {
         public MSP430DisassemblerTests()
         {
-            this.Architecture = new Msp430Architecture(new ServiceContainer(), "msp430");
+            this.Architecture = new Msp430Architecture(new ServiceContainer(), "msp430", new Dictionary<string, object>());
             this.LoadAddress = Address.Ptr16(0x0100);
         }
 
@@ -88,6 +88,12 @@ namespace Reko.UnitTests.Arch.Tlcs
         public void MSP430Dis_call()
         {
             AssertCode("call\tr8", "8812");
+        }
+
+        [Test]
+        public void MSP430Dis_cmpa()
+        {
+            AssertCode("cmpa.a\tr9,r4", "D409");
         }
 
         [Test]
@@ -200,6 +206,5 @@ namespace Reko.UnitTests.Arch.Tlcs
         {
             AssertCode("mov.w\t#EEA0,r12", "3C40 A0EE");
         }
-
     }
 }

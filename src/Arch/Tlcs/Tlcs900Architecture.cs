@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,7 +40,8 @@ namespace Reko.Arch.Tlcs
     // https://toshiba.semicon-storage.com/product/micro/900H1_CPU_BOOK_CP3_CPU_en.pdf
     public class Tlcs900Architecture : ProcessorArchitecture
     {
-        public Tlcs900Architecture(IServiceProvider services, string archId) : base(services, archId)
+        public Tlcs900Architecture(IServiceProvider services, string archId, Dictionary<string, object> options)
+            : base(services, archId, options)
         {
             this.CarryFlagMask = Registers.C.FlagGroupBits;
             this.Endianness = EndianServices.Little;
@@ -156,11 +157,13 @@ namespace Reko.Arch.Tlcs
 
         public override RegisterStorage GetSubregister(RegisterStorage reg, int offset, int width)
         {
+            if (width == 0)
+                return null;
             if (!Registers.Subregisters.TryGetValue(reg.Domain, out var subs))
                 return null;
             int key = (width << 4) | offset;
             if (!subs.TryGetValue(key, out var subreg))
-                return null;
+                return reg;
             return subreg;
         }
 

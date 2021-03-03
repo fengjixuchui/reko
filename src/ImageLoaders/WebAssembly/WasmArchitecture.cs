@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,7 +34,8 @@ namespace Reko.ImageLoaders.WebAssembly
 {
     public class WasmArchitecture : ProcessorArchitecture
     {
-        public WasmArchitecture(IServiceProvider services, string archName) : base(services, archName)
+        public WasmArchitecture(IServiceProvider services, string archId, Dictionary<string, object> options)
+            : base(services, archId, options)
         {
             this.Endianness = EndianServices.Little;
             this.PointerType = PrimitiveType.Ptr32;

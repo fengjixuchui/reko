@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -334,7 +334,7 @@ namespace Reko.Analysis
 
         private ApplicationBuilder CreateApplicationBuilder(SsaState ssaCaller, Statement stmCaller, CallInstruction call, Expression fn)
         {
-            return new CallApplicationBuilder(ssaCaller, stmCaller, call, fn);
+            return new CallApplicationBuilder(ssaCaller, stmCaller, call, fn, false);
         }
 
         public void RemoveStatementsFromExitBlock(SsaState ssa)
@@ -373,6 +373,7 @@ namespace Reko.Analysis
                     return false;
                 ApplicationBuilder ab = CreateApplicationBuilder(ssaCaller, stm, call, fn);
                 var instr = ab.CreateInstruction(sigCallee, procCallee.Characteristics);
+                var instrOld = stm.Instruction;
                 stm.Instruction = instr;
                 var ssam = new SsaMutator(ssaCaller);
                 ssam.AdjustSsa(stm, call);

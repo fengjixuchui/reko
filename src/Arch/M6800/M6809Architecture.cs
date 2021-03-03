@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,16 +37,14 @@ namespace Reko.Arch.M6800
 
     public class M6809Architecture : ProcessorArchitecture
     {
-        private readonly Dictionary<uint, FlagGroupStorage> flagGroups;
-
-        public M6809Architecture(IServiceProvider services, string archId) : base(services, archId)
+        public M6809Architecture(IServiceProvider services, string archId, Dictionary<string, object> options)
+            : base(services, archId, options)
         {
             this.Endianness = EndianServices.Big;
             this.FramePointerType = PrimitiveType.Ptr16;
             this.InstructionBitSize = 8;
             this.PointerType = PrimitiveType.Ptr16;
             this.StackRegister = M6809.Registers.S;
-            this.flagGroups = new Dictionary<uint, FlagGroupStorage>();
         }
 
         public override IEnumerable<MachineInstruction> CreateDisassembler(EndianImageReader rdr)
@@ -81,14 +79,8 @@ namespace Reko.Arch.M6800
 
         public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)
         {
-            if (flagGroups.TryGetValue(grf, out var f))
-            {
-                return f;
-            }
-
             var dt = Bits.IsSingleBitSet(grf) ? PrimitiveType.Bool : PrimitiveType.Byte;
             var fl = new FlagGroupStorage(M6809.Registers.CC, grf, GrfToString(M6809.Registers.CC, "", grf), dt);
-            flagGroups.Add(grf, fl);
             return fl;
         }
 

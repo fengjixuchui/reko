@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,7 +33,8 @@ namespace Reko.Arch.Vax
     {
         private Expression Adawi(Expression a, Expression b)
         {
-            return host.PseudoProcedure("atomic_fetch_add",
+            return host.Intrinsic("atomic_fetch_add",
+                false,
                 a.DataType,
                 a, b);
         }
@@ -93,8 +94,9 @@ namespace Reko.Arch.Vax
 
         private Expression Rotl(Expression a, Expression b)
         {
-            return host.PseudoProcedure(
-                PseudoProcedure.Rol,
+            return host.Intrinsic(
+                IntrinsicProcedure.Rol,
+                true,
                 a.DataType,
                 a, b);
         }
@@ -105,14 +107,15 @@ namespace Reko.Arch.Vax
             var op1 = RewriteSrcOp(1, PrimitiveType.Ptr32);
             var op2 = RewriteSrcOp(2, PrimitiveType.Word16);
             var op3 = RewriteSrcOp(3, PrimitiveType.Ptr32);
-            var grf = FlagGroup(FlagM.NF | FlagM.ZF | FlagM.VF);
+            var grf = FlagGroup(Registers.VZN);
             m.Assign(
                 grf,
-                host.PseudoProcedure(
+                host.Intrinsic(
                     op,
+                    false,
                     PrimitiveType.Byte,
                     op0, op1, op2, op3));
-            var c = FlagGroup(FlagM.CF);
+            var c = FlagGroup(Registers.C);
             m.Assign(c, Constant.False());
         }
 
@@ -124,14 +127,15 @@ namespace Reko.Arch.Vax
             var op3 = RewriteSrcOp(3, PrimitiveType.Ptr32);
             var op4 = RewriteSrcOp(4, PrimitiveType.Word16);
             var op5 = RewriteSrcOp(5, PrimitiveType.Ptr32);
-            var grf = FlagGroup(FlagM.NF | FlagM.ZF | FlagM.VF);
+            var grf = FlagGroup(Registers.VZN);
             m.Assign(
                 grf,
-                host.PseudoProcedure(
+                host.Intrinsic(
                     op, 
+                    false,
                     PrimitiveType.Byte,
                     op0, op1, op2, op3, op4, op5));
-            var c = FlagGroup(FlagM.CF);
+            var c = FlagGroup(Registers.C);
             m.Assign(c, Constant.False());
         }
 
@@ -141,7 +145,7 @@ namespace Reko.Arch.Vax
             var dst = RewriteDstOp(1, PrimitiveType.Word32,
                 e => m.IAdd(
                         m.IAdd(e, op1),
-                        FlagGroup(FlagM.CF)));
+                        FlagGroup(Registers.C)));
             AllFlags(dst);
         }
 
@@ -211,7 +215,7 @@ namespace Reko.Arch.Vax
             else
             {
                 shift = RewriteSrcOp(0, width);
-                fn = (a, b) => host.PseudoProcedure("__ashift", width, a, b);
+                fn = (a, b) => host.Intrinsic("__ashift", false, width, a, b);
             }
             var op2 = RewriteSrcOp(1, width);
             var dst = RewriteDstOp(2, width, e => fn(op2, shift));
@@ -226,14 +230,15 @@ namespace Reko.Arch.Vax
             var op3 = RewriteSrcOp(3, PrimitiveType.Ptr32);
             var op4 = RewriteSrcOp(4, PrimitiveType.Word16);
             var op5 = RewriteSrcOp(5, PrimitiveType.Ptr32);
-            var grf = FlagGroup(FlagM.NF | FlagM.ZF | FlagM.VF);
+            var grf = FlagGroup(Registers.VZN);
             m.Assign(
                 grf,
-                host.PseudoProcedure(
+                host.Intrinsic(
                     "vax_ashp",
+                    false,
                     PrimitiveType.Byte,
                     op0, op1, op2, op3, op4, op5));
-            var c = FlagGroup(FlagM.CF);
+            var c = FlagGroup(Registers.C);
             m.Assign(c, Constant.False());
         }
 
@@ -243,26 +248,26 @@ namespace Reko.Arch.Vax
             var src = RewriteSrcOp(1, width);
             var tmp = binder.CreateTemporary(width);
             m.Assign(tmp, m.And(src, mask));
-            m.Assign(FlagGroup(FlagM.NZ), m.Cond(tmp));
-            m.Assign(FlagGroup(FlagM.VF), Constant.False());
+            m.Assign(FlagGroup(Registers.ZN), m.Cond(tmp));
+            m.Assign(FlagGroup(Registers.V), Constant.False());
         }
 
         private void RewriteClr(PrimitiveType width)
         {
             RewriteDstOp(0, width, e => Constant.Create(width, 0));
-            m.Assign(FlagGroup(FlagM.ZF), Constant.True());
-            m.Assign(FlagGroup(FlagM.NF), Constant.False());
-            m.Assign(FlagGroup(FlagM.CF), Constant.False());
-            m.Assign(FlagGroup(FlagM.VF), Constant.False());
+            m.Assign(FlagGroup(Registers.Z), Constant.True());
+            m.Assign(FlagGroup(Registers.N), Constant.False());
+            m.Assign(FlagGroup(Registers.C), Constant.False());
+            m.Assign(FlagGroup(Registers.V), Constant.False());
         }
 
         private void RewriteCmp(PrimitiveType width)
         {
             var op0 = RewriteSrcOp(0, width);
             var op1 = RewriteSrcOp(1, width);
-            var grf = FlagGroup(FlagM.NF | FlagM.ZF | FlagM.CF);
+            var grf = FlagGroup(Registers.CZN);
             m.Assign(grf, m.Cond(m.ISub(op0, op1)));
-            m.Assign(FlagGroup(FlagM.VF), Constant.False());
+            m.Assign(FlagGroup(Registers.V), Constant.False());
         }
 
         private void RewriteCmpp3()
@@ -271,8 +276,9 @@ namespace Reko.Arch.Vax
             var op1 = RewriteSrcOp(1, PrimitiveType.Ptr32);
             var op2 = RewriteSrcOp(2, PrimitiveType.Ptr32);
             NZ00(
-                host.PseudoProcedure(
+                host.Intrinsic(
                     "vax_cmpp3",
+                    false,
                     PrimitiveType.Byte,
                     op0, op1, op2));
         }
@@ -284,8 +290,9 @@ namespace Reko.Arch.Vax
             var op2 = RewriteSrcOp(2, PrimitiveType.Word16);
             var op3 = RewriteSrcOp(3, PrimitiveType.Ptr32);
             NZ00(
-                host.PseudoProcedure(
+                host.Intrinsic(
                     "vax_cmpp4",
+                    false,
                     PrimitiveType.Byte,
                     op0, op1, op2, op3));
         }
@@ -310,7 +317,8 @@ namespace Reko.Arch.Vax
             var srcaddr = RewriteSrcOp(1, PrimitiveType.Ptr32);
             var dstlen = RewriteSrcOp(2, PrimitiveType.Word16);
             var dstaddr = RewriteSrcOp(3, PrimitiveType.Word16);
-            NZV0(host.PseudoProcedure(cvtfn,
+            NZV0(host.Intrinsic(cvtfn,
+                false,
                 PrimitiveType.Byte,
                 srclen,
                 srcaddr,
@@ -322,7 +330,7 @@ namespace Reko.Arch.Vax
         {
             var src = RewriteSrcOp(0, from);
             var dst = RewriteDstOp(1, to, e => m.Convert(
-                host.PseudoProcedure("round", from, src),
+                host.Intrinsic("round", false, from, src),
                 from,
                 to));
             NZV0(dst);
@@ -336,14 +344,15 @@ namespace Reko.Arch.Vax
             var op3 = RewriteSrcOp(3, PrimitiveType.Ptr32);
             var op4 = RewriteSrcOp(4, PrimitiveType.Word16);
             var op5 = RewriteSrcOp(5, PrimitiveType.Ptr32);
-            var grf = FlagGroup(FlagM.NF | FlagM.ZF | FlagM.VF);
+            var grf = FlagGroup(Registers.VZN);
             m.Assign(
                 grf,
-                host.PseudoProcedure(
+                host.Intrinsic(
                     "vax_divp",
+                    false,
                     PrimitiveType.Byte,
                     op0, op1, op2, op3, op4, op5));
-            var c = FlagGroup(FlagM.CF);
+            var c = FlagGroup(Registers.C);
             m.Assign(c, Constant.False());
         }
 
@@ -354,7 +363,11 @@ namespace Reko.Arch.Vax
             if (pos is Constant cPos && size is Constant cSize)
             {
                 var nSize = cSize.ToInt32();
-                if (0 <= nSize && nSize < 32)
+                var nPos = cPos.ToInt32();
+                var nEnd = nSize + nPos;
+                var dstWidth = instr.Operands[3].Width.BitSize;
+                if (0 <= nPos && nPos < dstWidth && 
+                    nPos < nEnd && nEnd < dstWidth)
                 {
                     var bas = RewriteSrcOp(2, PrimitiveType.Word32);
                     Expression dst = RewriteDstOp(3, PrimitiveType.Word32, e =>
@@ -379,12 +392,13 @@ namespace Reko.Arch.Vax
             var size = RewriteSrcOp(1, PrimitiveType.Byte);
             var bas = RewriteSrcOp(2, PrimitiveType.Word32);
             var findPos = RewriteSrcOp(3, PrimitiveType.Word32);
-            var z = FlagGroup(FlagM.ZF);
-            var grf = FlagGroup(FlagM.NVC);
+            var z = FlagGroup(Registers.Z);
+            var grf = FlagGroup(Registers.CVN);
             m.Assign(
                 z,
-                host.PseudoProcedure(
+                host.Intrinsic(
                     fnname,
+                    false, 
                     z.DataType,
                     bas, size, start,
                     m.Out(PrimitiveType.Ptr32, findPos)));
@@ -405,14 +419,15 @@ namespace Reko.Arch.Vax
             var op3 = RewriteSrcOp(3, PrimitiveType.Ptr32);
             var op4 = RewriteSrcOp(4, PrimitiveType.Word16);
             var op5 = RewriteSrcOp(5, PrimitiveType.Ptr32);
-            var grf = FlagGroup(FlagM.NF | FlagM.ZF | FlagM.VF);
+            var grf = FlagGroup(Registers.VZN);
             m.Assign(
                 grf,
-                host.PseudoProcedure(
+                host.Intrinsic(
                     "vax_mulp",
+                    false,
                     PrimitiveType.Byte,
                     op0, op1, op2, op3, op4, op5));
-            var c = FlagGroup(FlagM.CF);
+            var c = FlagGroup(Registers.C);
             m.Assign(c, Constant.False());
         }
 
@@ -427,16 +442,17 @@ namespace Reko.Arch.Vax
                 var r1 = binder.EnsureRegister(Registers.r1);
                 ret = binder.EnsureSequence(width, r1.Storage, ret.Storage);
             }
-            var grf = FlagGroup(FlagM.ZF | FlagM.NF);
+            var grf = FlagGroup(Registers.ZN);
             m.Assign(
                 ret,
-                host.PseudoProcedure(
+                host.Intrinsic(
                     "vax_poly",
+                    false,
                     width,
                     op0, op1, op2));
             m.Assign(grf, m.Cond(ret));
-            m.Assign(FlagGroup(FlagM.VF), Constant.False());
-            m.Assign(FlagGroup(FlagM.CF), Constant.False());
+            m.Assign(FlagGroup(Registers.V), Constant.False());
+            m.Assign(FlagGroup(Registers.C), Constant.False());
         }
 
         private void RewritePush(PrimitiveType width)
@@ -480,7 +496,7 @@ namespace Reko.Arch.Vax
             var dst = RewriteDstOp(1, PrimitiveType.Word32,
                 e => m.ISub(
                         m.ISub(e, op1),
-                        FlagGroup(FlagM.CF)));
+                        FlagGroup(Registers.C)));
             AllFlags(dst);
         }
 

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -454,7 +454,7 @@ done:
                 m.Assign(r1, m.Shr(r1, 1));
                 m.Assign(C, m.Cond(r1));
                 m.Assign(r2, m.Fn(
-                    new PseudoProcedure(PseudoProcedure.RorC, r2.DataType, 2),
+                    new IntrinsicProcedure(IntrinsicProcedure.RorC, true, r2.DataType, 2),
                     r2, Constant.Byte(1), C));
                 m.Assign(C, m.Cond(r2));
                 m.MStore(m.Word32(0x3000), r2);
@@ -478,7 +478,7 @@ done:
                 m.Assign(r1, m.Shl(r1, 1));
                 m.Assign(C, m.Cond(r1));
                 m.Assign(r2, m.Fn(
-                    new PseudoProcedure(PseudoProcedure.RolC, r2.DataType, 2),
+                    new IntrinsicProcedure(IntrinsicProcedure.RolC, true, r2.DataType, 2),
                     r2, Constant.Byte(1), C));
                 m.Assign(C, m.Cond(r2));
                 m.MStore(m.Word32(0x3000), r1);
@@ -777,6 +777,50 @@ ProcedureBuilder_exit:
                 m.MStore(m.Word32(0x00123400), m.Convert(m.Test(ConditionCode.UGT, CZ), PrimitiveType.Bool, PrimitiveType.SByte));
                 m.MStore(m.Word32(0x00123402), m.Convert(m.Test(ConditionCode.ULE, CZ), PrimitiveType.Bool, PrimitiveType.SByte));
                 m.MStore(m.Word32(0x00123404), m.Convert(m.Test(ConditionCode.EQ, Z), PrimitiveType.Bool, PrimitiveType.SByte));
+                m.Return();
+            });
+        }
+
+        [Test]
+        public void CceShlRcl_Through_Alias()
+        {
+            var sExp =
+            #region Expected
+@"// ProcedureBuilder
+// Return size: 0
+define ProcedureBuilder
+ProcedureBuilder_entry:
+	def r1
+	def r0
+	// succ:  l1
+l1:
+	v9_13 = SEQ(r0, r1) << 1<8>
+	r1_2 = SLICE(v9_13, word16, 0)
+	r0_7 = SLICE(v9_13, word16, 16)
+	Mem9[0x1234<16>:word16] = r0_7
+	Mem10[0x1236<16>:word16] = r1_2
+	return
+	// succ:  ProcedureBuilder_exit
+ProcedureBuilder_exit:
+
+";
+            #endregion
+            RunStringTest(sExp, m => {
+                var RolC = new ProcedureConstant(PrimitiveType.Ptr32, new IntrinsicProcedure(
+                    IntrinsicProcedure.RolC, true, PrimitiveType.Word16, 3));
+                var r1 = m.Reg16("r1", 1);
+                var r0 = m.Reg16("r0", 0);
+                var psw = new RegisterStorage("psw", 2, 0, PrimitiveType.Word16);
+                var C = m.Frame.EnsureFlagGroup(new FlagGroupStorage(psw, 1, "C", PrimitiveType.Bool));
+                var NZVC = m.Frame.EnsureFlagGroup(new FlagGroupStorage(psw, 0xF, "NZVC", PrimitiveType.Word16));
+                var tmp = m.Frame.CreateTemporary("tmp", PrimitiveType.Word16);
+                m.Assign(r1, m.Shl(r1 , m.Int16(1)));
+                m.Assign(NZVC, m.Cond(r1));
+                m.Assign(tmp, r0);
+                m.Assign(r0, m.Fn(RolC, r0, m.Int16(1), C));
+                m.Assign(C, m.Ne0(m.And(tmp, m.Word16(0x8000))));
+                m.MStore(m.Word16(0x1234), r0);
+                m.MStore(m.Word16(0x1236), r1);
                 m.Return();
             });
         }

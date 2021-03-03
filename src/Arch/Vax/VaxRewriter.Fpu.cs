@@ -1,6 +1,6 @@
-﻿#region License
+#region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,13 +36,13 @@ namespace Reko.Arch.Vax
             var muld = RewriteSrcOp(2, floatType);
             var integral = RewriteSrcOp(3, PrimitiveType.Int32);
             var frac = RewriteSrcOp(4, floatType);
-            var nzv = FlagGroup(FlagM.NZV);
+            var nzv = FlagGroup(Registers.VZN);
             m.Assign(
                 nzv,
-                host.PseudoProcedure(fnname, nzv.DataType, mulr, mulrx, muld,
+                host.Intrinsic(fnname, false, nzv.DataType, mulr, mulrx, muld,
                 m.Out(PrimitiveType.Word32, integral),
                 m.Out(floatType, frac)));
-            m.Assign(FlagGroup(FlagM.CF), Constant.False());
+            m.Assign(FlagGroup(Registers.C), Constant.False());
         }
 
         private bool RewriteFpu2(PrimitiveType width, Func<Expression, Expression, Expression> fn, Func<Expression, bool> genFlags)

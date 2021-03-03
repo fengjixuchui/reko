@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -234,5 +234,40 @@ foo(1<32>)
 ";
             AssertProcedureCode(sExp);
         }
- 	}
+
+        [Test]
+        public void DeadIdempotentIntrinsic()
+        {
+            var dead = m.Reg32("dead");
+            var intrinsic = new IntrinsicProcedure("useless", true, PrimitiveType.Int32, 0);
+            m.Assign(dead, m.Fn(intrinsic));
+            m.Return();
+
+            EliminateDeadCode();
+
+            var sExp = 
+@"
+return
+";
+            AssertProcedureCode(sExp);
+        }
+
+        [Test]
+        public void DeadIntrinsicWithSideEffect()
+        {
+            var dead = m.Reg32("dead");
+            var intrinsic = new IntrinsicProcedure("sideffector", false, PrimitiveType.Int32, 0);
+            m.Assign(dead, m.Fn(intrinsic));
+            m.Return();
+
+            EliminateDeadCode();
+
+            var sExp =
+@"
+sideffector()
+return
+";
+            AssertProcedureCode(sExp);
+        }
+    }
 }

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,7 +36,7 @@ namespace Reko.UnitTests.Arch.Arm
 
         protected override IProcessorArchitecture CreateArchitecture()
         {
-            return new ThumbArchitecture(new ServiceContainer(), "arm-thumb");
+            return new ThumbArchitecture(new ServiceContainer(), "arm-thumb", new Dictionary<string, object>());
         }
 
         protected MachineInstruction Disassemble16(params ushort[] instrs)
@@ -80,6 +80,15 @@ namespace Reko.UnitTests.Arch.Arm
         protected override IEnumerator<MachineInstruction> CreateDisassembler(IProcessorArchitecture arch, EndianImageReader rdr)
         {
             return arch.CreateDisassembler(rdr).GetEnumerator();
+        }
+
+        // Handle the case when only 2 bytes are available but they are the first 
+        // 2 bytes of a 4 byte instruction.
+        [Test]
+        public void ThumbDis_Incomplete_instr()
+        {
+            var instr = Disassemble16(0xE895);
+            Assert.AreEqual("Invalid", instr.ToString());
         }
 
         [Test]

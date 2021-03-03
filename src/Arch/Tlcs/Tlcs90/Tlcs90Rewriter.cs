@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -116,10 +116,10 @@ namespace Reko.Arch.Tlcs.Tlcs90
                 case Mnemonic.res: RewriteSetRes(false); break;
                 case Mnemonic.ret: RewriteRet(); break;
                 case Mnemonic.reti: RewriteReti(); break;
-                case Mnemonic.rl: RewriteRotation(PseudoProcedure.RolC, true); break;
-                case Mnemonic.rlc: RewriteRotation(PseudoProcedure.Rol, false); break;
-                case Mnemonic.rr: RewriteRotation(PseudoProcedure.RorC, true); break;
-                case Mnemonic.rrc: RewriteRotation(PseudoProcedure.Ror, false); break;
+                case Mnemonic.rl: RewriteRotation(IntrinsicProcedure.RolC, true); break;
+                case Mnemonic.rlc: RewriteRotation(IntrinsicProcedure.Rol, false); break;
+                case Mnemonic.rr: RewriteRotation(IntrinsicProcedure.RorC, true); break;
+                case Mnemonic.rrc: RewriteRotation(IntrinsicProcedure.Ror, false); break;
                 case Mnemonic.sbc: RewriteAdcSbc(m.ISub, "**-**V1*"); break;
                 case Mnemonic.scf: RewriteScf(); break;
                 case Mnemonic.set: RewriteSetRes(true); break;
@@ -235,21 +235,15 @@ namespace Reko.Arch.Tlcs.Tlcs90
 
         private Expression RewriteDst(MachineOperand op, Expression src, Func<Expression, Expression, Expression> fn)
         {
-            var reg = op as RegisterOperand;
-            if (reg != null)
+            switch (op)
             {
+            case RegisterOperand reg:
                 var id = binder.EnsureRegister(reg.Register);
                 m.Assign(id, fn(id, src));
                 return id;
-            }
-            var addr = op as AddressOperand;
-            if (addr != null)
-            {
+            case AddressOperand addr:
                 return addr.Address;
-            }
-            var mem = op as MemoryOperand;
-            if (mem != null)
-            {
+            case MemoryOperand mem:
                 Expression ea;
                 if (mem.Base != null)
                 {

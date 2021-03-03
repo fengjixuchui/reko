@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -32,7 +32,8 @@ namespace Reko.Arch.MCore
 {
     public class MCoreArchitecture : ProcessorArchitecture
     {
-        public MCoreArchitecture(IServiceProvider services, string archId) : base(services, archId)
+        public MCoreArchitecture(IServiceProvider services, string archId, Dictionary<string, object> options)
+            : base(services, archId, options)
         {
             //this.CarryFlagMask = ???
             this.Endianness = EndianServices.Big;
@@ -65,12 +66,12 @@ namespace Reko.Arch.MCore
 
         public override ProcessorState CreateProcessorState()
         {
-            throw new NotImplementedException();
+            return new MCoreState(this);
         }
 
         public override IEnumerable<RtlInstructionCluster> CreateRewriter(EndianImageReader rdr, ProcessorState state, IStorageBinder binder, IRewriterHost host)
         {
-            throw new NotImplementedException();
+            return new MCoreRewriter(this, rdr, state, binder, host);
         }
 
         public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)

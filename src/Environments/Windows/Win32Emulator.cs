@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -263,7 +263,7 @@ namespace Reko.Environments.Windows
         {
             var stack = new ByteMemoryArea(Address.Ptr32(0x7FE00000), new byte[1024 * 1024]);
             var stackSeg = this.map.AddSegment(stack, "stack", AccessMode.ReadWrite);
-            emu.WriteRegister(Registers.esp, (uint) stack.EndAddress.ToLinear() - 4u);
+            emu.WriteRegister(Registers.esp, (uint) stack.BaseAddress.ToLinear() +  (uint)(stack.Length - this.platform.Architecture.PointerType.Size));
             return stackSeg;
         }
 

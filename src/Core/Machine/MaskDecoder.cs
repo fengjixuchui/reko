@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -52,10 +52,6 @@ namespace Reko.Core.Machine
             this.decoders = Enumerable.Range(0, 1 << bitSize)
                .Select(n => nyiDecoder)
                .ToArray();
-            foreach (var (value, decoder) in decoders)
-            {
-                this.decoders[value] = decoder;
-            }
             foreach (var (value, decoder) in decoders)
             {
                 Debug.Assert(this.decoders[value] == null, $"Duplicate value {value}");

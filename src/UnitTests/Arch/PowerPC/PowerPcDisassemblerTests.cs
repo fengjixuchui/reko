@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,7 +38,7 @@ namespace Reko.UnitTests.Arch.PowerPC
         [SetUp]
         public void Setup()
         {
-            this.arch = new PowerPcBe32Architecture(new ServiceContainer(), "ppc-be-32");
+            this.arch = new PowerPcBe32Architecture(new ServiceContainer(), "ppc-be-32", new Dictionary<string, object>());
         }
 
         public override IProcessorArchitecture Architecture => arch;
@@ -73,7 +73,7 @@ namespace Reko.UnitTests.Arch.PowerPC
 
         private void Given_PowerPcBe64()
         {
-            this.arch = new PowerPcBe64Architecture(new ServiceContainer(), "ppc-be-64");
+            this.arch = new PowerPcBe64Architecture(new ServiceContainer(), "ppc-be-64", new Dictionary<string, object>());
         }
 
         private void Given_ProcessorModel_750cl()

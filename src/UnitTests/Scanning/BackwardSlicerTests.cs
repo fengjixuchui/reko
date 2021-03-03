@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -287,7 +287,7 @@ namespace Reko.UnitTests.Scanning
         {
             // In old x86 binaries we see this mechanism
             // for zero extending a register.
-            arch = new Reko.Arch.X86.X86ArchitectureReal(sc, "x86-real-16");
+            arch = new Reko.Arch.X86.X86ArchitectureReal(sc, "x86-real-16", new Dictionary<string, object>());
             var bl = binder.EnsureRegister(arch.GetRegister("bl"));
             var bh = binder.EnsureRegister(arch.GetRegister("bh"));
             var bx = binder.EnsureRegister(arch.GetRegister("bx"));
@@ -353,7 +353,7 @@ namespace Reko.UnitTests.Scanning
             // rep movsd 
             // jmp dword ptr[007862E8 + edx * 4]
 
-            arch = new Reko.Arch.X86.X86ArchitectureReal(sc, "x86-real-16");
+            arch = new Reko.Arch.X86.X86ArchitectureReal(sc, "x86-real-16", new Dictionary<string, object>());
             var ecx = binder.EnsureRegister(arch.GetRegister("ecx"));
             var edx = binder.EnsureRegister(arch.GetRegister("edx"));
             var esi = binder.EnsureRegister(arch.GetRegister("esi"));
@@ -413,7 +413,7 @@ namespace Reko.UnitTests.Scanning
         [Test]
         public void Bwslc_SegmentedLoad()
         {
-            arch = new Reko.Arch.X86.X86ArchitectureReal(sc, "x86-real-16");
+            arch = new Reko.Arch.X86.X86ArchitectureReal(sc, "x86-real-16", new Dictionary<string, object>());
             var cx = binder.EnsureRegister(arch.GetRegister("cx"));
             var bx = binder.EnsureRegister(arch.GetRegister("bx"));
             var ds = binder.EnsureRegister(arch.GetRegister("ds"));
@@ -449,7 +449,7 @@ namespace Reko.UnitTests.Scanning
         [Test]
         public void Bwslc_ClearingBits()
         {
-            arch = new Reko.Arch.X86.X86ArchitectureReal(sc, "x86-real-16");
+            arch = new Reko.Arch.X86.X86ArchitectureReal(sc, "x86-real-16", new Dictionary<string, object>());
             var eax = binder.EnsureRegister(arch.GetRegister("eax"));
             var edx = binder.EnsureRegister(arch.GetRegister("edx"));
             var dl = binder.EnsureRegister(arch.GetRegister("dl"));
@@ -481,7 +481,7 @@ namespace Reko.UnitTests.Scanning
             Assert.IsTrue(bwslc.Step());
             Assert.IsFalse(bwslc.Step());
 
-            Assert.AreEqual("Mem0[Mem0[eax + 0x123500<32>:byte] * 4<32> + 0x123400<32>:word32]", bwslc.JumpTableFormat.ToString());
+            Assert.AreEqual("Mem0[Mem0[eax + 0x123500<32>:byte] *32 4<32> + 0x123400<32>:word32]", bwslc.JumpTableFormat.ToString());
             Assert.AreEqual("1[0,3]", bwslc.JumpTableIndexInterval.ToString());
         }
 
@@ -540,7 +540,7 @@ namespace Reko.UnitTests.Scanning
             var W32 = PrimitiveType.Word32;
             var I16 = PrimitiveType.Int16;
             var I32 = PrimitiveType.Int32;
-            arch = new Reko.Arch.M68k.M68kArchitecture(sc, "m68k");
+            arch = new Reko.Arch.M68k.M68kArchitecture(sc, "m68k", new Dictionary<string, object>());
             var d0 = Reg("d0");
             var d1 = Reg("d1");
             var v2 = binder.CreateTemporary("v2", W8);
@@ -626,7 +626,7 @@ namespace Reko.UnitTests.Scanning
             var W32 = PrimitiveType.Word32;
             var I16 = PrimitiveType.Int16;
             var I32 = PrimitiveType.Int32;
-            arch = new Reko.Arch.M68k.M68kArchitecture(sc, "m68k");
+            arch = new Reko.Arch.M68k.M68kArchitecture(sc, "m68k", new Dictionary<string, object>());
             var d0 = Reg("d0");
             var d1 = Reg("d1");
             var v2 = binder.CreateTemporary("v2", W8);
@@ -766,7 +766,7 @@ namespace Reko.UnitTests.Scanning
         [Test]
         public void Bwslc_Issue_691()
         {
-            arch = new Reko.Arch.M68k.M68kArchitecture(sc, "m68k");
+            arch = new Reko.Arch.M68k.M68kArchitecture(sc, "m68k", new Dictionary<string, object>());
             var d0 = Reg("d0");
             var CVZN = Cc("CVZN");
             var C = Cc("C");
@@ -812,7 +812,7 @@ namespace Reko.UnitTests.Scanning
             Assert.IsTrue(bwslc.Start(b2, 6, Target(b2)));
             while (bwslc.Step())
                 ;
-            Assert.AreEqual("CONVERT(SLICE(SLICE(v3 * 2<32>, word16, 0) * 2<32>, word16, 0), word16, int32) + 0xA8B4<32>", bwslc.JumpTableFormat.ToString());
+            Assert.AreEqual("CONVERT(SLICE(SLICE(v3 *32 2<32>, word16, 0) *32 2<32>, word16, 0), word16, int32) + 0xA8B4<32>", bwslc.JumpTableFormat.ToString());
             Assert.AreEqual("v3", bwslc.JumpTableIndex.ToString());
             Assert.AreEqual("v3", bwslc.JumpTableIndexToUse.ToString(), "Expression to use when indexing");
             Assert.AreEqual("1[20,7FFFFFFFFFFFFFFF]", bwslc.JumpTableIndexInterval.ToString());
@@ -860,6 +860,41 @@ namespace Reko.UnitTests.Scanning
             Assert.AreEqual("1[0,3]", bwslc.JumpTableIndexInterval.ToString());
         }
 
+        [Test(Description = "MIPS switches are guarded by have explicit comparisons")]
+        [Ignore("Get this working soon")]
+        public void Bwslc_MipsBranch()
+        {
+            /*
+            00404786 F3FC andi r7,r7,000000FF
+            00404788 C8EC 57C7 bgeiuc r7,0000000A,00404752
+            0040478C 04C0 DBB0 addiupc r6,00006DD8
+            00404790 537F lwxs r7,r7(r6)
+            00404792 D8E0 jrc r7
+*/
+                        var l00404786 = Given_Block(0x00404786);
+                        Given_Instrs(l00404786, m =>
+                        {
+                            //m.Assign(r7, m.Assign)
+                        });
+                        var l0040478C = Given_Block(0x0040478C);
+                        Given_Instrs(l0040478C, m =>
+                        {
+                        });
+                        /*
+                         */
+            //            +       [1] { r7 = r7 & 0xFF < 32 >}
+            //            Reko.Core.Statement
+            //+       [2] { branch r7 >= u 0xA < 32 > l00404752}
+            //            Reko.Core.Statement
+
+
+            //+       [0] { r6 = 0x0040B568 < p32 >}
+            //            Reko.Core.Statement
+            //+       [1] { r7 = Mem0[r6 + r7 * 4 < 32 >:word32]}
+            //            Reko.Core.Statement
+            //            { goto r7}
+
+        }
 
         // Test cases
         // A one-level jump table from MySQL. JTT represents the jump table.

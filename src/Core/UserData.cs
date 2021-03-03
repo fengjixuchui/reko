@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -47,6 +47,7 @@ namespace Reko.Core
             this.ProcedureSourceFiles = new Dictionary<Address, string>();
             this.Patches = new Dictionary<Address, CodePatch>();
             this.DebugTraceProcedures = new HashSet<string>();
+            this.BlockLabels = new Dictionary<string, string>();
         }
 
         // 'Oracular' information provided by the user.
@@ -61,7 +62,8 @@ namespace Reko.Core
         public SortedList<Address, ImageMapVectorTable> JumpTables { get; set; }
         public AnnotationList Annotations { get; set; }
         public List<UserSegment> Segments { get; set; }
-
+        public Dictionary<string, string> BlockLabels { get; set; }
+        
         /// <summary>
         /// A script to run after the image is loaded.
         /// </summary>

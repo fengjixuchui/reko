@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,9 +34,9 @@ namespace Reko.Arch.Sparc
     {
         private void RewriteAddxSubx(Func<Expression,Expression,Expression> op, bool emitCc)
         {
-            var dst = RewriteRegister(instrCur.Operands[2]);
-            var src1 = RewriteOp(instrCur.Operands[0]);
-            var src2 = RewriteOp(instrCur.Operands[1]);
+            var dst = RewriteRegister(2);
+            var src1 = RewriteOp(0);
+            var src2 = RewriteOp(1);
             var C = binder.EnsureFlagGroup(arch.Registers.C);
             m.Assign(
                 dst,
@@ -49,9 +49,9 @@ namespace Reko.Arch.Sparc
 
         private void RewriteAlu(Func<Expression,Expression,Expression> op, bool negateOp2)
         {
-            var dst = RewriteRegister(instrCur.Operands[2]);
-            var src1 = RewriteOp(instrCur.Operands[0]);
-            var src2 = RewriteOp(instrCur.Operands[1]);
+            var dst = RewriteRegister(2);
+            var src1 = RewriteOp(0);
+            var src2 = RewriteOp(1);
             if (negateOp2)
             {
                 src2 = m.Comp(src2);
@@ -62,7 +62,7 @@ namespace Reko.Arch.Sparc
         private void RewriteAluCc(Func<Expression, Expression, Expression> op, bool negateOp2)
         {
             RewriteAlu(op, negateOp2);
-            var dst = RewriteRegister(instrCur.Operands[2]);
+            var dst = RewriteRegister(2);
             EmitCc(dst);
         }
 
@@ -73,11 +73,11 @@ namespace Reko.Arch.Sparc
 
         private void RewriteLdstub()
         {
-            var mem = (MemoryAccess)RewriteOp(instrCur.Operands[0]);
-            var dst = RewriteOp(instrCur.Operands[1]);
+            var mem = (MemoryAccess)RewriteOp(0);
+            var dst = RewriteOp(1);
             var bTmp = binder.CreateTemporary(PrimitiveType.Byte);
             var tmpHi = binder.CreateTemporary(PrimitiveType.CreateWord(dst.DataType.BitSize - bTmp.DataType.BitSize));
-            var intrinsic = host.PseudoProcedure("__ldstub", bTmp.DataType, m.AddrOf(arch.PointerType, mem));
+            var intrinsic = host.Intrinsic("__ldstub", false, bTmp.DataType, m.AddrOf(arch.PointerType, mem));
             m.Assign(bTmp, intrinsic);
             m.Assign(tmpHi, m.Slice(tmpHi.DataType, dst, bTmp.DataType.BitSize));
             m.Assign(dst, m.Seq(tmpHi, bTmp));
@@ -102,7 +102,7 @@ namespace Reko.Arch.Sparc
             var src2 = RewriteOp(instrCur.Operands[1]);
             m.Assign(
                 dst,
-                host.PseudoProcedure("__mulscc", PrimitiveType.Int32, src1, src2));
+                host.Intrinsic("__mulscc", true, PrimitiveType.Int32, src1, src2));
             EmitCc(dst);
         }
 
@@ -135,11 +135,11 @@ namespace Reko.Arch.Sparc
 
         private void RewriteSave()
         {
-            var dst = RewriteOp(instrCur.Operands[2]);
-            var src1 = RewriteOp(instrCur.Operands[0]);
-            var src2 = RewriteOp(instrCur.Operands[1]);
+            var dst = RewriteOp(2);
+            var src1 = RewriteOp(0);
+            var src2 = RewriteOp(1);
             Identifier tmp = null;
-            if (((Identifier)dst).Storage != arch.Registers.g0)
+            if (dst is Identifier)
             {
                 tmp = binder.CreateTemporary(dst.DataType);
                 m.Assign(tmp, m.IAdd(src1, src2));

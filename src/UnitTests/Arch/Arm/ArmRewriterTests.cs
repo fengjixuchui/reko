@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,7 +33,7 @@ namespace Reko.UnitTests.Arch.Arm
     [TestFixture]
     public class ArmRewriterTests : RewriterTestBase
     {
-        private Arm32Architecture arch = new Arm32Architecture(CreateServiceContainer(), "arm32");
+        private Arm32Architecture arch = new Arm32Architecture(CreateServiceContainer(), "arm32", new Dictionary<string, object>());
         private Address baseAddress = Address.Ptr32(0x00100000);
 
         public override IProcessorArchitecture Architecture => arch;
@@ -681,7 +681,7 @@ means
             AssertCode(
                 "0|L--|00100000(4): 2 instructions",
                 "1|T--|if (Test(NE,Z)) branch 00100004",
-                "2|L--|sp = (ip *s CONVERT(r6 >> 16<i32>, word32, int16) >> 16<i32>) + r0");
+                "2|L--|sp = (ip *s32 CONVERT(r6 >> 16<i32>, word32, int16) >> 16<i32>) + r0");
             //74 EC 0A 01 ????
             //﻿90 41 E0 00 smlaleqr4,r0,r0,r1
             // B0 44 E0 00 strhteqr4,[r0],#&40
@@ -718,10 +718,11 @@ means
         [Test]
         public void ArmRw_smulwb()
         {
+            //$REVIEW: shoudln't the CONVERT be a SLICE?
             Given_UInt32s(0xE12e5ba8);	// smulwb lr, r8, fp
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|lr = r8 *s CONVERT(fp, word32, int16) >> 16<i32>");
+                "1|L--|lr = r8 *s32 CONVERT(fp, word32, int16) >> 16<i32>");
         }
 
         [Test]
@@ -809,7 +810,7 @@ means
         {
             Given_UInt32s(0xE1206aec);	// smulwt r0, ip, sl
             AssertCode("0|L--|00100000(4): 1 instructions",
-                "1|L--|r0 = ip *s CONVERT(r10 >> 16<i32>, word32, int16) >> 16<i32>");
+                "1|L--|r0 = ip *s32 CONVERT(r10 >> 16<i32>, word32, int16) >> 16<i32>");
         }
 
         [Test]
@@ -818,7 +819,7 @@ means
             Given_UInt32s(0xE12d5980);	// smlawb sp, r0, sb, r5
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|sp = (r0 *s CONVERT(r9, word32, int16) >> 16<i32>) + r5");
+                "1|L--|sp = (r0 *s32 CONVERT(r9, word32, int16) >> 16<i32>) + r5");
         }
 
         [Test]
@@ -1547,7 +1548,7 @@ means
             Given_UInt32s(0xE7434774);        // smlsldx\tr3,r4,r7,r4
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
-                "1|L--|r4_r3 = r4_r3 + (CONVERT(r7, word32, int16) *s (r4 >> 16<i32>) - (r7 >> 16<i32>) *s CONVERT(r4, word32, int16))");
+                "1|L--|r4_r3 = r4_r3 + (CONVERT(r7, word32, int16) *s16 (r4 >> 16<i32>) - (r7 >> 16<i32>) *s32 CONVERT(r4, word32, int16))");
         }
 
         [Test]
@@ -1679,6 +1680,15 @@ means
             AssertCode(
                 "0|L--|00100000(4): 1 instructions",
                 "1|L--|d15 = __vbit(d20, d14)");
+        }
+
+        [Test]
+        public void ArmRw_vmin_f32()
+        {
+            Given_HexString("011F20F2");
+            AssertCode(     // vmin.f32\td1,d0,d1
+                "0|L--|00100000(4): 1 instructions",
+                "1|L--|d1 = __vmin_f32(d0, d1)");
         }
 
         [Test]

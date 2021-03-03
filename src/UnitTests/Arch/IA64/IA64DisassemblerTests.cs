@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,8 +25,6 @@ using Reko.Core.Memory;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Reko.UnitTests.Arch.IA64
 {
@@ -37,7 +35,7 @@ namespace Reko.UnitTests.Arch.IA64
 
         public IA64DisassemblerTests()
         {
-            this.arch = new IA64Architecture(CreateServiceContainer(), "ia64");
+            this.arch = new IA64Architecture(CreateServiceContainer(), "ia64", new Dictionary<string, object>());
             this.addrLoad = Address.Ptr64(0x10_0000_0000);
         }
 

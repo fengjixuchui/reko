@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -268,14 +268,14 @@ namespace Reko.Core.NativeInterface
         {
             var aa = GetExpression(a);
             var bb = GetExpression(b);
-            return MapToHandle(host.PseudoProcedure(PseudoProcedure.Ror, PrimitiveType.Word32, aa, bb));
+            return MapToHandle(host.Intrinsic(IntrinsicProcedure.Ror, true, PrimitiveType.Word32, aa, bb));
         }
 
         public HExpr Rrc(HExpr a, HExpr b)
         {
             var aa = GetExpression(a);
             var bb = GetExpression(b);
-            return MapToHandle(host.PseudoProcedure(PseudoProcedure.Ror, PrimitiveType.Word32, aa, bb));
+            return MapToHandle(host.Intrinsic(IntrinsicProcedure.Ror, true, PrimitiveType.Word32, aa, bb));
         }
 
         public HExpr Sar(HExpr a, HExpr b)

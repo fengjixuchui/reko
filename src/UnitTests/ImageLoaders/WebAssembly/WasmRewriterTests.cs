@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,7 +39,7 @@ namespace Reko.UnitTests.ImageLoaders.WebAssembly
 
         public WasmRewriterTests()
         {
-            this.arch = new WasmArchitecture(CreateServiceContainer(), "wasm");
+            this.arch = new WasmArchitecture(CreateServiceContainer(), "wasm", new Dictionary<string, object>());
         }
 
         public override IProcessorArchitecture Architecture => arch;

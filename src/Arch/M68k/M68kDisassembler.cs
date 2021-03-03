@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -2396,6 +2396,8 @@ namespace Reko.Arch.M68k
             {
                 const uint valid_ea_mask = 0xE4;
                 if ((1u << (((int)uInstr >> 3) & 7) & valid_ea_mask) == 0)
+                    return false;
+                if ((uInstr & 0x3F) == 0x3C)    // Immediate
                     return false;
                 dasm.mnemonic = Mnemonic.ptest;
                 dasm.iclass = InstrClass.System;

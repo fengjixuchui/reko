@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -51,6 +51,10 @@ namespace Reko.UnitTests.Gui.Windows.Controls
             this.platform = new Mock<IPlatform>();
             this.platform.Setup(p => p.Architecture).Returns(arch.Object);
             this.arch.Setup(a => a.Name).Returns("FakeArch");
+            this.arch.Setup(a => a.MemoryGranularity).Returns(8);
+            this.arch.Setup(a => a.RenderInstructionOpcode(
+                It.IsAny<MachineInstruction>(), It.IsAny<EndianImageReader>()))
+                .Returns("00 00 ");
             this.arch.Setup(a => a.CreateImageReader(
                 It.IsAny<ByteMemoryArea>(),
                 It.IsAny<Address>()))
@@ -163,7 +167,7 @@ namespace Reko.UnitTests.Gui.Windows.Controls
             Given_Program();
             Given_CodeBlock(memText.BaseAddress, 2);
 
-            var mcdm = new MixedCodeDataModel(program);
+            var mcdm = new MixedCodeDataModel(program, program.ImageMap);
             var lines = mcdm.GetLineSpans(2);
             Assert.AreEqual(2, lines.Length);
         }
@@ -182,7 +186,7 @@ namespace Reko.UnitTests.Gui.Windows.Controls
             Given_Program();
             Given_CodeBlock(memText.BaseAddress, 4);
 
-            var mcdm = new MixedCodeDataModel(program);
+            var mcdm = new MixedCodeDataModel(program, program.ImageMap);
             var lines = mcdm.GetLineSpans(2);
             Assert.AreEqual(2, lines.Length);
         }
@@ -201,7 +205,7 @@ namespace Reko.UnitTests.Gui.Windows.Controls
             var program = new Program(segmentMap, arch.Object, platform.Object);
             Given_CodeBlock(memText.BaseAddress, 4);
 
-            var mcdm = new MixedCodeDataModel(program);
+            var mcdm = new MixedCodeDataModel(program, program.ImageMap);
             var lines = mcdm.GetLineSpans(2);
 
             Assert.AreEqual(2, lines.Length);
@@ -221,7 +225,7 @@ namespace Reko.UnitTests.Gui.Windows.Controls
             Given_Program();
             Given_CodeBlock(memText.BaseAddress, 4);
 
-            var mcdm = new MixedCodeDataModel(program);
+            var mcdm = new MixedCodeDataModel(program, program.ImageMap);
 
             // Read the first instruction
             var lines = mcdm.GetLineSpans(1);
@@ -257,7 +261,7 @@ namespace Reko.UnitTests.Gui.Windows.Controls
             Given_CodeBlock(memText.BaseAddress, 4);
             Given_CodeBlock(Address.Ptr32(0x42004), 4);
 
-            var mcdm = new MixedCodeDataModel(program);
+            var mcdm = new MixedCodeDataModel(program, program.ImageMap);
 
             // Read all lines
             var lines = mcdm.GetLineSpans(5);
@@ -283,7 +287,7 @@ namespace Reko.UnitTests.Gui.Windows.Controls
                 new ImageSegment(".data", memData, AccessMode.ReadWriteExecute));
             var program = new Program(segmentMap, arch.Object, platform.Object);
 
-            var mcdm = new MixedCodeDataModel(program);
+            var mcdm = new MixedCodeDataModel(program, program.ImageMap);
 
             // This places the curpos right after the last item in the .text
             // segment.
@@ -337,7 +341,7 @@ namespace Reko.UnitTests.Gui.Windows.Controls
 
             Given_CodeBlock(memText.BaseAddress, 4);
 
-            var mcdm = new MixedCodeDataModel(program);
+            var mcdm = new MixedCodeDataModel(program, program.ImageMap);
             // Advance 1 line into another piece of code.
             int delta = mcdm.MoveToLine(mcdm.CurrentPosition, 1);
             Assert.AreEqual(1, delta);
@@ -373,7 +377,7 @@ namespace Reko.UnitTests.Gui.Windows.Controls
 
             Given_CodeBlock(Address.Ptr32(0x40FF9), 4);
 
-            var mcdm = new MixedCodeDataModel(program);
+            var mcdm = new MixedCodeDataModel(program, program.ImageMap);
 
             mcdm.MoveToLine(mcdm.CurrentPosition, 2);
             var curPos = mcdm.CurrentPosition;
@@ -406,7 +410,7 @@ namespace Reko.UnitTests.Gui.Windows.Controls
 
             Given_CodeBlock(memText.BaseAddress, 4);
 
-            var mcdm = new MixedCodeDataModel(program);
+            var mcdm = new MixedCodeDataModel(program, program.ImageMap);
             Debug.Print("LineCount: {0}", mcdm.LineCount);
             mcdm.SetPositionAsFraction(0, 1);
             Assert.AreSame(mcdm.StartPosition, mcdm.CurrentPosition);
@@ -430,7 +434,7 @@ namespace Reko.UnitTests.Gui.Windows.Controls
             Given_Program();
             Given_CodeBlock(memText.BaseAddress, 4);
 
-            var mcdm = new MixedCodeDataModel(program);
+            var mcdm = new MixedCodeDataModel(program, program.ImageMap);
             var num_lines = 4;
             for (int i = 0; i <= num_lines; i++)
             {
@@ -460,7 +464,7 @@ namespace Reko.UnitTests.Gui.Windows.Controls
             Given_Program();
             Given_CodeBlock(memText.BaseAddress, 4);
 
-            var mcdm = new MixedCodeDataModel(program);
+            var mcdm = new MixedCodeDataModel(program, program.ImageMap);
 
             // Read the two instructions, placing curpos in the 'gap'
             // of invalid addresses between the .text and .data segments
@@ -494,7 +498,7 @@ namespace Reko.UnitTests.Gui.Windows.Controls
 Second line");
             Given_Comment(0x41004, "Single line comment");
 
-            var mcdm = new MixedCodeDataModel(program);
+            var mcdm = new MixedCodeDataModel(program, program.ImageMap);
             GetLineSpans(mcdm, 1);
             GetLineSpans(mcdm, 1);
             GetLineSpans(mcdm, 1);
@@ -527,7 +531,7 @@ Second line");
             Given_Comment(0x41000, "First comment");
             Given_Comment(0x41002, "Second comment");
 
-            var mcdm = new MixedCodeDataModel(program);
+            var mcdm = new MixedCodeDataModel(program, program.ImageMap);
             GetLineSpans(mcdm, 1);
             GetLineSpans(mcdm, 1);
             GetLineSpans(mcdm, 1);

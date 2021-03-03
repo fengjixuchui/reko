@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -70,7 +70,7 @@ namespace Reko.Arch.Tlcs.Tlcs90
         private void RewriteDaa()
         {
             var a = binder.EnsureRegister(Registers.a);
-            m.Assign(a, host.PseudoProcedure("__daa", PrimitiveType.Byte, a));
+            m.Assign(a, host.Intrinsic("__daa", true, PrimitiveType.Byte, a));
             EmitCc(a, "**-**P-*");
         }
 
@@ -231,14 +231,23 @@ namespace Reko.Arch.Tlcs.Tlcs90
             var one = m.Byte(1);
             if (useCarry)
             {
-                src = host.PseudoProcedure(pseudoOp, reg.DataType, reg, one, c);
+                src = host.Intrinsic(pseudoOp, true, reg.DataType, reg, one, c);
             }
             else
             {
-                src = host.PseudoProcedure(pseudoOp, reg.DataType, reg, one);
+                src = host.Intrinsic(pseudoOp, true, reg.DataType, reg, one);
             }
-            m.Assign(reg, src);
-            EmitCc(reg, "**-0XP0*");
+            Expression result;
+            if (instr.Operands.Length >= 1)
+            {
+                result = RewriteDst(instr.Operands[0], src, (a, b) => b);
+            }
+            else
+            {
+                m.Assign(reg, src);
+                result = reg;
+            }
+            EmitCc(result, "**-0XP0*");
         }
 
         private void RewriteScf()

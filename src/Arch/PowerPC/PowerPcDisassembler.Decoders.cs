@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -51,28 +51,9 @@ namespace Reko.Arch.PowerPC
                 this.message = message;
             }
 
-            private static readonly HashSet<uint> seen = new HashSet<uint>();
-
             public override PowerPcInstruction Decode(uint wInstr, PowerPcDisassembler dasm)
             {
-                if (!seen.Contains(wInstr))
-                {
-                    seen.Add(wInstr);
-                    EmitUnitTest(wInstr);
-                }
-                return dasm.CreateInvalidInstruction();
-            }
-
-            [Conditional("DEBUG")]
-            private void EmitUnitTest(uint wInstr)
-            {
-                Console.WriteLine("    // {0}", message);
-                Console.WriteLine("    [Test]");
-                Console.WriteLine("    public void PPCDis_{0:X8}()", wInstr);
-                Console.WriteLine("    {");
-                Console.WriteLine("        AssertCode(0x{0:X8}, \"@@@\");", wInstr);
-                Console.WriteLine("    }");
-                Console.WriteLine("");
+                return dasm.NotYetImplemented(message);
             }
 
             public override string ToString()

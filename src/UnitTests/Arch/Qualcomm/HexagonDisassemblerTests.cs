@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,11 +21,7 @@
 using NUnit.Framework;
 using Reko.Arch.Qualcomm;
 using Reko.Core;
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Reko.UnitTests.Arch.Qualcomm
 {
@@ -36,7 +32,7 @@ namespace Reko.UnitTests.Arch.Qualcomm
 
         public HexagonDisassemblerTests()
         {
-            this.arch = new HexagonArchitecture(CreateServiceContainer(), "hexagon");
+            this.arch = new HexagonArchitecture(CreateServiceContainer(), "hexagon", new Dictionary<string, object>());
             this.addrLoad = Address.Ptr32(0x00100000);
         }
 

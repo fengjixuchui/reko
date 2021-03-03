@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@
 
 using Reko.Core;
 using Reko.Core.Expressions;
+using Reko.Core.Lib;
 using Reko.Core.Machine;
 using Reko.Core.Types;
 using System;
@@ -71,11 +72,23 @@ namespace Reko.Arch.X86
         public static readonly FlagGroupStorage D;
         public static readonly FlagGroupStorage O;
         public static readonly FlagGroupStorage P;
+        public static readonly FlagGroupStorage CO;
+        public static readonly FlagGroupStorage CZ;
+        public static readonly FlagGroupStorage CZP;
+        public static readonly FlagGroupStorage SCZ;
+        public static readonly FlagGroupStorage SCZO;
+        public static readonly FlagGroupStorage SO;
+        public static readonly FlagGroupStorage SZ;
+        public static readonly FlagGroupStorage SZO;
 
         public static readonly RegisterStorage eflags;
 
         public static readonly RegisterStorage FPUF;
         public static readonly RegisterStorage FPST;    // virtual register; the x87 FPU stack pointer.
+        public static readonly FlagGroupStorage C0;
+        public static readonly FlagGroupStorage C1;
+        public static readonly FlagGroupStorage C2;
+        public static readonly FlagGroupStorage C3;
 
         public static readonly RegisterStorage rax;
         public static readonly RegisterStorage rcx;
@@ -196,6 +209,7 @@ namespace Reko.Arch.X86
         public const int DebugRegisterMin = 89;
 
         internal static readonly FlagGroupStorage[] EflagsBits;
+        internal static readonly FlagGroupStorage[] FpuFlagsBits;
 
         static Registers()
         {
@@ -257,10 +271,23 @@ namespace Reko.Arch.X86
             D = FlagRegister("D", eflags, FlagM.DF);
             O = FlagRegister("O", eflags, FlagM.OF);
             P = FlagRegister("P", eflags, FlagM.PF);
+            CO = FlagRegister("CO", eflags, FlagM.CF | FlagM.OF);
+            CZ = FlagRegister("CZ", eflags, FlagM.CF | FlagM.ZF);
+            CZP = FlagRegister("CZP", eflags, FlagM.CF | FlagM.ZF | FlagM.PF);
+            SCZ = FlagRegister("SCZ", eflags, FlagM.SF | FlagM.CF | FlagM.ZF);
+            SCZO = FlagRegister("SCZO", eflags, FlagM.SF | FlagM.CF | FlagM.ZF | FlagM.OF);
+            SO = FlagRegister("SO", eflags, FlagM.SF | FlagM.OF);
+            SZ = FlagRegister("SZ", eflags, FlagM.SF | FlagM.ZF);
+            SZO = FlagRegister("SZO", eflags, FlagM.SF | FlagM.ZF | FlagM.OF);
             EflagsBits = new FlagGroupStorage[] { S, C, Z, D, O, P };
 
-            FPUF = factory.Reg("FPUF", PrimitiveType.Byte);
-            FPST = factory.Reg("FPST", PrimitiveType.Byte); 
+            FPUF = factory.Reg("FPUF", PrimitiveType.Word16);
+            FPST = factory.Reg("FPST", PrimitiveType.Byte);
+            C0 = FlagRegister("C0", FPUF, 0x0100);
+            C1 = FlagRegister("C1", FPUF, 0x0200);
+            C2 = FlagRegister("C2", FPUF, 0x0400);
+            C3 = FlagRegister("C3", FPUF, 0x4000);
+            FpuFlagsBits = new FlagGroupStorage[] { C0, C1, C2, C3 };
 
             r8d = new RegisterStorage("r8d", r8.Number, 0, PrimitiveType.Word32);
             r9d = new RegisterStorage("r9d", r9.Number, 0, PrimitiveType.Word32);
@@ -540,7 +567,13 @@ namespace Reko.Arch.X86
 
         private static FlagGroupStorage FlagRegister(string name, RegisterStorage freg, FlagM grf)
         {
-            return new FlagGroupStorage(freg, (uint)grf, name, PrimitiveType.Bool);
+            var dt = Bits.IsSingleBitSet((uint) grf) ? PrimitiveType.Bool : PrimitiveType.Byte;
+            return new FlagGroupStorage(freg, (uint)grf, name, dt);
+        }
+
+        private static FlagGroupStorage FlagRegister(string name, RegisterStorage freg, uint grf)
+        {
+            return new FlagGroupStorage(freg, (uint) grf, name, PrimitiveType.Bool);
         }
 
         public static RegisterStorage GetRegister(string name)

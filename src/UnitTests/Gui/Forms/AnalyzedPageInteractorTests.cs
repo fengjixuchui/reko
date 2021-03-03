@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,6 +29,7 @@ using Reko.Core.Types;
 using Reko.Gui;
 using Reko.Gui.Forms;
 using Reko.UnitTests.Mocks;
+using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Linq;
 
@@ -62,11 +63,12 @@ namespace Reko.UnitTests.Gui.Forms
 
             form.Setup(f => f.Show());
 
+            var arch = new X86ArchitectureFlat32(sc, "x86-protected-32", new Dictionary<string, object>());
             var platform = new Mock<IPlatform>();
             platform.Setup(p => p.CreateMetadata()).Returns(new TypeLibrary());
+            platform.Setup(p => p.Architecture).Returns(arch);
             var loadAddress = Address.Ptr32(0x100000);
             var bytes = new byte[4711];
-            var arch = new X86ArchitectureFlat32(sc, "x86-protected-32");
             var mem = new ByteMemoryArea(loadAddress, bytes);
             this.program = new Program
             {

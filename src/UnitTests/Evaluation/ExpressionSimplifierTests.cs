@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,7 +38,7 @@ namespace Reko.UnitTests.Evaluation
         private ExpressionSimplifier simplifier;
         private Identifier foo;
         private ProcedureBuilder m;
-        private PseudoProcedure rolc_8;
+        private IntrinsicProcedure rolc_8;
         private Mock<IProcessorArchitecture> arch;
         private SsaIdentifierCollection ssaIds;
 
@@ -46,7 +46,7 @@ namespace Reko.UnitTests.Evaluation
         public void Setup()
         {
             m = new ProcedureBuilder();
-            this.rolc_8 = new PseudoProcedure(PseudoProcedure.RolC, PrimitiveType.Byte, 3);
+            this.rolc_8 = new IntrinsicProcedure(IntrinsicProcedure.RolC, true, PrimitiveType.Byte, 3);
             arch = new Mock<IProcessorArchitecture>();
         }
 
@@ -579,5 +579,52 @@ namespace Reko.UnitTests.Evaluation
             expr.DataType = PrimitiveType.Real64;
             Assert.AreEqual("Mem0[foo_1:real64]", expr.Accept(simplifier).ToString());
         }
+
+        [Test]
+        public void Exs_Slice_Convert()
+        {
+            Given_ExpressionSimplifier();
+
+            var expr = m.Slice(
+                PrimitiveType.Char,
+                m.Convert(
+                    m.Mem8(foo),
+                    PrimitiveType.Byte,
+                    PrimitiveType.Word32),
+                0);
+            Assert.AreEqual("SLICE(Mem0[foo_1:byte], char, 0)", expr.Accept(simplifier).ToString());
+        }
+
+        [Test]
+        public void Exs_Rol_rol()
+        {
+            Given_ExpressionSimplifier();
+            var r0 = new RegisterStorage("r0", 0, 0, PrimitiveType.Word32);
+            var r1 = new RegisterStorage("r1", 0, 0, PrimitiveType.Word32);
+            var sigRol = FunctionType.Func(
+                new Identifier("", r0.DataType, r0),
+                new Identifier("value", r0.DataType, r0),
+                new Identifier("sh", r0.DataType, r1));
+            var rol = new IntrinsicProcedure(IntrinsicProcedure.Rol, true, sigRol);
+            var exp = m.Fn(rol, m.Fn(rol, foo, m.Word32(1)), m.Word32(1));
+            Assert.AreEqual("__rol(foo_1, 2<32>)", exp.Accept(simplifier).ToString());
+        }
+
+        [Test]
+        public void Exs_Ror_ror()
+        {
+            Given_ExpressionSimplifier();
+            var r0 = new RegisterStorage("r0", 0, 0, PrimitiveType.Word32);
+            var r1 = new RegisterStorage("r1", 0, 0, PrimitiveType.Word32);
+            var sigRol = FunctionType.Func(
+                new Identifier("", r0.DataType, r0),
+                new Identifier("value", r0.DataType, r0),
+                new Identifier("sh", r0.DataType, r1));
+            var ror = new IntrinsicProcedure(IntrinsicProcedure.Ror, true, sigRol);
+            var exp = m.Fn(ror, m.Fn(ror, foo, m.Word32(2)), m.Word32(1));
+            Assert.AreEqual("__ror(foo_1, 3<32>)", exp.Accept(simplifier).ToString());
+        }
+
+
     }
 }

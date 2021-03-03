@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -144,6 +144,8 @@ namespace Reko.Arch.X86
             }
         }
 
+        partial class InstructionSet
+        { 
         private static Decoder[] CreateFpuDecoders()
         {
             return new Decoder[]  
@@ -302,14 +304,14 @@ namespace Reko.Arch.X86
 				// D9 F0
 				Instr(Mnemonic.f2xm1, F,f),
 				Instr(Mnemonic.fyl2x, F,f),
-				Instr(Mnemonic.fptan, F,f),
-				Instr(Mnemonic.fpatan, F,f),
+				Instr(Mnemonic.fptan),
+				Instr(Mnemonic.fpatan),
 				Instr(Mnemonic.fxtract, f),
-				Instr(Mnemonic.fprem1, F,f),
+				Instr(Mnemonic.fprem1),
 				Instr(Mnemonic.fdecstp, F,f),
 				Instr(Mnemonic.fincstp, F,f),
 						
-				Instr(Mnemonic.fprem, F,f),
+				Instr(Mnemonic.fprem),
 				Instr(Mnemonic.fyl2xp1, F,f),
 				Instr(Mnemonic.fsqrt),
 				Instr(Mnemonic.fsincos),
@@ -842,4 +844,5 @@ namespace Reko.Arch.X86
             };
         }
     }
+}
 }

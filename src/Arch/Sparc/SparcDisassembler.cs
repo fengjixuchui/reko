@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -129,7 +129,7 @@ namespace Reko.Arch.Sparc
         {
             return (u, d) =>
             {
-                var freg = d.arch.Registers.GetFpuRegister((int) (u >> pos) & 0x1F);
+                var freg = d.arch.Registers.FFloatRegisters[(u >> pos) & 0x1F];
                 d.ops.Add(new RegisterOperand(freg));
                 return true;
             };
@@ -251,6 +251,18 @@ namespace Reko.Arch.Sparc
         internal static readonly Mutator<SparcDisassembler> R0 = R(false);
         internal static readonly Mutator<SparcDisassembler> Rs = R(true);
 
+        // Register or simm10
+        private static Mutator<SparcDisassembler> RorSimm10()
+        {
+            return (u, d) =>
+            {
+                // if 's', return a signed immediate operand where relevant.
+                d.ops.Add(d.GetRegImmOperand(d.arch.Registers, u, true, 10));
+                return true;
+            };
+        }
+        internal static readonly Mutator<SparcDisassembler> Rs10 = RorSimm10();
+
         // Register or uimm5/6
         internal static bool S(uint wInstr, SparcDisassembler dasm)
         {
@@ -312,7 +324,7 @@ namespace Reko.Arch.Sparc
         {
             int encodedReg = (int) (wInstr >> offset) & 0x1F;
             int reg = ((encodedReg & 1) << 5) | (encodedReg & ~1);
-            return new RegisterOperand(registers.GetFpuRegister(reg));
+            return new RegisterOperand(registers.DFloatRegisters[reg >> 1]);
         }
 
         private static RegisterOperand GetQuadRegisterOperand(Registers registers, uint wInstr, int offset)
@@ -321,7 +333,7 @@ namespace Reko.Arch.Sparc
             int reg = ((encodedReg & 1) << 5) | (encodedReg & ~1);
             if ((reg & 0x3) != 0)
                 return null;
-            return new RegisterOperand(registers.GetFpuRegister(reg));
+            return new RegisterOperand(registers.QFloatRegisters[reg>>2]);
         }
 
         private MachineOperand GetRegImmOperand(Registers registers, uint wInstr, bool signed, int bits)

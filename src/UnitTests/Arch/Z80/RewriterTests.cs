@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,20 +18,19 @@
  */
 #endregion
 
+using NUnit.Framework;
 using Reko.Arch.Z80;
 using Reko.Core;
-using Reko.Core.Rtl;
-using NUnit.Framework;
-using System.Collections.Generic;
-using System.ComponentModel.Design;
 using Reko.Core.Memory;
+using Reko.Core.Rtl;
+using System.Collections.Generic;
 
 namespace Reko.UnitTests.Arch.Z80
 {
     [TestFixture]
     public class RewriterTests : RewriterTestBase
     {
-        private readonly Z80ProcessorArchitecture arch = new Z80ProcessorArchitecture(CreateServiceContainer(), "z80");
+        private readonly Z80ProcessorArchitecture arch = new Z80ProcessorArchitecture(CreateServiceContainer(), "z80", new Dictionary<string, object>());
         private readonly Address baseAddr = Address.Ptr16(0x0100);
 
         public override IProcessorArchitecture Architecture => arch;
@@ -285,6 +284,30 @@ namespace Reko.UnitTests.Arch.Z80
                 "0|L--|0100(1): 2 instructions",
                 "1|L--|a = __rcl(a, 1<8>, C)",
                 "2|L--|C = cond(a)");
+        }
+
+        [Test]
+        public void Z80rw_outi()
+        {
+            Given_HexString("EDA3");
+            AssertCode(
+                "0|L--|0100(2): 3 instructions",
+                "1|L--|v4 = Mem0[hl:byte]",
+                "2|L--|__out(c, v4)",
+                "3|L--|hl = hl + 1<i16>");
+        }
+
+        [Test]
+        public void Z80rw_otir()
+        {
+            Given_HexString("EDB3");
+            AssertCode(
+               "0|L--|0100(2): 5 instructions",
+               "1|L--|v4 = Mem0[hl:byte]",
+               "2|L--|__out(c, v4)",
+               "3|L--|hl = hl + 1<i16>",
+               "4|L--|b = b - 1<8>",
+               "5|T--|if (b != 0<8>) branch 0100");
         }
     }
 }

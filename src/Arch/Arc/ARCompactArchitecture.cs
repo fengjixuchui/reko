@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,9 +33,8 @@ namespace Reko.Arch.Arc
 {
     public class ARCompactArchitecture : ProcessorArchitecture
     {
-        private readonly Dictionary<uint, FlagGroupStorage> flagGroups;
-
-        public ARCompactArchitecture(IServiceProvider services, string archId) : base(services, archId)
+        public ARCompactArchitecture(IServiceProvider services, string archId, Dictionary<string, object> options)
+            : base(services, archId, options)
         {
             base.Endianness = EndianServices.Little;
             base.FramePointerType = PrimitiveType.Ptr32;
@@ -43,7 +42,7 @@ namespace Reko.Arch.Arc
             base.PointerType = PrimitiveType.Ptr32;
             base.StackRegister = Registers.Sp;
             base.WordWidth = PrimitiveType.Word32;
-            this.flagGroups = new Dictionary<uint, FlagGroupStorage>();
+            LoadUserOptions(options);
         }
 
         public override IEnumerable<MachineInstruction> CreateDisassembler(EndianImageReader rdr)
@@ -78,15 +77,9 @@ namespace Reko.Arch.Arc
 
         public override FlagGroupStorage GetFlagGroup(RegisterStorage flagRegister, uint grf)
         {
-            if (flagGroups.TryGetValue(grf, out var fl))
-            {
-                return fl;
-            }
-
             var dt = Bits.IsSingleBitSet((uint)grf) ? PrimitiveType.Bool : PrimitiveType.Byte;
             var flagregister = Registers.Status32;
-            fl = new FlagGroupStorage(flagregister, grf, GrfToString(flagRegister, "", grf), dt);
-            flagGroups.Add(grf, fl);
+            var fl = new FlagGroupStorage(flagregister, grf, GrfToString(flagRegister, "", grf), dt);
             return fl;
         }
 

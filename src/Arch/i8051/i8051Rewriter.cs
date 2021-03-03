@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -80,7 +80,7 @@ namespace Reko.Arch.i8051
                     Invalid();
                     break;
                 case Mnemonic.acall: RewriteCall(); break;
-                case Mnemonic.add: RewriteBinop(m.IAdd, FlagM.C | FlagM.AC | FlagM.OV | FlagM.P); break;
+                case Mnemonic.add: RewriteBinop(m.IAdd, Registers.CAOP); break;
                 case Mnemonic.addc: RewriteAddcSubb(m.IAdd); break;
                 case Mnemonic.ajmp: RewriteJump(); break;
                 case Mnemonic.anl: RewriteLogical(m.And); break;
@@ -109,8 +109,8 @@ namespace Reko.Arch.i8051
                 case Mnemonic.push: RewritePush(); break;
                 case Mnemonic.ret: RewriteRet(); break;
                 case Mnemonic.reti: RewriteRet(); break;
-                case Mnemonic.rl: RewriteRotate(PseudoProcedure.Rol); break;
-                case Mnemonic.rr: RewriteRotate(PseudoProcedure.Ror); break;
+                case Mnemonic.rl: RewriteRotate(IntrinsicProcedure.Rol); break;
+                case Mnemonic.rr: RewriteRotate(IntrinsicProcedure.Ror); break;
                 case Mnemonic.setb: RewriteSetb(); break;
                 case Mnemonic.sjmp: RewriteJump(); break;
                 case Mnemonic.subb: RewriteAddcSubb(m.ISub); break;
@@ -144,15 +144,14 @@ namespace Reko.Arch.i8051
             m.Goto(dst);
         }
 
-        private void RewriteBinop(Func<Expression, Expression, BinaryExpression> fn, FlagM grf)
+        private void RewriteBinop(Func<Expression, Expression, BinaryExpression> fn, FlagGroupStorage grf = null)
         {
             var dst = OpSrc(instr.Operands[0], arch.DataMemory);
             var src = OpSrc(instr.Operands[1], arch.DataMemory);
             m.Assign(dst, fn(dst, src));
-            if (grf != 0)
+            if (grf != null)
             {
-                var flg = arch.GetFlagGroup(Registers.PSW, (uint)grf);
-                m.Assign(binder.EnsureFlagGroup(flg), m.Cond(dst));
+                m.Assign(binder.EnsureFlagGroup(grf), m.Cond(dst));
             }
         }
 
@@ -197,8 +196,7 @@ namespace Reko.Arch.i8051
             WriteDst(instr.Operands[0], Constant.Zero(dst.DataType));
             if (dst is Identifier id && id.Storage is RegisterStorage)
             {
-                var flg = arch.GetFlagGroup(Registers.PSW, (uint)FlagM.P);
-                m.Assign(binder.EnsureFlagGroup(flg), m.Cond(dst));
+                m.Assign(binder.EnsureFlagGroup(Registers.PFlag), m.Cond(dst));
             }
         }
 
@@ -319,7 +317,7 @@ namespace Reko.Arch.i8051
         private void RewriteRotate(string rot)
         {
             var dst = OpSrc(instr.Operands[0], arch.DataMemory);
-            m.Assign(dst, host.PseudoProcedure(rot, dst.DataType, dst, m.Byte(1)));
+            m.Assign(dst, host.Intrinsic(rot, true, dst.DataType, dst, m.Byte(1)));
         }
 
         private void RewriteRet()

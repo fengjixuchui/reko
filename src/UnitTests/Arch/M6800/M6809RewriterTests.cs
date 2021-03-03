@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,7 +36,7 @@ namespace Reko.UnitTests.Arch.M6800
         [SetUp]
         public void Setup()
         {
-            this.arch = new M6809Architecture(CreateServiceContainer(), "m6809");
+            this.arch = new M6809Architecture(CreateServiceContainer(), "m6809", new Dictionary<string, object>());
             this.addr = Address.Ptr16(0x0100);
         }
 
@@ -424,7 +424,7 @@ namespace Reko.UnitTests.Arch.M6800
             Given_HexString("3D"); // mul
             AssertCode(
                 "0|L--|0100(1): 2 instructions",
-                "1|L--|d = a *u b",
+                "1|L--|d = a *u16 b",
                 "2|L--|ZC = cond(d)");
         }
 

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -43,7 +43,10 @@ namespace Reko.ImageLoaders.MzExe
     /// </remarks>
     public class NeImageLoader : ImageLoader
     {
-        private static readonly TraceSwitch trace = new TraceSwitch(nameof(NeImageLoader), "NE Image loader tracing", "Verbose");
+        private static readonly TraceSwitch trace = new TraceSwitch(nameof(NeImageLoader), "NE Image loader tracing")
+        {
+            Level = TraceLevel.Verbose
+        };
 
         // Relocation address types
         [Flags]
@@ -281,7 +284,7 @@ namespace Reko.ImageLoaders.MzExe
                 entryPoints.Add(ImageSymbol.Procedure(program.Architecture, addrEntry));
             }
             return new RelocationResults(
-                entryPoints.Where(e => e != null).ToList(),
+                entryPoints.Where(e => e != null && e.Type != SymbolType.Data).ToList(),
                 imageSymbols);
         }
 
@@ -328,7 +331,7 @@ namespace Reko.ImageLoaders.MzExe
             Dictionary<int, string> names,
             IProcessorArchitecture arch)
         {
-            DebugEx.Inform(trace, "== Loading entry points from offset {0:X}", offEntryTable);
+            trace.Inform("== Loading entry points from offset {0:X}", offEntryTable);
             var rdr = new LeImageReader(RawImage, offEntryTable);
 
             var entries = new List<ImageSymbol>();
@@ -361,17 +364,26 @@ namespace Reko.ImageLoaders.MzExe
                         }
                         var seg = segments[entry.iSeg - 1];
                         var addr = seg.Address + entry.offset;
-                        var ep = ImageSymbol.Procedure(arch, addr);
-                        ep.Ordinal = bundleOrdinal + i;
-                        if (names.TryGetValue(bundleOrdinal + i, out string name))
+
+                        if (!names.TryGetValue(bundleOrdinal + i, out string name))
                         {
-                            ep.Name = name;
+                            name = null;
                         }
-                        ep.Type = SymbolType.Procedure;
-                        ep.ProcessorState = arch.CreateProcessorState();
-                        imageSymbols[ep.Address] = ep;
+                        ImageSymbol ep;
+                        if (seg.IsData)
+                        {
+                            ep = ImageSymbol.DataObject(arch, addr, name, new UnknownType());
+                        }
+                        else
+                        {
+                            ep = ImageSymbol.Procedure(arch, addr, name);
+                            ep.Ordinal = bundleOrdinal + i;
+                            ep.Type = SymbolType.Procedure;
+                            ep.ProcessorState = arch.CreateProcessorState();
+                        }
                         entries.Add(ep);
-                        DebugEx.Verbose(trace, "   {0:X2} {1} {2} - {3}", segNum, ep.Address, ep.Name, ep.Ordinal);
+                        imageSymbols[ep.Address] = ep;
+                        trace.Verbose("   {0:X2} {1} {2} - {3}", segNum, ep.Address, ep.Name, ep.Ordinal);
                     }
                 }
                 else
@@ -408,6 +420,8 @@ namespace Reko.ImageLoaders.MzExe
 
             public uint LinearAddress;
             public Address Address;
+
+            public bool IsData => (Flags & NE_STFLAGS_DATA) != 0;
         }
 
         void LoadModuleTable(uint offset, int cModules)

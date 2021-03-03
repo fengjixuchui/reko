@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -42,7 +42,7 @@ namespace Reko.UnitTests.Arch.Mos6502
         {
             this.sc = new ServiceContainer();
             this.sc.AddService<ITestGenerationService>(new UnitTestGenerationService(sc));
-            this.arch = new Mos6502Architecture(sc, "mos6502");
+            this.arch = new Mos6502Architecture(sc, "mos6502", new Dictionary<string, object>());
         }
 
         private MachineInstruction RunTest(params byte[] bytes)

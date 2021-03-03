@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,6 +33,8 @@ using Reko.Core.Memory;
 
 namespace Reko.Arch.RiscV
 {
+    using Decoder = Decoder<RiscVDisassembler, Mnemonic, RiscVInstruction>;
+
     public partial class RiscVRewriter : IEnumerable<RtlInstructionCluster>
     {
         private readonly RiscVArchitecture arch;
@@ -47,10 +49,10 @@ namespace Reko.Arch.RiscV
         private InstrClass iclass;
 #nullable enable
 
-        public RiscVRewriter(RiscVArchitecture arch, EndianImageReader rdr, ProcessorState state, IStorageBinder binder, IRewriterHost host)
+        public RiscVRewriter(RiscVArchitecture arch, Decoder[] decoders, EndianImageReader rdr, ProcessorState state, IStorageBinder binder, IRewriterHost host)
         {
             this.arch = arch;
-            this.dasm = new RiscVDisassembler(arch, rdr).GetEnumerator();
+            this.dasm = new RiscVDisassembler(arch, decoders, rdr).GetEnumerator();
             this.state = state;
             this.binder = binder;
             this.host = host;

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -45,6 +45,8 @@ namespace Reko.UnitTests.Gui.Windows.Controls
             arch.Setup(a => a.Name).Returns("FakeArch");
             arch.Setup(a => a.InstructionBitSize).Returns(8);
             arch.Setup(a => a.MemoryGranularity).Returns(8);
+            arch.Setup(a => a.RenderInstructionOpcode(It.IsAny<MachineInstruction>(), It.IsAny<EndianImageReader>()))
+                .Returns("02 03 04 ");
             
             program = new Program
             {

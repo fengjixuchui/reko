@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -190,10 +190,10 @@ namespace Reko.Arch.Mips
         {
             var tmp = binder.CreateTemporary(dtSrc);
             m.Assign(tmp, RewriteOperand(instr.Operands[1]));
-            var ppp = host.PseudoProcedure(fn, dtSrc, tmp);
+            var intrinsic = host.Intrinsic(fn, true, dtSrc, tmp);
             m.Assign(
                 RewriteOperand(instr.Operands[0]),
-                m.Convert(ppp, ppp.DataType, dtDst));
+                m.Convert(intrinsic, intrinsic.DataType, dtDst));
         }
     }
 }

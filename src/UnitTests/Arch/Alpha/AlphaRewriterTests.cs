@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -37,7 +37,7 @@ namespace Reko.UnitTests.Arch.Mips
     [TestFixture]
     public class AlphaRewriterTests : RewriterTestBase
     {
-        private static readonly AlphaArchitecture arch = new AlphaArchitecture(CreateServiceContainer(), "alpha");
+        private static readonly AlphaArchitecture arch = new AlphaArchitecture(CreateServiceContainer(), "alpha", new Dictionary<string, object>());
         private static readonly Address addr = Address.Ptr32(0x00100000);
         
         public override IProcessorArchitecture Architecture => arch;
@@ -992,6 +992,16 @@ namespace Reko.UnitTests.Arch.Mips
 
         [Test]
         public void AlphaRw_cvtlq()
+        {
+            Given_HexString("0D02B25E");
+            AssertCode(
+                "0|L--|00100000(4): 2 instructions",
+                "1|L--|v3 = SLICE(f21, int32, 0)",
+                "2|L--|f18 = CONVERT(v3, int32, int64)");
+        }
+
+        [Test]
+        public void AlphaRw_cvtlq_0()
         {
             Given_HexString("0002E05F");	// cvtlq	f31,f0,f0
             AssertCode(

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -117,7 +117,20 @@ namespace Reko.Core.Code
 
         public bool VisitAddress(Address addr) => false;
 
-        public bool VisitApplication(Application appl) => true;
+        public bool VisitApplication(Application appl)
+        {
+            var argsCritical = appl.Arguments.Any(a => a.Accept(this));
+            if (argsCritical)
+                return true;
+            if (appl.Procedure is ProcedureConstant pc)
+            {
+                return !pc.Procedure.IsIdempotent;
+            }
+            else
+            {
+                return true;
+            }
+        }
 
         public bool VisitArrayAccess(ArrayAccess arr) =>
             arr.Array.Accept(this) || arr.Index.Accept(this);

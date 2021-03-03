@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,6 +27,7 @@ using Reko.Core.Memory;
 using Reko.Core.Serialization;
 using Reko.Core.Services;
 using Reko.Environments.SegaGenesis;
+using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Linq;
 
@@ -66,7 +67,7 @@ namespace Reko.UnitTests.Environments.SegaGenesis
             var cfgSvc = new Mock<IConfigurationService>();
             var openv = new Mock<PlatformDefinition>();
             var listener = new Mock<DecompilerEventListener>();
-            var arch = new M68kArchitecture(sc, "m68k");
+            var arch = new M68kArchitecture(sc, "m68k", new Dictionary<string, object>());
             var platform = new SegaGenesisPlatform(sc, arch);
             cfgSvc.Setup(c => c.GetArchitecture("m68k")).Returns(arch);
             cfgSvc.Setup(c => c.GetEnvironment("sega-genesis")).Returns(openv.Object);

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -59,7 +59,7 @@ namespace Reko.Arch.Tlcs.Tlcs900
             var a = binder.EnsureRegister(Registers.a);
             var src = RewriteSrc(instr.Operands[1]);
             var v = binder.EnsureFlagGroup(Registers.V);
-            m.Assign(a, host.PseudoProcedure("__bs1b", PrimitiveType.SByte, src));
+            m.Assign(a, host.Intrinsic("__bs1b", false, PrimitiveType.SByte, src));
             m.Assign(v, m.Eq0(src));
         }
 
@@ -86,7 +86,7 @@ namespace Reko.Arch.Tlcs.Tlcs900
         private void RewriteDaa(string flags)
         {
             var src = RewriteSrc(this.instr.Operands[0]);
-            var fn = host.PseudoProcedure("__daa", PrimitiveType.Byte, src);
+            var fn = host.Intrinsic("__daa", true, PrimitiveType.Byte, src);
             m.Assign(src, fn);
             EmitCc(src, flags);
         }
@@ -198,8 +198,19 @@ namespace Reko.Arch.Tlcs.Tlcs900
 
         private void RewriteScc()
         {
-            var test = GenerateTestExpression((ConditionOperand)instr.Operands[0], false);
-            m.Assign(RewriteSrc(instr.Operands[1]), test);
+            Expression src;
+            Expression dst;
+            if (instr.Operands.Length > 1)
+            {
+                src = GenerateTestExpression((ConditionOperand) instr.Operands[0], false);
+                dst = RewriteSrc(instr.Operands[1]);
+            }
+            else
+            {
+                src = Constant.True();
+                dst = RewriteSrc(instr.Operands[0]);
+            }
+            m.Assign(dst, m.Convert(src, src.DataType, dst.DataType));
         }
 
         private void RewriteScf()

@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -211,11 +211,7 @@ namespace Reko.Arch.X86
             return expr!;
         }
 
-        public Identifier FlagGroup(FlagM flags)
-        {
-            return binder.EnsureFlagGroup(arch.GetFlagGroup(Registers.eflags, (uint)flags)); ;
-        }
-
+        public Identifier FlagGroup(FlagGroupStorage flags) => binder.EnsureFlagGroup(flags);
 
         /// <summary>
         /// Changes the stack-relative address 'reg' into a frame-relative operand.

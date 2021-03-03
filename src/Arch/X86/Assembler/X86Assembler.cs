@@ -1,6 +1,6 @@
 #region License
 /* 
- * Copyright (C) 1999-2020 John Källén.
+ * Copyright (C) 1999-2021 John Källén.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -1171,13 +1171,13 @@ namespace Reko.Arch.X86.Assembler
 
         public void i386()
         {
-            arch = new X86ArchitectureFlat32(arch.Services, "x86-protected-32");
+            arch = new X86ArchitectureFlat32(arch.Services, "x86-protected-32", new Dictionary<string, object>());
             SetDefaultWordWidth(PrimitiveType.Word32);
         }
 
         public void i86()
         {
-            arch = new X86ArchitectureReal(arch.Services, "x86-real-16");
+            arch = new X86ArchitectureReal(arch.Services, "x86-real-16", new Dictionary<string, object>());
             SetDefaultWordWidth(PrimitiveType.Word16);
         }
 
