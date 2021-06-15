@@ -20,9 +20,9 @@
 using Reko.Analysis;
 using Reko.Core;
 using Reko.Core.Assemblers;
-using Reko.Core.Configuration;
 using Reko.Core.Lib;
 using Reko.Core.Output;
+using Reko.Core.Scripts;
 using Reko.Core.Serialization;
 using Reko.Core.Services;
 using Reko.Core.Types;
@@ -201,6 +201,7 @@ namespace Reko
             BuildImageMaps();
             WriteEntryPoints();
             eventListener.ShowStatus("Source program loaded.");
+            Project.FireScriptEvent(ScriptEvent.OnProgramLoaded);
             return true;
         }
 
@@ -226,7 +227,8 @@ namespace Reko
             try
             {
                 //$TODO: should be in the config file, yeah.
-                var type = Type.GetType("Reko.ImageLoaders.OdbgScript.OllyLang,Reko.ImageLoaders.OdbgScript");
+                var svc = services.RequireService<IPluginLoaderService>();
+                var type = svc.GetType("Reko.ImageLoaders.OdbgScript.OllyLang,Reko.ImageLoaders.OdbgScript");
                 interpreter = (IScriptInterpreter)Activator.CreateInstance(type, services);
             }
             catch (Exception ex)
@@ -522,7 +524,7 @@ namespace Reko
         public void WriteDecompiledTypes(Program program, string headerFilename, TextWriter w)
         {
             WriteHeaderComment(headerFilename, program, w);
-            w.WriteLine("/*"); program.TypeStore.Write(w); w.WriteLine("*/");
+            w.WriteLine("/*"); program.TypeStore.Write(true, w); w.WriteLine("*/");
             var tf = new TextFormatter(w)
             {
                 Indentation = 0,
@@ -570,12 +572,13 @@ namespace Reko
 		{
 			if (Project is null || Project.Programs.Count == 0)
 				throw new InvalidOperationException("Programs must be loaded first.");
-
+            Project.FireScriptEvent(ScriptEvent.OnProgramDecompiling);
             foreach (Program program in Project.Programs)
             {
                 ScanProgram(program);
             }
-		}
+            Project.FireScriptEvent(ScriptEvent.OnProgramScanned);
+        }
 
         private void ScanProgram(Program program)
         {
@@ -661,9 +664,10 @@ namespace Reko
                             "An error occurred while rewriting procedure to high-level language.");
                     }
                 }
-                WriteDecompilerProducts();
             }
-			eventListener.ShowStatus("Rewriting complete.");
+            project.FireScriptEvent(ScriptEvent.OnProgramDecompiled);
+            WriteDecompilerProducts();
+            eventListener.ShowStatus("Rewriting complete.");
 		}
 
 		public void WriteDecompilerProducts()

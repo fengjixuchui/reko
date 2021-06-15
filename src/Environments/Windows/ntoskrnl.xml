@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<library xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://schemata.jklnet.org/Decompiler">
+<library xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns="http://schemata.jklnet.org/Decompiler">
   <Types>
     <typedef name="ULONG">
       <prim domain="UnsignedInt" size="4" />
@@ -9,11 +9,6 @@
     </typedef>
     <typedef name="BOOLEAN">
       <prim domain="SignedInt" size="4" />
-    </typedef>
-    <typedef name="PVOID">
-      <ptr>
-        <void />
-      </ptr>
     </typedef>
     <typedef name="DEVICE_TYPE">
       <prim domain="SignedInt" size="4" />
@@ -38,7 +33,7 @@
     </typedef>
     <typedef name="PUNICODE_STRING">
       <ptr>
-        <prim domain="Character" size="2" />
+        <prim domain="Character" size="1" />
       </ptr>
     </typedef>
     <struct name="_DEVICE_OBJECT" />
@@ -127,26 +122,6 @@
       </arg>
       <arg name="DeviceName">
         <type>PUNICODE_STRING</type>
-      </arg>
-    </signature>
-  </procedure>
-
-  <procedure name="NtSetInformationProcess">
-    <signature>
-      <return>
-        <type>NTSTATUS</type>
-      </return>
-      <arg name="ProcessHandle">
-        <type>HANDLE</type>
-      </arg>
-      <arg name="ProcessInformationClass">
-        <type>PROCESS_INFORMATION_CLASS</type>
-      </arg>
-      <arg name="ProcessInformation">
-        <type>PVOID</type>
-      </arg>
-      <arg name="ProcessInformation">
-        <type>ULONG</type>
       </arg>
     </signature>
   </procedure>

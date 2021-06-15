@@ -128,13 +128,13 @@ namespace Reko.Arch.Tlcs
             throw new NotImplementedException();
         }
 
-        public override RegisterStorage GetRegister(StorageDomain regDomain, BitRange range)
+        public override RegisterStorage? GetRegister(StorageDomain regDomain, BitRange range)
         {
             if (!Registers.Subregisters.TryGetValue(regDomain, out var subs))
                 return null;
-            int key = (range.Extent * 4) + range.Lsb;
+            int key = (range.Extent << 4) + range.Lsb;
             if (subs.TryGetValue(key, out var subreg))
-            return subreg;
+                return subreg;
             else
                 return Registers.regs[regDomain - StorageDomain.Register];
         }
@@ -155,18 +155,6 @@ namespace Reko.Arch.Tlcs
             if ((grf & Registers.C.FlagGroupBits) != 0) yield return Registers.C;
         }
 
-        public override RegisterStorage GetSubregister(RegisterStorage reg, int offset, int width)
-        {
-            if (width == 0)
-                return null;
-            if (!Registers.Subregisters.TryGetValue(reg.Domain, out var subs))
-                return null;
-            int key = (width << 4) | offset;
-            if (!subs.TryGetValue(key, out var subreg))
-                return reg;
-            return subreg;
-        }
-
         public override string GrfToString(RegisterStorage flagRegister, string prefix, uint grf)
         {
             StringBuilder s = new StringBuilder();
@@ -183,7 +171,7 @@ namespace Reko.Arch.Tlcs
             return Address.Ptr32(c.ToUInt32());
         }
 
-        public override Address ReadCodeAddress(int size, EndianImageReader rdr, ProcessorState state)
+        public override Address ReadCodeAddress(int size, EndianImageReader rdr, ProcessorState? state)
         {
             throw new NotImplementedException();
         }
@@ -193,7 +181,7 @@ namespace Reko.Arch.Tlcs
             throw new NotImplementedException();
         }
 
-        public override bool TryParseAddress(string txtAddr, out Address addr)
+        public override bool TryParseAddress(string? txtAddr, out Address addr)
         {
             return Address.TryParse32(txtAddr, out addr);
         }

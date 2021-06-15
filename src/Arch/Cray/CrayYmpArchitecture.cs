@@ -54,15 +54,12 @@ namespace Reko.Arch.Cray
             this.FramePointerType = PrimitiveType.Ptr32;
             this.InstructionBitSize = 16;
             this.MemoryGranularity = 64;
-            this.Options = new Dictionary<string, object>();
             this.PointerType = PrimitiveType.Ptr32;
             this.StackRegister = Registers.sp;          // Fake register, YMP has no architecture defined SP.
             this.WordWidth = PrimitiveType.Word64;
             this.instructionSet = CreateInstructionSet();
             this.rootDecoder = instructionSet.CreateDecoder();
         }
-
-        public Dictionary<string,object> Options { get; private set; }
 
         public override IEnumerable<MachineInstruction> CreateDisassembler(EndianImageReader imageReader)
         {
@@ -157,9 +154,9 @@ namespace Reko.Arch.Cray
             throw new NotImplementedException();
         }
 
-        public override void LoadUserOptions(Dictionary<string, object> options)
+        public override void LoadUserOptions(Dictionary<string, object>? options)
         {
-            this.Options = options;
+            this.Options = options ?? Options;
             this.instructionSet = CreateInstructionSet();
             this.rootDecoder = instructionSet.CreateDecoder();
         }
@@ -169,7 +166,7 @@ namespace Reko.Arch.Cray
             return Address.Ptr32(c.ToUInt32());
         }
 
-        public override Address ReadCodeAddress(int size, EndianImageReader rdr, ProcessorState state)
+        public override Address ReadCodeAddress(int size, EndianImageReader rdr, ProcessorState? state)
         {
             throw new NotImplementedException();
         }
@@ -198,7 +195,7 @@ namespace Reko.Arch.Cray
             throw new NotImplementedException();
         }
 
-        public override bool TryParseAddress(string txtAddr, out Address addr)
+        public override bool TryParseAddress(string? txtAddr, out Address addr)
         {
             return Address.TryParse32(txtAddr, out addr);
         }

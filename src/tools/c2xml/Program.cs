@@ -26,7 +26,6 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Xml;
 
@@ -47,18 +46,20 @@ Options:
   -a <arch>        Processor architecture
   -e <env>         Operating environment
   -d <dialect>     Dialect of C/C++ used to parse
+  -p               Explicitly generate pointer sizes
 ";
 
-        static int Main(string[] args)
+        public static int Main(string[] args)
         {
             return new Program().Execute(args);
         }
 
         public int Execute(string [] args)
         {
-            TextReader input = Console.In;
+            TextReader input;
             Stream output = Console.OpenStandardOutput();
             var sc = new ServiceContainer();
+            sc.AddService(typeof(IPluginLoaderService), new PluginLoaderService());
             var rekoCfg = RekoConfigurationService.Load(sc);
             sc.AddService<IConfigurationService>(rekoCfg);
 
@@ -80,6 +81,7 @@ Options:
                     options["-a"]);
                 return -1;
             }
+            
             var envElem = rekoCfg.GetEnvironment(options["-e"].ToString());
             if (envElem == null)
             {
@@ -88,8 +90,8 @@ Options:
                    options["-e"]);
                 return -1;
             }
-
             var platform = envElem.Load(sc, arch);
+            
             try
             {
                 input = new StreamReader(options["<inputfile>"].ToString());
@@ -113,16 +115,17 @@ Options:
                 }
             }
             string dialect = null;
-            if (options.TryGetValue("-d", out var optDialect))
+            if (options.TryGetValue("-d", out var optDialect) && optDialect != null)
             {
                 dialect = (string) optDialect.Value;
             }
+            bool explicitPointerSizes = options["-p"].IsTrue;
             var xWriter = new XmlTextWriter(output, new UTF8Encoding(false))
             {
                 Formatting = Formatting.Indented
             };
 
-            XmlConverter c = new XmlConverter(input, xWriter, platform, dialect);
+            XmlConverter c = new XmlConverter(input, xWriter, platform, explicitPointerSizes, dialect);
             c.Convert();
             output.Flush();
             output.Close();

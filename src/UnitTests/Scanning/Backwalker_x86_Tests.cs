@@ -62,16 +62,15 @@ namespace Reko.UnitTests.Scanning
                 this.arch = arch;
             }
 
-            public IProcessorArchitecture Architecture => throw new NotImplementedException();
+            public IProcessorArchitecture Architecture => arch;
             public Program Program => throw new NotImplementedException();
             public SegmentMap SegmentMap => throw new NotImplementedException();
 
-            public Tuple<Expression, Expression> AsAssignment(Instruction instr)
+            public (Expression?, Expression?) AsAssignment(Instruction instr)
             {
-                var ass = instr as Assignment;
-                if (ass == null)
-                    return null;
-                return Tuple.Create((Expression)ass.Dst, ass.Src);
+                if (!(instr is Assignment ass))
+                    return (null,null);
+                return (ass.Dst, ass.Src);
             }
 
             public Expression AsBranch(Instruction instr)
@@ -110,9 +109,9 @@ namespace Reko.UnitTests.Scanning
                 return block.Procedure.ControlGraph.Predecessors(block).ToList();
             }
 
-            public RegisterStorage GetSubregister(RegisterStorage reg, int off, int width)
+            public RegisterStorage GetSubregister(RegisterStorage reg, BitRange range)
             {
-                return arch.GetSubregister(reg, off, width);
+                return arch.GetRegister(reg.Domain, range);
             }
 
             public bool IsStackRegister(Storage stg)

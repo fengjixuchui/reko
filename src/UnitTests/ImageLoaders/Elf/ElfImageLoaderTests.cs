@@ -26,6 +26,7 @@ using Reko.Core.Services;
 using Reko.Environments.SysV;
 using Reko.ImageLoaders.Elf;
 using System;
+using System.Collections.Generic;
 
 namespace Reko.UnitTests.ImageLoaders.Elf
 {
@@ -350,7 +351,10 @@ namespace Reko.UnitTests.ImageLoaders.Elf
             arch.Setup(a => a.Name).Returns("FakeArchBe");
             this.tlSvc = new Mock<ITypeLibraryLoaderService>(); 
             sc.AddService<ITypeLibraryLoaderService>(tlSvc.Object);
-            cfgSvc.Setup(d => d.GetArchitecture("x86-protected-32")).Returns(arch.Object);
+            sc.AddService<IPluginLoaderService>(new PluginLoaderService());
+            cfgSvc.Setup(d => d.GetArchitecture(
+                "x86-protected-32",
+                It.IsAny<Dictionary<string,object>>())).Returns(arch.Object);
             cfgSvc.Setup(d => d.GetEnvironment("elf-neutral")).Returns(new PlatformDefinition
             {
                 TypeName = typeof(SysVPlatform).AssemblyQualifiedName

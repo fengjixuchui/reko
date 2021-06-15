@@ -1,0 +1,17 @@
+{
+  "iisSettings": {
+    "windowsAuthentication": false,
+    "anonymousAuthentication": true,
+    "iisExpress": {
+      "applicationUrl": "http://localhost:53053/",
+      "sslPort": 0
+    }
+  },
+  "profiles": {
+    "CmdLine": {
+      "commandName": "Project",
+      "commandLineArgs": "fft.dcproject",
+      "workingDirectory": "D:\\dev\\uxmal\\reko\\master\\subjects\\Raw\\1750A"
+    }
+  }
+}

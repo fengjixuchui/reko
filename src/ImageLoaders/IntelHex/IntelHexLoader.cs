@@ -31,14 +31,12 @@ using System.Linq;
 
 namespace Reko.ImageLoaders.IntelHex
 {
-
     /// <summary>
     /// An Intel Hexadecimal 32-bit object format image (a.k.a. IHEX32) loader.
     /// </summary>
     public class HexLoader : ImageLoader
     {
-
-        //TODO: As Intel Hex specs do not specify any ordering of records, we should be able, getting a new record,
+        //$TODO: As Intel Hex specs do not specify any ordering of records, we should be able, getting a new record,
         // to add it at tail, at head, or merge with already loaded records - or to create a new memory chunk.
         // For the time being we assume we are safe and Hex records are contiguous (not overlapping) and somehow sorted in increasing load address order.
 
@@ -76,10 +74,10 @@ namespace Reko.ImageLoaders.IntelHex
         /// </summary>
         internal class MemoryChunksList : IEnumerable<MemoryChunk>
         {
-            private Address currAddr = null;
-            private Address nextAddr = null;
+            private Address? currAddr = null;
+            private Address? nextAddr = null;
             private SortedList<Address, MemoryChunk> memChunks;
-            private MemoryChunk currMemChunk;
+            private MemoryChunk? currMemChunk;
 
             public MemoryChunksList()
             {
@@ -123,7 +121,7 @@ namespace Reko.ImageLoaders.IntelHex
                     }
                 }
 
-                currMemChunk.Datum.AddRange(data);
+                currMemChunk!.Datum.AddRange(data);
                 nextAddr = currAddr + data.Length;
             }
 
@@ -145,6 +143,7 @@ namespace Reko.ImageLoaders.IntelHex
         public HexLoader(IServiceProvider services, string filename, byte[] imgRaw)
             : base(services, filename, imgRaw)
         {
+            listener = null!;
         }
 
         #endregion
@@ -167,7 +166,7 @@ namespace Reko.ImageLoaders.IntelHex
         /// <returns>
         /// A <see cref="Program"/> instance.
         /// </returns>
-        public override Program Load(Address addrLoad) => throw new NotImplementedException();
+        public override Program Load(Address? addrLoad) => throw new NotImplementedException();
 
         /// <summary>
         /// Loads the image into memory at the specified address, using the provided
@@ -184,7 +183,7 @@ namespace Reko.ImageLoaders.IntelHex
         {
             listener = Services.RequireService<DecompilerEventListener>();
             var memChunks = new MemoryChunksList();
-            Address addrEp = null;
+            Address? addrEp = null;
             Address addrBase = MakeZeroAddress(arch);
             using (var rdr = new IntelHexReader(new MemoryStream(RawImage), addrBase))
             {
@@ -206,7 +205,7 @@ namespace Reko.ImageLoaders.IntelHex
                 catch (IntelHexException ex)
                 {
                     listener.Error(ex.Message);
-                    return null;
+                    return null!;
                 }
             }
 

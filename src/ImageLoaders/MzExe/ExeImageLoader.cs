@@ -34,7 +34,7 @@ namespace Reko.ImageLoaders.MzExe
 	public class ExeImageLoader : ImageLoader
 	{
         private readonly IServiceProvider services;
-        private ImageLoader ldrDeferred;
+        private ImageLoader? ldrDeferred;
 
 		public ushort	e_magic;                     // 0000 - Magic number
 		public ushort   e_cbLastPage;                // 0002 - Bytes on last page of file
@@ -55,6 +55,7 @@ namespace Reko.ImageLoaders.MzExe
 		public ushort   e_ovno;                      // 001A - Overlay number
 
 		private const int MarkZbikowski = (('Z' << 8) | 'M');		// 'MZ' magic number expressed in little-endian.
+		private const int ZbikowskiMark = (('M' << 8) | 'Z');		// 'ZM' magic number expressed in little-endian.
 		
         public const int CbPsp = 0x0100;			// Program segment prefix size in bytes.
 		public const int CbPageSize = 0x0200;		// MSDOS pages are 512 bytes.
@@ -67,7 +68,7 @@ namespace Reko.ImageLoaders.MzExe
             this.services = services;
             ReadCommonExeFields();	
 		
-			if (e_magic != MarkZbikowski)
+			if (e_magic != MarkZbikowski && e_magic != ZbikowskiMark)
 				throw new FormatException("Image is not an MS-DOS executable image.");
 		}
 
@@ -116,7 +117,7 @@ namespace Reko.ImageLoaders.MzExe
         /// sub-formats, so we need to discover what flavour it is before we
         /// can proceed.
         /// </summary>
-        public override Program Load(Address addrLoad)
+        public override Program Load(Address? addrLoad)
 		{
 			return GetDeferredLoader().Load(addrLoad);
 		}

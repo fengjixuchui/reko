@@ -61,7 +61,10 @@ namespace Reko.Core.Configuration
 
         public virtual IPlatform Load(IServiceProvider services, IProcessorArchitecture arch)
         {
-            var type = Type.GetType(TypeName, true);
+            if (TypeName is null)
+                throw new InvalidOperationException("Platform configuration TypeName has no value.");
+            var svc = services.RequireService<IPluginLoaderService>();
+            var type = svc.GetType(TypeName);
             if (type == null)
                 throw new TypeLoadException(
                     string.Format("Unable to load {0} environment.", Description));

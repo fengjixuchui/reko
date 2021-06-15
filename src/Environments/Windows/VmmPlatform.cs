@@ -25,6 +25,7 @@ using Reko.Core.Expressions;
 using Reko.Core.Rtl;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Reko.Core.Serialization;
 using X86Registers = Reko.Arch.X86.Registers;
@@ -58,12 +59,12 @@ namespace Reko.Environments.Windows
         public override HashSet<RegisterStorage> CreateTrashedRegisters()
         {
             return new[] { X86Registers.eax, X86Registers.edx, X86Registers.ecx }
-                .ToSet();
+                .ToHashSet();
         }
 
-        public override SystemService FindService(int vector, ProcessorState state, SegmentMap segmentMap)
+        public override SystemService? FindService(int vector, ProcessorState? state, SegmentMap? segmentMap)
         {
-            if (vector == 0x20)
+            if (vector == 0x20 && state != null && segmentMap != null)
             {
                 // Dynamic VxD call.
                 //$TODO: look up the call to determine what parameters it uses.
@@ -87,17 +88,17 @@ namespace Reko.Environments.Windows
             throw new NotImplementedException();
         }
 
-        public override CallingConvention GetCallingConvention(string ccName)
+        public override CallingConvention GetCallingConvention(string? ccName)
         {
             throw new NotImplementedException();
         }
 
-        public override ProcedureBase GetTrampolineDestination(Address addrInstr, IEnumerable<RtlInstruction> instrs, IRewriterHost host)
+        public override ProcedureBase? GetTrampolineDestination(Address addrInstr, IEnumerable<RtlInstruction> instrs, IRewriterHost host)
         {
             return base.GetTrampolineDestination(addrInstr, instrs, host);
         }
 
-        public override ExternalProcedure LookupProcedureByName(string moduleName, string procName)
+        public override ExternalProcedure LookupProcedureByName(string? moduleName, string procName)
         {
             throw new NotImplementedException();
         }

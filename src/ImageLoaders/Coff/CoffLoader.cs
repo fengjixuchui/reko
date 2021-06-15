@@ -18,7 +18,6 @@
  */
 #endregion
 
-using Reko.Arch.X86;
 using Reko.Core;
 using Reko.Core.Configuration;
 using Reko.Core.Memory;
@@ -31,7 +30,7 @@ namespace Reko.ImageLoaders.Coff
 {
     public class CoffLoader : ImageLoader
     {
-        private IProcessorArchitecture arch;
+        private IProcessorArchitecture? arch;
 
         public CoffLoader(IServiceProvider services, string filename, byte[] rawBytes)
             : base(services, filename, rawBytes)
@@ -45,7 +44,7 @@ namespace Reko.ImageLoaders.Coff
             set { throw new NotImplementedException(); }
         }
 
-        public override Program Load(Address addrLoad)
+        public override Program Load(Address? addrLoad)
         {
             throw new NotImplementedException();
         }

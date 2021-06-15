@@ -105,6 +105,7 @@ namespace Reko.UserInterfaces.WindowsForms
             framesByTab.Add(tabPage, frame);
             this.form.DocumentTabs.TabPages.Add(tabPage);
             this.form.DocumentTabs.SelectedTab = tabPage;
+            pane.Frame = frame;
             pane.SetSite(services);
             return frame;
         }
@@ -130,6 +131,7 @@ namespace Reko.UserInterfaces.WindowsForms
             framesByTab.Add(tabPage, frame);
             this.form.DocumentTabs.TabPages.Add(tabPage);
             this.form.DocumentTabs.SelectedTab = tabPage;
+            pane.Frame = frame;
             pane.SetSite(services);
             return frame;   
         }
@@ -200,7 +202,7 @@ namespace Reko.UserInterfaces.WindowsForms
         public virtual void SetContextMenu(object control, int menuId)
         {
             var ctxMenu = dm.GetContextMenu(menuId);
-            var ctxMenuProp = control.GetType().GetProperty("ContextMenu");
+            var ctxMenuProp = control.GetType().GetProperty("ContextMenuStrip");
             ctxMenuProp.SetValue(control, ctxMenu);
         }
 
@@ -276,7 +278,7 @@ namespace Reko.UserInterfaces.WindowsForms
 
         #endregion
 
-        void documentTabs_MouseUp(object sender, MouseEventArgs e)
+        void documentTabs_MouseUp(object sender, System.Windows.Forms.MouseEventArgs e)
         {
             Debug.Print("Mouse up at: {0,1}", e.Location);
             for (int i = 0; i < form.DocumentTabs.TabPages.Count; ++i)

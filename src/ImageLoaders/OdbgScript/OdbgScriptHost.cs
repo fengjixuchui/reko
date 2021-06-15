@@ -35,6 +35,9 @@ namespace Reko.ImageLoaders.OdbgScript
 {
     public class OdbgScriptHost : IOdbgScriptHost
     {
+        public const int Cancel = 0;
+        public const int OK = 1;
+
         private readonly OdbgScriptLoader loader;
         private readonly Program program;
         private ImageSegment heap;
@@ -45,6 +48,7 @@ namespace Reko.ImageLoaders.OdbgScript
             this.loader = loader;
             this.program = program;
 			this.SegmentMap = program.SegmentMap;
+            this.heap = null!;
         }
 
         public SegmentMap SegmentMap { get; set; }
@@ -53,7 +57,7 @@ namespace Reko.ImageLoaders.OdbgScript
         {
             if (heap == null)
             {
-                // Find an available spot in th address space & align it up to a 16-byte boundary.
+                // Find an available spot in the address space & align it up to a 16-byte boundary.
                 var maxSegment = SegmentMap.Segments.Values
                     .OrderByDescending(s => s.Address.ToLinear() + s.Size)
                     .First();
@@ -66,7 +70,7 @@ namespace Reko.ImageLoaders.OdbgScript
             }
             var newHeapAlloc = heapAlloc + size;
             if ((uint) heap.MemoryArea.Length <= newHeapAlloc)
-                return null;
+                return null!;
             var addrChunk = (heap.MemoryArea.BaseAddress + heapAlloc).Align(0x10);
             this.heapAlloc = newHeapAlloc;
             return addrChunk;
@@ -147,7 +151,7 @@ namespace Reko.ImageLoaders.OdbgScript
             }
             else
             {
-                MemInfo = null;
+                MemInfo = null!;
                 return false;
             }
         }
@@ -226,7 +230,7 @@ namespace Reko.ImageLoaders.OdbgScript
             throw new NotImplementedException();
         }
 
-        public virtual MachineInstruction Disassemble(Address addr)
+        public virtual MachineInstruction? Disassemble(Address addr)
         {
             if (!SegmentMap.TryFindSegment(addr, out ImageSegment segment))
                 throw new AccessViolationException();

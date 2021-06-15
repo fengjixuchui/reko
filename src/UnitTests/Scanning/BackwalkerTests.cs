@@ -69,12 +69,11 @@ namespace Reko.UnitTests.Scanning
 
             public SegmentMap SegmentMap => throw new NotImplementedException();
 
-            public Tuple<Expression, Expression> AsAssignment(Instruction instr)
+            public (Expression?, Expression?) AsAssignment(Instruction instr)
             {
-                var ass = instr as Assignment;
-                if (ass == null)
-                    return null;
-                return Tuple.Create((Expression)ass.Dst, ass.Src);
+                if (!(instr is Assignment ass))
+                    return (null,null);
+                return (ass.Dst, ass.Src);
             }
 
             public Expression AsBranch(Instruction instr)
@@ -87,8 +86,7 @@ namespace Reko.UnitTests.Scanning
 
             public bool IsFallthrough(Instruction instr, Block block)
             {
-                var bra = instr as Branch;
-                if (bra == null)
+                if (!(instr is Branch bra))
                     return false;
                 return bra.Target != block;
             }
@@ -113,9 +111,15 @@ namespace Reko.UnitTests.Scanning
                 return block.Pred.ToList();
             }
 
+
+            public RegisterStorage GetSubregister(RegisterStorage reg, BitRange range)
+            {
+                return arch.GetRegister(reg.Domain, range)!;
+            }
+
             public RegisterStorage GetSubregister(RegisterStorage reg, int off, int width)
             {
-                return arch.GetSubregister(reg, off, width);
+                throw new NotImplementedException();
             }
 
             public bool IsStackRegister(Storage stg)
